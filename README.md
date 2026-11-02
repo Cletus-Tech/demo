@@ -15,37 +15,27 @@ A self-contained, dark-themed trading dashboard built with plain HTML, CSS and J
 
 ## Getting started
 
-No installation is needed. Open `index.html` in a browser.
-
-To serve it locally instead:
-
-```bash
-python3 -m http.server 8000
-# then visit http://localhost:8000
-```
+Open `index.html` in a browser. Everything (markup, styles and scripts) is in that one file, so there is nothing to install or build.
 
 ## Project structure
 
 ```
 .
-├── index.html        # Page markup
-├── css/
-│   └── styles.css    # All styles
-├── js/
-│   └── app.js        # Configuration, simulation and UI logic
+├── index.html    # The whole app: markup, CSS and JavaScript
+├── .nojekyll     # Tells GitHub Pages to serve files as-is
 ├── LICENSE
 └── README.md
 ```
 
 ## Configuration
 
-All branding and behavior is controlled by the `CONFIG` object at the top of `js/app.js`: brand name, user name, currency symbol, max leverage, tick speed, volatility, trade durations, sidebar navigation, categories and the asset list with starting prices.
+All branding and behavior is controlled by the `CONFIG` object at the top of the `<script>` block in `index.html`: brand name, user name, currency symbol, max leverage, tick speed, volatility, trade durations, sidebar navigation, categories and the asset list with starting prices.
 
 Change `storageKey` per deployment so saved balances from different sites do not clash.
 
 ## Deploy with GitHub Pages
 
-1. Push this repository to GitHub.
+1. Push this repository to GitHub with `index.html` at the repository root.
 2. Go to **Settings → Pages**.
 3. Under **Build and deployment**, choose **Deploy from a branch**, select `main` and `/ (root)`, then save.
 4. Your site will be live at `https://<your-username>.github.io/<repo-name>/`.
