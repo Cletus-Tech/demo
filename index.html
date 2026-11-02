@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07090c">
+<title>Demo Broker | Dashboard</title>
+<meta name="description" content="A self-contained demo trading dashboard with simulated prices and practice funds.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+<div class="scrim" id="scrim"></div>
+<aside>
+ <div class="logo" id="brand"></div>
+ <nav id="nav"></nav>
+ <div class="ucard"><div class="av" id="uAv"></div><div><b id="uName"></b><small>Demo account</small></div></div>
+</aside>
+<main>
+ <div class="card top">
+  <span class="l"><button class="ib mbtn" id="menuBtn" aria-label="Open menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8v10H3z"/></svg>Dashboard</span>
+  <span class="r">
+   <button class="ib" id="globe" aria-label="Language"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></button>
+   <button class="badge" id="acctBtn"><span id="topBal"></span><b>DEMO</b><small>&#9660;</small></button>
+   <button class="ib" id="bell" aria-label="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 17V11a6 6 0 0112 0v6l2 2H4zM10 21h4"/></svg><i class="dotn" id="bellDot" hidden></i></button>
+   <span class="avatar" id="topAv"></span>
+  </span>
+  <div class="menu" id="acctMenu">
+   <div class="it">Demo account<span>Practice funds only</span></div>
+   <button id="mReset">Reset demo balances</button>
+   <button id="mEdit">Edit demo balances</button>
+  </div>
+  <div class="menu" id="bellMenu"></div>
+  <div class="menu" id="langMenu"><button data-l="English">English</button><button data-l="Francais">Fran&ccedil;ais</button><button data-l="Espanol">Espa&ntilde;ol</button></div>
+ </div>
+
+ <div class="card grid" id="secAssets">
+  <div>
+   <div class="hd">
+    <div>
+     <div class="lbl">Total balance (demo)<button class="eye" id="eyeBtn" aria-label="Hide balance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+     <div class="total" id="total"></div>
+    </div>
+    <div class="acts2">
+     <button class="mm" id="mmBtn">&#10022; Move money &#9662;</button>
+     <button class="sq" id="editBtn" aria-label="Edit demo balances" title="Edit demo balances"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg></button>
+     <button class="sq" id="expBtn" aria-label="Export trades" title="Export trades (CSV)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg></button>
+     <div class="menu" id="mmMenu" style="top:40px;right:0"><button data-a="Deposit">Deposit</button><button data-a="Withdraw">Withdraw</button><button id="mmConv">Convert</button></div>
+    </div>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center">
+    <span class="lbl">Top assets</span>
+    <button class="va" id="vaBtn">View all assets &#8250;</button>
+   </div>
+   <div id="assets"></div>
+  </div>
+  <div>
+   <div class="lbl">Categories</div>
+   <div class="bar" id="bar"></div>
+   <div class="legend" id="legend"></div>
+   <div class="pr"><span class="lbl">Trading progress</span><b id="progV">0%</b></div><div class="prog"><i id="progI" style="width:0"></i></div>
+   <div class="pr"><span class="lbl">Signal strength</span><b id="sigV" style="color:#e5484d">0%</b></div><div class="sig" id="sig"></div>
+  </div>
+ </div>
+
+ <div class="split" id="secTrade">
+  <div class="card chartcard">
+   <div class="ctop"><select id="cSym" aria-label="Chart symbol"></select>
+    <span class="sep"></span>
+    <span id="tf"><button data-n="40" data-l="1m">1m</button><button data-n="60" data-l="30m">30m</button><button data-n="75" data-l="1h">1h</button><button class="on" data-n="90" data-l="D">D</button></span>
+    <span class="sep"></span>
+    <button class="tb on" id="ctCandle">Candles</button><button class="tb" id="ctLine">Line</button>
+    <button class="tb" id="indBtn">Indicators: MA</button>
+    <button class="tb" id="shotBtn" aria-label="Save chart image">&#128247;</button>
+    <button class="btn" id="hideChart" style="margin-left:auto;padding:6px 12px">Hide chart</button></div>
+   <div id="chartBody">
+    <div class="ctitle" id="cTitle"></div>
+    <div class="wrap">
+     <div class="tools" id="tools">
+      <button class="on" data-t="cross" title="Crosshair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18"/></svg></button>
+      <button data-t="trend" title="Trend line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19L20 5"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="5" r="2"/></svg></button>
+      <button data-t="hline" title="Horizontal line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/></svg></button>
+      <button data-t="clear" title="Remove drawings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+     </div>
+     <div class="cwrap"><canvas id="chart"></canvas></div>
+    </div>
+    <div class="lbl note">Simulated price data for practice.</div>
+   </div>
+  </div>
+  <div class="card tp">
+   <div class="tabs" id="tabs"><button class="on" data-m="Buy">Buy</button><button data-m="Sell">Sell</button><button data-m="Convert">Convert</button></div>
+   <label>Trade type<select id="tType"></select></label>
+   <label id="fromRow" hidden>From<select id="tFrom"></select></label>
+   <label><span id="aLbl">Amount</span><div class="amtbox"><input id="tAmt" type="number" min="0" step="any" placeholder="100"><select id="tAsset" aria-label="Asset"></select></div></label>
+   <div class="kv">Current USD balance <b id="kUsd"></b></div>
+   <div class="kv">Current <span id="kSym" style="margin-left:4px"></span> price <b id="kPx" class="g"></b></div>
+   <div id="levBox"><label>Leverage:<div class="levrow"><div class="sl"><input type="range" id="lev" min="1" max="100" value="1"><div class="ticks"></div><div class="tlab" id="tlab"></div></div><div class="lvbox" id="levV">1x</div></div></label></div>
+   <label class="chk tprow"><span style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="tpOn"> Use TP/SL</span><button type="button" class="ai" id="aiBtn">Set with AI</button></label>
+   <div id="tpBox" hidden><input id="tp" type="number" step="any" placeholder="Take profit"><input id="sl" type="number" step="any" placeholder="Stop loss"></div>
+   <label id="durBox">Duration (leveraged trades)<select id="dur"></select></label>
+   <button class="btn" id="go">Buy</button>
+   <div id="msg" style="padding:10px 14px 0"></div>
+  </div>
+ </div>
+ <div class="card" style="padding:16px"><div style="font-weight:600;margin-bottom:10px">My trades</div>
+ <div id="hf" class="tabs" style="padding:0 0 4px"><button class="on" data-f="All">All</button><button data-f="Swaps">Swaps</button><button data-f="Auto">Auto</button></div>
+ <details open><summary id="openS">Open (0)</summary><div id="pos"></div></details>
+ <details><summary id="closedS">Closed (0)</summary><div id="hist"></div></details></div>
+</main>
+</div>
+
+<button class="fab" id="fab" aria-label="Support chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4z"/></svg></button>
+<div class="chat" id="chat"><h3>Demo support</h3><div class="log" id="clog"><div>Hi! This is a demo chat. Ask about deposits, leverage or TP/SL.</div></div><form id="cform"><input id="cin" placeholder="Type a message" autocomplete="off"><button class="btn">Send</button></form></div>
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
+ <div class="sheet">
+  <h2 id="mt">Edit demo balances</h2>
+  <div class="lbl">Amounts are in USD. These are practice funds.</div>
+  <div id="fields"></div>
+  <div class="acts">
+   <button class="btn ghost" id="reset">Reset</button>
+   <button class="btn ghost" id="cancel">Cancel</button>
+   <button class="btn" id="save">Save</button>
+  </div>
+ </div>
+</div>
+
+<div class="modal" id="money" role="dialog" aria-modal="true" aria-labelledby="moneyT">
+ <div class="sheet">
+  <h2 id="moneyT">Deposit</h2>
+  <div class="lbl">Demo funds only. No real money moves.</div>
+  <label>Amount (USD)<input id="moneyAmt" type="number" min="0" step="any" placeholder="100"></label>
+  <div class="lbl" id="moneyErr" style="margin-top:8px;min-height:18px"></div>
+  <div class="acts"><button class="btn ghost" id="moneyCancel">Cancel</button><button class="btn" id="moneyOk">Confirm</button></div>
+ </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
