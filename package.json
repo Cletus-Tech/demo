@@ -1,0 +1,13 @@
+{
+  "name": "master-brokerage-platform",
+  "version": "0.1.0-stage1",
+  "private": true,
+  "description": "Demo trading platform: static frontend + Supabase backend (Stage 1 foundation)",
+  "scripts": {
+    "config": "node scripts/generate-config.js",
+    "build:sql": "node scripts/build-setup-all.js",
+    "check": "node scripts/static-checks.js",
+    "serve": "python3 -m http.server 8000 --directory app",
+    "test:ui": "python3 tests/ui-test.py"
+  }
+}

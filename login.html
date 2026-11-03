@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title><style>
+:root{--bg:#07090c;--panel:#0d1014;--line:#1a1f26;--text:#f2f5f8;--mute:#8b94a1;--blue:#2d9cff;--green:#0fb58a;--red:#c0392b;--r:14px}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:grid;place-items:center;padding:20px}
+.box{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:24px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--mute);font-size:13px;margin:0 0 16px}
+.demo{background:#1a2230;border:1px solid #27405f;color:#9cc7f5;border-radius:10px;padding:8px 10px;font-size:12.5px;margin-bottom:16px}
+.tabs{display:flex;gap:6px;margin-bottom:16px}.tabs button{flex:1;background:none;border:1px solid var(--line);color:var(--mute);padding:9px;border-radius:10px;cursor:pointer;font:inherit}
+.tabs button.on{border-color:var(--blue);color:var(--text)}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+input{width:100%;background:#07090c;border:1px solid var(--line);border-radius:10px;padding:11px;color:var(--text);font:inherit}
+input:focus{outline:none;border-color:var(--blue)}
+.btn{width:100%;margin-top:16px;background:var(--blue);color:#fff;border:0;border-radius:10px;padding:12px;font:inherit;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.6;cursor:default}
+.msg{min-height:20px;margin-top:12px;font-size:13px}.err{color:#ff7b6b}.okm{color:var(--green)}
+a{color:var(--blue)}
+</style></head><body>
+<div class="box">
+ <h1>Demo Broker</h1>
+ <p class="sub">Sign in or create a practice account.</p>
+ <div class="demo">Demo mode: practice funds and simulated prices. No real money is held or moved.</div>
+ <div class="tabs"><button id="tIn" class="on" type="button">Sign in</button><button id="tUp" type="button">Create account</button></div>
+ <div id="fName" hidden><label for="name">Full name</label><input id="name" autocomplete="name" maxlength="120"></div>
+ <label for="email">Email</label><input id="email" type="email" autocomplete="email">
+ <div id="fPass"><label for="pass">Password</label><input id="pass" type="password" autocomplete="current-password"></div>
+ <div id="fPass2" hidden><label for="pass2">Confirm password</label><input id="pass2" type="password" autocomplete="new-password"></div>
+ <div id="fRef" hidden><label for="ref">Referral code (optional)</label><input id="ref" maxlength="16" autocapitalize="characters"></div>
+ <button class="btn" id="go" type="button">Sign in</button>
+ <div class="msg" id="msg" role="status"></div>
+ <div class="sub" style="margin:8px 0 0"><a href="#" id="forgot">Forgot your password?</a></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/supabase-client.js"></script>
+<script>
+(function(){
+ var S=window.AppSupabase,$=function(i){return document.getElementById(i)};
+ var mode="in",msg=$("msg");
+ function say(t,ok){msg.textContent=t;msg.className="msg "+(ok?"okm":"err")}
+ if(!S||!S.ready){say(S?S.problem:"Setup problem.");$("go").disabled=true;
+   msg.innerHTML="";msg.className="msg err";msg.appendChild(document.createTextNode((S&&S.problem)||"Setup problem. "));
+   var a=document.createElement("a");a.href="setup-check.html";a.textContent="Open the setup check";msg.appendChild(a);return}
+ var sb=S.client,base=new URL(".",location.href).href;
+ var q=new URLSearchParams(location.search);if(q.get("ref")){$("ref").value=q.get("ref");setMode("up")}
+ sb.auth.getSession().then(function(r){if(r.data.session)location.replace("dashboard.html")});
+ function setMode(m){mode=m;
+  $("tIn").classList.toggle("on",m==="in");$("tUp").classList.toggle("on",m==="up");
+  $("fName").hidden=$("fPass2").hidden=$("fRef").hidden=(m!=="up");
+  $("fPass").hidden=(m==="forgot");
+  $("pass").autocomplete=m==="up"?"new-password":"current-password";
+  $("go").textContent=m==="in"?"Sign in":m==="up"?"Create account":"Send reset link";
+  msg.textContent=""}
+ $("tIn").onclick=function(){setMode("in")};$("tUp").onclick=function(){setMode("up")};
+ $("forgot").onclick=function(e){e.preventDefault();setMode("forgot")};
+ async function submit(){
+  var email=$("email").value.trim(),pass=$("pass").value;
+  if(!email){say("Enter your email address.");return}
+  $("go").disabled=true;
+  try{
+   if(mode==="in"){
+    if(!pass){say("Enter your password.");return}
+    var r=await sb.auth.signInWithPassword({email:email,password:pass});
+    if(r.error){say(/confirm/i.test(r.error.message)?"Please confirm your email first. Check your inbox.":"Invalid email or password.");return}
+    location.replace("dashboard.html");
+   }else if(mode==="up"){
+    if(pass.length<8){say("Use a password of at least 8 characters.");return}
+    if(pass!==$("pass2").value){say("The two passwords do not match.");return}
+    var r2=await sb.auth.signUp({email:email,password:pass,options:{
+      data:{full_name:$("name").value.trim(),ref:$("ref").value.trim()},
+      emailRedirectTo:base+"login.html"}});
+    if(r2.error){say(r2.error.message);return}
+    if(r2.data.session){location.replace("dashboard.html");return}
+    say("Almost done: check your email and click the confirmation link, then sign in.",true);
+   }else{
+    var r3=await sb.auth.resetPasswordForEmail(email,{redirectTo:base+"reset-password.html"});
+    if(r3.error&&r3.error.status===429){say("Too many requests. Please wait a few minutes.");return}
+    say("If that email has an account, a reset link is on its way.",true);
+   }
+  }catch(e){say("Could not reach the server. Check your connection.")}
+  finally{$("go").disabled=false}
+ }
+ $("go").onclick=submit;
+ document.addEventListener("keydown",function(e){if(e.key==="Enter")submit()});
+})();
+</script></body></html>

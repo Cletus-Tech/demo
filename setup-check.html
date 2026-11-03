@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup check</title><style>
+:root{--bg:#07090c;--panel:#0d1014;--line:#1a1f26;--text:#f2f5f8;--mute:#8b94a1;--blue:#2d9cff;--green:#0fb58a;--red:#c0392b;--r:14px}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:grid;place-items:center;padding:20px}
+.box{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:24px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--mute);font-size:13px;margin:0 0 16px}
+.demo{background:#1a2230;border:1px solid #27405f;color:#9cc7f5;border-radius:10px;padding:8px 10px;font-size:12.5px;margin-bottom:16px}
+.tabs{display:flex;gap:6px;margin-bottom:16px}.tabs button{flex:1;background:none;border:1px solid var(--line);color:var(--mute);padding:9px;border-radius:10px;cursor:pointer;font:inherit}
+.tabs button.on{border-color:var(--blue);color:var(--text)}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+input{width:100%;background:#07090c;border:1px solid var(--line);border-radius:10px;padding:11px;color:var(--text);font:inherit}
+input:focus{outline:none;border-color:var(--blue)}
+.btn{width:100%;margin-top:16px;background:var(--blue);color:#fff;border:0;border-radius:10px;padding:12px;font:inherit;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.6;cursor:default}
+.msg{min-height:20px;margin-top:12px;font-size:13px}.err{color:#ff7b6b}.okm{color:var(--green)}
+a{color:var(--blue)}
+</style></head><body>
+<style>.box{max-width:640px}ul{list-style:none;padding:0;margin:12px 0}li{padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;font-size:13.5px}
+li b{display:block;margin-bottom:2px}.p{border-color:#0c5a46}.f{border-color:#7a2a22}.w{border-color:#6b5a1c}code{background:#07090c;padding:1px 5px;border-radius:5px}</style>
+<div class="box">
+ <h1>Setup check</h1>
+ <p class="sub">Verifies that this app is really connected to your Supabase project. Nothing is assumed: each line below is tested live.</p>
+ <button class="btn" id="run" type="button" style="margin-top:0">Run checks</button>
+ <ul id="out"></ul>
+ <div class="sub"><a href="login.html">Go to sign in</a> · <a href="dashboard.html">Go to dashboard</a></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/supabase-client.js"></script>
+<script>
+(function(){
+ var S=window.AppSupabase||{},$=function(i){return document.getElementById(i)},out=$("out");
+ function add(state,title,detail){var li=document.createElement("li");li.className=state;
+  var b=document.createElement("b");b.textContent=(state==="p"?"PASS  ":state==="f"?"FAIL  ":"NOTE  ")+title;li.appendChild(b);
+  if(detail){var d=document.createElement("span");d.textContent=detail;li.appendChild(d)}out.appendChild(li)}
+ function hdr(){var h={apikey:S.key};if(/^eyJ/.test(S.key))h.Authorization="Bearer "+S.key;return h}
+ async function j(r){try{return await r.json()}catch(e){return null}}
+ async function run(){
+  out.innerHTML="";
+  if(!S.url||!S.key){add("f","Configuration","Open app/js/config.js and fill in SUPABASE_URL and SUPABASE_ANON_KEY. See docs/SUPABASE-SETUP.md.");return}
+  if(!S.ready){add("f","Configuration",S.problem);return}
+  add("p","Configuration looks valid","URL: "+S.url+" (key type is not a secret key)");
+  try{var r=await fetch(S.url+"/auth/v1/health",{headers:hdr()});
+   add(r.ok?"p":"f","Supabase Auth service reachable","HTTP "+r.status+(r.ok?"":". Check the URL and key."))}
+  catch(e){add("f","Supabase Auth service reachable","Network error. Check the URL and your connection.");return}
+  try{
+   var t=await fetch(S.url+"/rest/v1/assets?select=symbol&limit=1",{headers:hdr()});var tb=await j(t);
+   if(t.status===404||(tb&&tb.code==="PGRST205"))add("f","Database tables exist","The tables were not found. Run supabase/setup_all.sql in the SQL Editor.");
+   else if(t.status===401||t.status===403||(tb&&tb.code==="42501"))add("p","Tables exist and are locked from anonymous visitors","Anonymous access to public.assets was refused, as intended.");
+   else if(t.ok)add("f","Anonymous visitors can read your tables","The lockdown step (0009) did not run. Re-run the setup SQL.");
+   else add("w","Tables check inconclusive","HTTP "+t.status);
+  }catch(e){add("w","Tables check inconclusive",String(e))}
+  try{
+   var f=await fetch(S.url+"/rest/v1/rpc/place_spot_order",{method:"POST",headers:Object.assign({"Content-Type":"application/json"},hdr()),body:"{}"});var fb=await j(f);
+   if(f.status===404||(fb&&fb.code==="PGRST202"))add("f","Server-side trading functions exist","Functions not found. Run supabase/setup_all.sql.");
+   else if(f.status===401||f.status===403||(fb&&fb.code==="42501"))add("p","Trading functions exist and refuse anonymous callers","As intended.");
+   else add("w","Function check inconclusive","HTTP "+f.status);
+  }catch(e){add("w","Function check inconclusive",String(e))}
+  var s=await S.client.auth.getSession();
+  if(!s.data.session){add("w","Signed-in checks skipped","Sign in (or create an account) on the sign-in page, then run these checks again to test your own data access.");return}
+  var uid=s.data.session.user.id,c=S.client;
+  var pr=await c.from("profiles").select("id,role,status").eq("id",uid).maybeSingle();
+  add(pr.data?"p":"f","Your profile row exists",pr.error?pr.error.message:(pr.data?"role: "+pr.data.role+", status: "+pr.data.status:"No profile found. The signup trigger (0007) may not have run."));
+  var w=await c.from("wallets").select("symbol,balance").eq("user_id",uid);
+  add(w.data&&w.data.length?"p":"w","Your demo wallets",w.error?w.error.message:(w.data.length+" wallets found."+(w.data.length?"":" Use \"Reset demo account\" in the dashboard to receive starting funds.")));
+  var mp=await c.from("market_prices").select("symbol,source");
+  var demo=mp.data&&mp.data.every(function(x){return x.source==="demo"});
+  add(mp.data&&mp.data.length?"p":"f","Market prices present",mp.error?mp.error.message:(mp.data.length+" prices, source: "+(demo?"DEMO (simulated)":"mixed/live")));
+  var w2=await c.from("wallets").update({balance:999999}).eq("user_id",uid).select();
+  add(w2.error?"p":"f","You cannot edit your own balance",w2.error?"Refused by the database, as intended.":"DANGER: the update was allowed. Re-run the setup SQL (0003 + 0009).");
+  var pf=await c.from("profiles").update({role:"superadmin"}).eq("id",uid).select();
+  add(pf.error?"p":"f","You cannot promote yourself",pf.error?"Refused by the database, as intended.":"DANGER: the update was allowed. Re-run the setup SQL (0001 + 0009).");
+ }
+ $("run").onclick=run;run();
+})();
+</script></body></html>
