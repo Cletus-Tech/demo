@@ -40,14 +40,50 @@
         run(sb.from("wallets").select("symbol,balance").eq("user_id", id)),
         run(sb.from("positions").select("*").eq("user_id", id).eq("status", "open").order("opened_at")),
         run(sb.from("positions").select("*").eq("user_id", id).eq("status", "closed").order("closed_at", { ascending: false }).limit(50)),
-        run(sb.from("orders").select("*").eq("user_id", id).in("kind", ["spot", "swap"]).order("created_at", { ascending: false }).limit(50))
+        run(sb.from("orders").select("*").eq("user_id", id).in("kind", ["spot", "swap"]).order("created_at", { ascending: false }).limit(50)),
+        run(sb.from("ledger_entries").select("id,symbol,amount,entry_type,memo,created_at").eq("user_id", id).in("entry_type", ["demo_grant","demo_deposit","demo_withdrawal","demo_reset"]).order("created_at", { ascending: false }).limit(50)),
+        run(sb.from("referrals").select("id,status,created_at").eq("referrer_id", id).order("created_at", { ascending: false }).limit(100))
       ]);
       var wallets = {};
       res[3].forEach(function (w) { wallets[w.symbol] = num(w.balance); });
       return { profile: res[0], assets: res[1], prices: res[2], wallets: wallets,
-               positions: res[4], closed: res[5], orders: res[6] };
+               positions: res[4], closed: res[5], orders: res[6], ledger: res[7], referrals: res[8] };
     },
     loadPrices: function () { return run(sb.from("market_prices").select("symbol,price,source,updated_at")); },
+    updateProfile: async function (changes) {
+      var id = await uid();
+      var allowed = {};
+      ["full_name", "phone", "country", "language"].forEach(function (k) {
+        if (Object.prototype.hasOwnProperty.call(changes, k)) allowed[k] = changes[k];
+      });
+      if (!Object.keys(allowed).length) throw new Error("There are no profile changes to save");
+      return run(sb.from("profiles").update(allowed).eq("id", id).select("id,email,full_name,phone,country,language,role,status,referral_code").single());
+    },
+    loadReferrals: async function () {
+      var id = await uid();
+      return run(sb.from("referrals").select("id,status,created_at").eq("referrer_id", id).order("created_at", { ascending: false }).limit(100));
+    },
+    adminOverview: async function () {
+      await uid();
+      var allowed = await run(sb.rpc("is_admin"));
+      if (!allowed) throw new Error("Administrator access required");
+      var superadmin = await run(sb.rpc("is_superadmin"));
+      var results = await Promise.all([
+        run(sb.from("profiles").select("id,email,full_name,role,status,created_at").order("created_at", { ascending: false }).limit(200)),
+        run(sb.from("orders").select("id,user_id,kind,side,symbol,from_symbol,amount_usd,price,quantity,status,mode,created_at").order("created_at", { ascending: false }).limit(100)),
+        run(sb.from("ledger_entries").select("id,user_id,symbol,amount,entry_type,memo,created_at").order("created_at", { ascending: false }).limit(100)),
+        run(sb.from("positions").select("id,user_id,symbol,side,margin_usd,leverage,status,pnl_usd,opened_at,closed_at").order("opened_at", { ascending: false }).limit(100))
+      ]);
+      return { isSuperadmin: !!superadmin, users: results[0], orders: results[1], ledger: results[2], positions: results[3] };
+    },
+    adminSetStatus: function (userId, status) {
+      if (["active", "suspended"].indexOf(status) < 0) throw new Error("Invalid account status");
+      return run(sb.rpc("admin_set_status", { p_user: userId, p_status: status }));
+    },
+    adminSetRole: function (userId, role) {
+      if (["user", "support", "admin", "superadmin"].indexOf(role) < 0) throw new Error("Invalid account role");
+      return run(sb.rpc("admin_set_role", { p_user: userId, p_role: role }));
+    },
     loadNotifications: async function () {
       var id = await uid();
       return run(sb.from("notifications").select("id,title,created_at,read_at").eq("user_id", id).order("created_at", { ascending: false }).limit(20));
