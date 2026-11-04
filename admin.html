@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07090c"><title>Admin Console · Demo Broker</title>
+<style>
+:root{color-scheme:dark;--bg:#07090c;--panel:#0d1014;--line:#1a1f26;--text:#f2f5f8;--mute:#8b94a1;--blue:#2d9cff;--green:#0fb58a;--red:#e5484d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:22px}button,select{font:inherit}button{cursor:pointer}.wrap{max-width:1250px;margin:auto}.top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:20px}.top h1{font-size:22px;margin:0}.sub{color:var(--mute);font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);border-radius:9px;padding:9px 13px;background:#171b21;color:var(--text)}.primary{background:var(--blue);border-color:var(--blue)}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:13px}.card{padding:16px}.card span{display:block;color:var(--mute);font-size:12px}.card b{display:block;font-size:24px;margin-top:4px}.panel{padding:16px;margin:12px 0}.panel h2{font-size:15px;margin:0 0 12px}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:700px}th,td{text-align:left;padding:10px 9px;border-top:1px solid var(--line);font-size:12px;vertical-align:middle}th{color:var(--mute);font-weight:600;border-top:0}.muted{color:var(--mute)}.pill{display:inline-block;padding:3px 7px;border-radius:20px;background:#17232d;color:#9dcfff;font-size:11px}.danger{color:var(--red)}select{background:#12161b;border:1px solid var(--line);border-radius:7px;padding:6px;color:var(--text);max-width:125px}.status{margin:12px 0;color:var(--mute);min-height:20px}.empty{padding:16px;color:var(--mute)}a{color:var(--blue)}@media(max-width:760px){body{padding:13px}.cards{grid-template-columns:repeat(2,1fr)}.top{align-items:flex-start;flex-direction:column}.card b{font-size:20px}}
+</style></head><body><main class="wrap">
+<header class="top"><div><h1>Administration</h1><div class="sub">Demo Broker · restricted staff workspace</div></div><div class="actions"><button class="btn" id="refresh">Refresh data</button><a class="btn" href="dashboard.html">Back to dashboard</a><button class="btn" id="signout">Sign out</button></div></header>
+<div class="status" id="status">Checking your administrator access…</div>
+<section class="cards"><div class="card"><span>Registered users loaded</span><b id="usersCount">—</b></div><div class="card"><span>Orders loaded</span><b id="ordersCount">—</b></div><div class="card"><span>Open positions loaded</span><b id="openCount">—</b></div><div class="card"><span>Ledger entries loaded</span><b id="ledgerCount">—</b></div></section>
+<section class="panel"><h2>User management</h2><div class="sub">Account suspension/reactivation is available to admins. Role changes are restricted to superadmins. Database rules prevent changing your own account.</div><div class="scroll"><table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Joined</th><th>Account status action</th><th>Role action</th></tr></thead><tbody id="users"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody></table></div></section>
+<section class="panel"><h2>Recent orders</h2><div class="scroll"><table><thead><tr><th>Time</th><th>User</th><th>Type</th><th>Side</th><th>Asset</th><th>Amount USD</th><th>Status</th><th>Mode</th></tr></thead><tbody id="orders"></tbody></table></div></section>
+<section class="panel"><h2>Open and recent positions</h2><div class="scroll"><table><thead><tr><th>Opened</th><th>User</th><th>Asset</th><th>Side</th><th>Margin</th><th>Leverage</th><th>Status</th><th>P&amp;L</th></tr></thead><tbody id="positions"></tbody></table></div></section>
+<section class="panel"><h2>Recent wallet ledger</h2><div class="sub">Append-only accounting entries. These are demo funds only.</div><div class="scroll"><table><thead><tr><th>Time</th><th>User</th><th>Asset</th><th>Amount</th><th>Entry type</th><th>Memo</th></tr></thead><tbody id="ledger"></tbody></table></div></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script><script src="config.js"></script><script src="supabase-client.js"></script><script src="api.js"></script>
+<script>
+(function(){
+ const $=id=>document.getElementById(id), esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const date=v=>v?new Date(v).toLocaleString():"—", money=v=>"$"+Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+ let data=null,busy=false;
+ function msg(t,bad){$("status").textContent=t;$("status").className="status"+(bad?" danger":"")}
+ function rows(id,html,empty){$(id).innerHTML=html||'<tr><td colspan="8" class="empty">'+empty+'</td></tr>'}
+ async function load(){
+  if(busy)return;busy=true;$("refresh").disabled=true;msg("Loading protected admin data…");
+  try{
+   data=await API.adminOverview();
+   $("usersCount").textContent=data.users.length;$("ordersCount").textContent=data.orders.length;
+   $("openCount").textContent=data.positions.filter(p=>p.status==="open").length;$("ledgerCount").textContent=data.ledger.length;
+   rows("users",data.users.map(u=>'<tr><td><b>'+esc(u.full_name||"Unnamed user")+'</b><div class="muted">'+esc(u.email)+'</div><small class="muted">'+esc(u.id.slice(0,8))+'…</small></td><td><span class="pill">'+esc(u.role)+'</span></td><td>'+esc(u.status)+'</td><td>'+esc(date(u.created_at))+'</td><td><select data-status="'+esc(u.id)+'"><option value="">Choose…</option><option value="active">Activate</option><option value="suspended">Suspend</option></select></td><td>'+(data.isSuperadmin?'<select data-role="'+esc(u.id)+'"><option value="">Choose…</option><option value="user">User</option><option value="support">Support</option><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select>':'<span class="muted">Superadmin only</span>')+'</td></tr>').join(""),"No users found.");
+   rows("orders",data.orders.map(o=>'<tr><td>'+esc(date(o.created_at))+'</td><td>'+esc(o.user_id.slice(0,8))+'…</td><td>'+esc(o.kind)+'</td><td>'+esc(o.side)+'</td><td>'+esc(o.from_symbol?o.from_symbol+" → ":"")+esc(o.symbol)+'</td><td>'+money(o.amount_usd)+'</td><td>'+esc(o.status)+'</td><td><span class="pill">'+esc(o.mode)+'</span></td></tr>').join(""),"No orders found.");
+   rows("positions",data.positions.map(p=>'<tr><td>'+esc(date(p.opened_at))+'</td><td>'+esc(p.user_id.slice(0,8))+'…</td><td>'+esc(p.symbol)+'</td><td>'+esc(p.side)+'</td><td>'+money(p.margin_usd)+'</td><td>'+esc(p.leverage)+'x</td><td>'+esc(p.status)+'</td><td>'+money(p.pnl_usd)+'</td></tr>').join(""),"No positions found.");
+   rows("ledger",data.ledger.map(l=>'<tr><td>'+esc(date(l.created_at))+'</td><td>'+esc(l.user_id.slice(0,8))+'…</td><td>'+esc(l.symbol)+'</td><td>'+esc(Number(l.amount)>0?"+":"")+esc(Number(l.amount).toFixed(6))+'</td><td>'+esc(l.entry_type)+'</td><td>'+esc(l.memo||"—")+'</td></tr>').join(""),"No ledger entries found.");
+   msg("Admin access confirmed. Data refreshed "+new Date().toLocaleTimeString()+".");
+  }catch(e){msg(e.message||"Unable to load admin data",true);$("users").innerHTML='<tr><td colspan="6" class="empty">Access denied or data unavailable.</td></tr>'}
+  finally{busy=false;$("refresh").disabled=false}
+ }
+ $("users").addEventListener("change",async e=>{
+  const s=e.target.closest("[data-status]"),r=e.target.closest("[data-role]");if(!s&&!r)return;
+  const el=s||r,id=el.dataset.status||el.dataset.role,value=el.value;if(!value)return;
+  el.disabled=true;
+  try{if(s)await API.adminSetStatus(id,value);else await API.adminSetRole(id,value);msg("Account change saved and audited.");await load()}
+  catch(err){msg(err.message,true);el.value=""}
+  finally{el.disabled=false}
+ });
+ $("refresh").onclick=load;$("signout").onclick=async()=>{await API.signOut();location.replace("login.html")};
+ (async()=>{if(!window.AppSupabase||!AppSupabase.ready){location.replace("setup-check.html");return}if(!(await API.getSession())){location.replace("login.html");return}await load()})();
+})();
+</script></body></html>
