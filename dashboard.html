@@ -235,6 +235,8 @@ body{overflow-x:hidden}
   </span>
   <div class="menu" id="acctMenu">
    <div class="it">Demo account<span id="mEmail">Practice funds only</span></div>
+   <button id="mSettings">Profile settings</button>
+   <button id="mAdmin" hidden>Administration</button>
    <button id="mReset">Reset demo account</button>
    <button id="mOut">Sign out</button>
   </div>
@@ -665,6 +667,8 @@ document.addEventListener("click",e=>{if(!e.target.closest(".menu"))menus.forEac
 $("langMenu").onclick=e=>{const b=e.target.closest("button");if(b)toast("Language: "+b.dataset.l+" (demo)")};
 $("mmMenu").onclick=e=>{const b=e.target.closest("button");if(!b)return;if(b.id==="mmConv"){mode="Convert";$("tabs").querySelector('[data-m="Convert"]').click();$("secTrade").scrollIntoView({behavior:"smooth"})}else openMoney(b.dataset.a)};
 $("mReset").onclick=openEdit;
+$("mSettings").onclick=editProfile;
+$("mAdmin").onclick=()=>location.href="admin.html";
 $("mOut").onclick=async()=>{await API.signOut();location.replace("login.html")};
 $("eyeBtn").onclick=()=>{hidden=!hidden;render()};
 $("vaBtn").onclick=()=>{showAll=!showAll;render()};
@@ -730,6 +734,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"){close();closeMoney(
  CONFIG.userName=st.profile.full_name||(st.profile.email||"Account").split("@")[0];
  applyState(st);
  $("mEmail").textContent=st.profile.email||"Practice funds only";
+ $("mAdmin").hidden=!["admin","superadmin"].includes(st.profile.role);
  document.title=CONFIG.brand+" | Dashboard";
 $("brand").innerHTML=`<i>${CONFIG.logoLetter}</i>${CONFIG.brand}`;
 const ini=CONFIG.userName.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
