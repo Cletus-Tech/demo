@@ -34,7 +34,7 @@
     loadState: async function () {
       var id = await uid();
       var res = await Promise.all([
-        run(sb.from("profiles").select("id,email,full_name,role,status,referral_code,language").eq("id", id).maybeSingle()),
+        run(sb.from("profiles").select("id,email,full_name,phone,country,role,status,referral_code,language").eq("id", id).maybeSingle()),
         run(sb.from("assets").select("symbol,name,category,sort_order").eq("is_active", true).order("sort_order")),
         run(sb.from("market_prices").select("symbol,price,source,updated_at")),
         run(sb.from("wallets").select("symbol,balance").eq("user_id", id)),
