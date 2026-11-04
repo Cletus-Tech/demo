@@ -82,9 +82,10 @@
         run(sb.from("profiles").select("id,email,full_name,role,status,created_at").order("created_at", { ascending: false }).limit(200)),
         run(sb.from("orders").select("id,user_id,kind,side,symbol,from_symbol,amount_usd,price,quantity,status,mode,created_at").order("created_at", { ascending: false }).limit(100)),
         run(sb.from("ledger_entries").select("id,user_id,symbol,amount,entry_type,memo,created_at").order("created_at", { ascending: false }).limit(100)),
-        run(sb.from("positions").select("id,user_id,symbol,side,margin_usd,leverage,status,pnl_usd,opened_at,closed_at").order("opened_at", { ascending: false }).limit(100))
+        run(sb.from("positions").select("id,user_id,symbol,side,margin_usd,leverage,status,pnl_usd,opened_at,closed_at").order("opened_at", { ascending: false }).limit(100)),
+        run(sb.from("service_requests").select("id,user_id,service_key,details,status,created_at").order("created_at", { ascending: false }).limit(100))
       ]);
-      return { isSuperadmin: !!superadmin, users: results[0], orders: results[1], ledger: results[2], positions: results[3] };
+      return { isSuperadmin: !!superadmin, users: results[0], orders: results[1], ledger: results[2], positions: results[3], serviceRequests: results[4] };
     },
     adminSetStatus: function (userId, status) {
       if (["active", "suspended"].indexOf(status) < 0) throw new Error("Invalid account status");
