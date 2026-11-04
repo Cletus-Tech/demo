@@ -419,14 +419,17 @@ function notify(){refreshNotes()}   // the server writes the notification; we ju
 const syncBal=()=>ASSETS.forEach(a=>{bal[a.id]=(units[a.id]||0)*(px[a.id]||0)});
 const mapPos=r=>({id:r.id,sym:r.symbol,side:r.side,margin:+r.margin_usd,lev:r.leverage,entry:+r.entry_price,tp:r.take_profit?+r.take_profit:0,sl:r.stop_loss?+r.stop_loss:0,exp:r.expires_at?Date.parse(r.expires_at):0});
 const REASON={manual:"manual",take_profit:"take profit",stop_loss:"stop loss",liquidated:"liquidated",duration_ended:"duration ended"};
+let currentProfile=null, referralRows=[];
 function applyState(st){
+ currentProfile=st.profile;referralRows=st.referrals||[];
  st.prices.forEach(p=>{px[p.symbol]=Number(p.price)});
  units=st.wallets;syncBal();
  pos=st.positions.map(mapPos);
  const h=[];
  st.orders.forEach(o=>h.push({kind:o.kind,t:o.kind==="swap"?`Swap ${o.from_symbol} to ${o.symbol}`:`${o.side==="sell"?"Sold":"Bought"} ${o.symbol}`,sub:usd(+o.amount_usd),pnl:0,at:new Date(o.created_at)}));
  st.closed.forEach(p=>h.push({kind:p.close_reason==="manual"?"manual":"auto",t:`${p.symbol} ${p.side} ${p.leverage}x (${REASON[p.close_reason]||p.close_reason})`,pnl:+p.pnl_usd,at:new Date(p.closed_at)}));
- hist=h.sort((a,b)=>b.at-a.at).slice(0,50);
+ (st.ledger||[]).forEach(x=>h.push({kind:"wallet",t:({demo_grant:"Demo starting funds",demo_deposit:"Demo deposit",demo_withdrawal:"Demo withdrawal",demo_reset:"Demo balance reset"}[x.entry_type]||x.entry_type),sub:`${x.symbol} ${Number(x.amount)>0?"+":""}${Number(x.amount).toFixed(6)}`,pnl:0,at:new Date(x.created_at)}));
+ hist=h.sort((a,b)=>b.at-a.at).slice(0,100);
 }
 async function refreshState(){applyState(await API.loadState())}
 function render(){
@@ -679,10 +682,34 @@ $("cform").onsubmit=e=>{
  const r=/deposit|withdraw/.test(q)?"Use Move money at the top of the page. Everything here is demo funds.":/lever/.test(q)?"Leverage multiplies both gains and losses. A trade is liquidated when its loss reaches your margin.":/tp|sl|stop|profit/.test(q)?"Tick Use TP/SL, or press Set with AI to fill suggested levels.":"This is a demo chat, so replies are canned. Try asking about deposits, leverage or TP/SL.";
  setTimeout(()=>add(r),500);
 };
+async function editProfile(){
+ if(!currentProfile)return;
+ const full_name=prompt("Full name",currentProfile.full_name||"");
+ if(full_name===null)return;
+ const phone=prompt("Phone number",currentProfile.phone||"");
+ if(phone===null)return;
+ const country=prompt("Country",currentProfile.country||"");
+ if(country===null)return;
+ try{
+  const p=await API.updateProfile({full_name:full_name.trim(),phone:phone.trim(),country:country.trim()});
+  currentProfile=p;CONFIG.userName=p.full_name||(p.email||"Account").split("@")[0];
+  $("uName").textContent=CONFIG.userName;
+  const ini=CONFIG.userName.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  $("uAv").textContent=ini;$("topAv").textContent=ini;
+  toast("Profile updated successfully");
+ }catch(e){toast("Could not update profile: "+e.message)}
+}
+async function showReferrals(){
+ try{
+  const rows=await API.loadReferrals();
+  const code=currentProfile&&currentProfile.referral_code||"Not available";
+  alert("Your referral code: "+code+"\nReferrals: "+rows.length+"\n\nReferral tracking is active; reward processing is not enabled in this demo.");
+ }catch(e){toast(e.message)}
+}
 function goTo(g){
  if(g==="Deposit"||g==="Withdraw")openMoney(g);
  else if(g==="assets"){showAll=true;render();$("secAssets").scrollIntoView({behavior:"smooth"})}
- else if(g==="settings")toast("Settings arrives in Stage 2");
+ else if(g==="settings")editProfile();
  else if(g==="chart"||g==="trade")$("secTrade").scrollIntoView({behavior:"smooth"});
  else window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -714,7 +741,7 @@ $("nav").onclick=e=>{
  if(g){g.classList.toggle("shut");$("sub"+g.dataset.g).hidden=g.classList.contains("shut");return}
  const a=e.target.closest("a");if(!a)return;
  document.body.classList.remove("nav-open");
- if(a.dataset.go)goTo(a.dataset.go);else toast(a.dataset.t+" is coming in a later stage");
+ if(a.dataset.go)goTo(a.dataset.go);else if(a.dataset.t==="Referrals")showReferrals();else toast(a.dataset.t+" is not enabled in this demo yet");
 };
 $("menuBtn").onclick=e=>{e.stopPropagation();document.body.classList.toggle("nav-open")};
 $("scrim").onclick=()=>document.body.classList.remove("nav-open");
