@@ -344,6 +344,14 @@ body{overflow-x:hidden}
  </div>
 </div>
 
+<div class="modal" id="serviceHub" role="dialog" aria-modal="true" aria-labelledby="serviceTitle">
+ <div class="sheet" style="max-width:520px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h2 id="serviceTitle">Services</h2><button class="sq" id="serviceClose" aria-label="Close">✕</button></div>
+  <div class="lbl" id="serviceIntro" style="margin:8px 0 14px">Submit a demo service request. These are enquiries only; no real funds or assets are moved.</div>
+  <div id="serviceBody"></div>
+ </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="supabase-client.js"></script>
@@ -710,6 +718,30 @@ async function showReferrals(){
   alert("Your referral code: "+code+"\nReferrals: "+rows.length+"\n\nReferral tracking is active; reward processing is not enabled in this demo.");
  }catch(e){toast(e.message)}
 }
+const SERVICE_META={
+ "Cold Storage":["cold_storage","Request secure custody information","Custody is not connected to a live custodian. This form records an enquiry only."],
+ "Cards":["cards","Request card programme information","No payment card is issued or connected. Submit an enquiry for the client team."],
+ "Subscribe":["subscribe","Subscription interest","Subscription billing is not enabled. This records your interest only."],
+ "Signals":["signals","Trading signals access","Signals shown here are not live investment advice. Request access information."],
+ "Connect wallet":["connect_wallet","Wallet connection request","No wallet is connected and no private keys are requested. This records an assistance request."],
+ "Investing":["investing","Investment programme enquiry","No investment products or returns are offered in this demo. Submit an enquiry only."],
+ "Copy trading":["copy_trading","Copy trading interest","No trader is copied and no funds are allocated. This is an enquiry only."],
+ "Mining":["mining","Mining information request","No mining contract or rewards are active. Request information only."],
+ "Real Estate":["real_estate","Real estate enquiry","No property is listed for sale or investment through this demo. This records an enquiry."],
+ "Stake":["stake","Staking information request","No staking or yield is active. No tokens will be locked."]
+};
+const SERVICE_LABEL={cold_storage:"Cold Storage",cards:"Cards",subscribe:"Subscribe",signals:"Signals",connect_wallet:"Connect wallet",investing:"Investing",copy_trading:"Copy trading",mining:"Mining",real_estate:"Real Estate",stake:"Stake"};
+async function openServiceHub(name){
+ const m=SERVICE_META[name];if(!m)return toast(name+" is not available yet");
+ $("serviceTitle").textContent=m[1];$("serviceIntro").textContent=m[2];
+ $("serviceBody").innerHTML='<label style="display:block;margin:8px 0;color:var(--mute)">Additional details (optional)<textarea id="serviceDetails" maxlength="2000" rows="3" style="display:block;width:100%;margin-top:6px;background:#12161b;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;resize:vertical"></textarea></label><div id="serviceMsg" class="lbl" style="min-height:20px"></div><div class="acts"><button class="btn ghost" id="serviceHistory">My requests</button><button class="btn" id="serviceSubmit">Submit enquiry</button></div>';
+ $("serviceHub").classList.add("open");
+ $("serviceClose").onclick=()=>$("serviceHub").classList.remove("open");
+ $("serviceHistory").onclick=async()=>{const b=$("serviceBody");try{const rows=await API.loadMyServiceRequests();b.innerHTML='<h3 style="margin:10px 0">Your enquiries</h3>'+(rows.length?rows.map(x=>'<div class="row"><div class="n">'+esc(SERVICE_LABEL[x.service_key]||x.service_key)+'<span>'+esc(x.details||"No extra details")+'</span></div><div class="v">'+esc(x.status)+'</div></div>').join(""):'<div class="lbl">You have not submitted any enquiries yet.</div>')+'<div class="acts"><button class="btn ghost" id="serviceBack">Back</button></div>';$("serviceBack").onclick=()=>openServiceHub(name)}catch(e){$("serviceMsg").textContent=e.message}};
+ $("serviceSubmit").onclick=async()=>{const b=$("serviceSubmit"),msg=$("serviceMsg");b.disabled=true;msg.textContent="Submitting…";try{await API.createServiceRequest(m[0],$("serviceDetails").value);msg.textContent="Your enquiry has been saved. The team can review it in the admin console.";b.textContent="Submitted";}catch(e){msg.textContent=e.message;b.disabled=false}};
+}
+$("serviceClose").onclick=()=>$("serviceHub").classList.remove("open");
+$("serviceHub").onclick=e=>{if(e.target===$("serviceHub"))$("serviceHub").classList.remove("open")};
 function goTo(g){
  if(g==="Deposit"||g==="Withdraw")openMoney(g);
  else if(g==="assets"){showAll=true;render();$("secAssets").scrollIntoView({behavior:"smooth"})}
@@ -746,7 +778,7 @@ $("nav").onclick=e=>{
  if(g){g.classList.toggle("shut");$("sub"+g.dataset.g).hidden=g.classList.contains("shut");return}
  const a=e.target.closest("a");if(!a)return;
  document.body.classList.remove("nav-open");
- if(a.dataset.go)goTo(a.dataset.go);else if(a.dataset.t==="Referrals")showReferrals();else toast(a.dataset.t+" is not enabled in this demo yet");
+ if(a.dataset.go)goTo(a.dataset.go);else if(a.dataset.t==="Referrals")showReferrals();else openServiceHub(a.dataset.t);
 };
 $("menuBtn").onclick=e=>{e.stopPropagation();document.body.classList.toggle("nav-open")};
 $("scrim").onclick=()=>document.body.classList.remove("nav-open");
