@@ -13,7 +13,7 @@
   }
 
   if (!url || !key) {
-    S.problem = "Supabase is not configured yet. Open app/js/config.js and add your Project URL and anon key.";
+    S.problem = "Supabase is not configured yet. Open config.js in the repository root and add your Project URL and anon key.";
   } else if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(url) &&
              !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(url)) {
     S.problem = "SUPABASE_URL does not look right. It should look like https://abcdefgh.supabase.co";
