@@ -52,17 +52,21 @@ li b{display:block;margin-bottom:2px}.p{border-color:#0c5a46}.f{border-color:#7a
    else if(t.ok)add("f","Anonymous visitors can read your tables","The lockdown step (0009) did not run. Re-run the setup SQL.");
    else add("w","Tables check inconclusive","HTTP "+t.status);
   }catch(e){add("w","Tables check inconclusive",String(e))}
-  try{
-   var f=await fetch(S.url+"/rest/v1/rpc/place_spot_order",{method:"POST",headers:Object.assign({"Content-Type":"application/json"},hdr()),body:"{}"});var fb=await j(f);
-   if(f.status===404||(fb&&fb.code==="PGRST202"))add("f","Server-side trading functions exist","Functions not found. Run supabase/setup_all.sql.");
-   else if(f.status===401||f.status===403||(fb&&fb.code==="42501"))add("p","Trading functions exist and refuse anonymous callers","As intended.");
-   else add("w","Function check inconclusive","HTTP "+f.status);
-  }catch(e){add("w","Function check inconclusive",String(e))}
   var s=await S.client.auth.getSession();
-  if(!s.data.session){add("w","Signed-in checks skipped","Sign in (or create an account) on the sign-in page, then run these checks again to test your own data access.");return}
+  if(!s.data.session){add("w","Signed-in checks skipped","Sign in (or create an account) on the sign-in page, then run these checks again to test trading functions and service requests.");return}
   var uid=s.data.session.user.id,c=S.client;
+  try{
+   var f=await c.rpc("place_spot_order",{p_symbol:"BTC",p_side:"__setup_check_invalid__",p_amount_usd:1});
+   if(f.error&&/Side must be buy or sell/i.test(f.error.message))add("p","Server-side trading functions exist","Authenticated function reached validation; invalid test order was rejected without a trade.");
+   else if(f.error)add("w","Trading function responded","Validation response: "+f.error.message);
+   else add("f","Trading validation check","The invalid test order was not rejected. Check the trading function before accepting real activity.");
+  }catch(e){add("w","Function check inconclusive",String(e))}
   var pr=await c.from("profiles").select("id,role,status").eq("id",uid).maybeSingle();
   add(pr.data?"p":"f","Your profile row exists",pr.error?pr.error.message:(pr.data?"role: "+pr.data.role+", status: "+pr.data.status:"No profile found. The signup trigger (0007) may not have run."));
+  var sr=await c.from("service_requests").select("id").eq("user_id",uid).limit(1);
+  add(!sr.error?"p":"f","Service enquiry module",sr.error?sr.error.message:"Service request table and own-account access are available.");
+  var admin=await c.rpc("is_admin");
+  add(!admin.error?"p":"w","Administrator permission check",admin.error?admin.error.message:(admin.data?"This account has admin access.":"This account has standard user access."));
   var w=await c.from("wallets").select("symbol,balance").eq("user_id",uid);
   add(w.data&&w.data.length?"p":"w","Your demo wallets",w.error?w.error.message:(w.data.length+" wallets found."+(w.data.length?"":" Use \"Reset demo account\" in the dashboard to receive starting funds.")));
   var mp=await c.from("market_prices").select("symbol,source");
