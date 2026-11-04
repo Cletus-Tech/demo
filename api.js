@@ -40,14 +40,29 @@
         run(sb.from("wallets").select("symbol,balance").eq("user_id", id)),
         run(sb.from("positions").select("*").eq("user_id", id).eq("status", "open").order("opened_at")),
         run(sb.from("positions").select("*").eq("user_id", id).eq("status", "closed").order("closed_at", { ascending: false }).limit(50)),
-        run(sb.from("orders").select("*").eq("user_id", id).in("kind", ["spot", "swap"]).order("created_at", { ascending: false }).limit(50))
+        run(sb.from("orders").select("*").eq("user_id", id).in("kind", ["spot", "swap"]).order("created_at", { ascending: false }).limit(50)),
+        run(sb.from("ledger_entries").select("id,symbol,amount,entry_type,memo,created_at").eq("user_id", id).in("entry_type", ["demo_grant","demo_deposit","demo_withdrawal","demo_reset"]).order("created_at", { ascending: false }).limit(50)),
+        run(sb.from("referrals").select("id,status,created_at").eq("referrer_id", id).order("created_at", { ascending: false }).limit(100))
       ]);
       var wallets = {};
       res[3].forEach(function (w) { wallets[w.symbol] = num(w.balance); });
       return { profile: res[0], assets: res[1], prices: res[2], wallets: wallets,
-               positions: res[4], closed: res[5], orders: res[6] };
+               positions: res[4], closed: res[5], orders: res[6], ledger: res[7], referrals: res[8] };
     },
     loadPrices: function () { return run(sb.from("market_prices").select("symbol,price,source,updated_at")); },
+    updateProfile: async function (changes) {
+      var id = await uid();
+      var allowed = {};
+      ["full_name", "phone", "country", "language"].forEach(function (k) {
+        if (Object.prototype.hasOwnProperty.call(changes, k)) allowed[k] = changes[k];
+      });
+      if (!Object.keys(allowed).length) throw new Error("There are no profile changes to save");
+      return run(sb.from("profiles").update(allowed).eq("id", id).select("id,email,full_name,phone,country,language,role,status,referral_code").single());
+    },
+    loadReferrals: async function () {
+      var id = await uid();
+      return run(sb.from("referrals").select("id,status,created_at").eq("referrer_id", id).order("created_at", { ascending: false }).limit(100));
+    },
     loadNotifications: async function () {
       var id = await uid();
       return run(sb.from("notifications").select("id,title,created_at,read_at").eq("user_id", id).order("created_at", { ascending: false }).limit(20));
