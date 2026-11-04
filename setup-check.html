@@ -39,7 +39,7 @@ li b{display:block;margin-bottom:2px}.p{border-color:#0c5a46}.f{border-color:#7a
  async function j(r){try{return await r.json()}catch(e){return null}}
  async function run(){
   out.innerHTML="";
-  if(!S.url||!S.key){add("f","Configuration","Open app/config.js and fill in SUPABASE_URL and SUPABASE_ANON_KEY. See docs/SUPABASE-SETUP.md.");return}
+  if(!S.url||!S.key){add("f","Configuration","Open config.js in the repository root and fill in SUPABASE_URL and SUPABASE_ANON_KEY. See docs/SUPABASE-SETUP.md.");return}
   if(!S.ready){add("f","Configuration",S.problem);return}
   add("p","Configuration looks valid","URL: "+S.url+" (key type is not a secret key)");
   try{var r=await fetch(S.url+"/auth/v1/health",{headers:hdr()});
