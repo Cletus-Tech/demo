@@ -31,11 +31,19 @@
    rows("orders",data.orders.map(o=>'<tr><td>'+esc(date(o.created_at))+'</td><td>'+esc(o.user_id.slice(0,8))+'…</td><td>'+esc(o.kind)+'</td><td>'+esc(o.side)+'</td><td>'+esc(o.from_symbol?o.from_symbol+" → ":"")+esc(o.symbol)+'</td><td>'+money(o.amount_usd)+'</td><td>'+esc(o.status)+'</td><td><span class="pill">'+esc(o.mode)+'</span></td></tr>').join(""),"No orders found.");
    rows("positions",data.positions.map(p=>'<tr><td>'+esc(date(p.opened_at))+'</td><td>'+esc(p.user_id.slice(0,8))+'…</td><td>'+esc(p.symbol)+'</td><td>'+esc(p.side)+'</td><td>'+money(p.margin_usd)+'</td><td>'+esc(p.leverage)+'x</td><td>'+esc(p.status)+'</td><td>'+money(p.pnl_usd)+'</td></tr>').join(""),"No positions found.");
    rows("ledger",data.ledger.map(l=>'<tr><td>'+esc(date(l.created_at))+'</td><td>'+esc(l.user_id.slice(0,8))+'…</td><td>'+esc(l.symbol)+'</td><td>'+esc(Number(l.amount)>0?"+":"")+esc(Number(l.amount).toFixed(6))+'</td><td>'+esc(l.entry_type)+'</td><td>'+esc(l.memo||"—")+'</td></tr>').join(""),"No ledger entries found.");
-   rows("serviceRequests",(data.serviceRequests||[]).map(q=>'<tr><td>'+esc(date(q.created_at))+'</td><td>'+esc(q.user_id.slice(0,8))+'…</td><td>'+esc(q.service_key)+'</td><td>'+esc(q.details||"—")+'</td><td>'+esc(q.status)+'</td></tr>').join(""),"No service enquiries found.");
+   rows("serviceRequests",(data.serviceRequests||[]).map(q=>'<tr><td>'+esc(date(q.created_at))+'</td><td>'+esc(q.user_id.slice(0,8))+'…</td><td>'+esc(q.service_key)+'</td><td>'+esc(q.details||"—")+'</td><td><select data-service-status="'+esc(q.id)+'"><option value="pending" '+(q.status==="pending"?"selected":"")+'>Pending</option><option value="in_review" '+(q.status==="in_review"?"selected":"")+'>In review</option><option value="approved" '+(q.status==="approved"?"selected":"")+'>Approved</option><option value="declined" '+(q.status==="declined"?"selected":"")+'>Declined</option><option value="closed" '+(q.status==="closed"?"selected":"")+'>Closed</option></select></td></tr>').join(""),"No service enquiries found.");
    msg("Admin access confirmed. Data refreshed "+new Date().toLocaleTimeString()+".");
   }catch(e){msg(e.message||"Unable to load admin data",true);$("users").innerHTML='<tr><td colspan="6" class="empty">Access denied or data unavailable.</td></tr>'}
   finally{busy=false;$("refresh").disabled=false}
  }
+ document.addEventListener("change",async e=>{
+  const el=e.target.closest("[data-service-status]");if(!el)return;
+  const id=el.dataset.serviceStatus,status=el.value,note=prompt("Internal note for this enquiry (optional)","");
+  if(note===null){await load();return}
+  el.disabled=true;
+  try{await API.adminSetServiceRequest(id,status,note);msg("Service enquiry updated.");await load()}
+  catch(err){msg(err.message,true);await load()}
+ });
  $("users").addEventListener("change",async e=>{
   const s=e.target.closest("[data-status]"),r=e.target.closest("[data-role]");if(!s&&!r)return;
   const el=s||r,id=el.dataset.status||el.dataset.role,value=el.value;if(!value)return;
