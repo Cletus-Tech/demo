@@ -95,6 +95,10 @@
       if (["user", "support", "admin", "superadmin"].indexOf(role) < 0) throw new Error("Invalid account role");
       return run(sb.rpc("admin_set_role", { p_user: userId, p_role: role }));
     },
+    adminSetServiceRequest: function (requestId, status, note) {
+      if (["pending","in_review","approved","declined","closed"].indexOf(status) < 0) throw new Error("Invalid request status");
+      return run(sb.rpc("admin_update_service_request", { p_id: requestId, p_status: status, p_note: String(note||"").slice(0,2000) }));
+    },
     loadNotifications: async function () {
       var id = await uid();
       return run(sb.from("notifications").select("id,title,created_at,read_at").eq("user_id", id).order("created_at", { ascending: false }).limit(20));
