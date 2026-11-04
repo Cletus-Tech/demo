@@ -63,6 +63,16 @@
       var id = await uid();
       return run(sb.from("referrals").select("id,status,created_at").eq("referrer_id", id).order("created_at", { ascending: false }).limit(100));
     },
+    createServiceRequest: async function (serviceKey, details) {
+      var id = await uid();
+      var allowed = ["cold_storage","cards","subscribe","signals","connect_wallet","investing","copy_trading","mining","real_estate","stake"];
+      if (allowed.indexOf(serviceKey) < 0) throw new Error("Unknown service");
+      return run(sb.from("service_requests").insert({ user_id:id, service_key:serviceKey, details:String(details||"").slice(0,2000) }).select("id,service_key,details,status,created_at").single());
+    },
+    loadMyServiceRequests: async function () {
+      var id = await uid();
+      return run(sb.from("service_requests").select("id,service_key,details,status,created_at,updated_at").eq("user_id",id).order("created_at",{ascending:false}).limit(50));
+    },
     adminOverview: async function () {
       await uid();
       var allowed = await run(sb.rpc("is_admin"));
