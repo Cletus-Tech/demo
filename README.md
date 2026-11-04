@@ -1,51 +1,50 @@
-# Master Brokerage Platform: Stage 1 (Foundation)
+# Demo Broker — Brokerage Platform Foundation
 
-A **demo / practice** trading platform: a static web frontend (your existing dashboard, preserved) plus a Supabase backend
-with authentication, row-level security, wallets, an append-only ledger, server-side trading functions and an audit log.
+This repository contains the existing client-approved brokerage-style dashboard, connected to Supabase for authentication, account data, demo wallets, ledger entries, orders, positions, referrals, notifications, and administration.
 
-**Everything is demo.** Prices are simulated, funds are practice funds, and no real money is held or moved.
-Real payments, custody or trading require a licensed provider and are intentionally not implemented.
+## Important operating mode
 
-## What is in the box
-```
-app/                     the website (upload this folder to any static host)
-  index.html             routes to login / dashboard / setup check
-  login.html             sign in, create account, forgot password
-  reset-password.html    set a new password from the emailed link
-  dashboard.html         your original dashboard, now connected to the database
-  setup-check.html       live connection + security self-test
-  js/config.js           the ONLY file you edit (Supabase URL + anon key)
-  js/supabase-client.js  creates the client, refuses secret keys
-  js/api.js              every backend call
-supabase/
-  migrations/0001..0009  database schema, RLS, functions, lockdown
-  setup_all.sql          the same migrations in ONE file (paste this)
-  tests/rls_tests.sql    security test script (run in the SQL Editor)
-docs/                    SUPABASE-SETUP.md, ARCHITECTURE.md, STAGE-1-REPORT.md
-scripts/                 build-setup-all.js, generate-config.js, static-checks.js
-tests/                   ui-test.py + fake-supabase.js (browser test without a real project)
-.env.example             placeholders only (optional)
-```
+The current platform is a **demo/practice environment**:
+- Balances and deposits/withdrawals are simulated practice funds.
+- Market prices are marked as demo/simulated; they are not exchange feeds.
+- Spot orders, swaps, and leveraged positions are processed by database functions against demo wallets.
+- Service products (cards, custody, signals, copy trading, staking, etc.) are enquiry workflows, not activated financial products.
+- No real money, crypto custody, or live exchange orders are processed.
 
-## Quick start
-1. Follow **docs/SUPABASE-SETUP.md** (about 20 minutes, free).
-2. `cd app && python3 -m http.server 8000`, then open http://localhost:8000
-3. Open **/setup-check.html** and confirm every line is PASS.
-4. Run **supabase/tests/rls_tests.sql** in the SQL Editor.
+A production launch requires separately integrating and testing licensed payment, custody, KYC/AML, market-data, and brokerage/exchange providers, plus legal/compliance approval. Provider credentials must never be committed to this public repository.
 
-## Commands (optional; Node 18+ for the scripts)
-| Command | What it does |
-|---|---|
-| `npm run build:sql` | regenerate `supabase/setup_all.sql` from the migrations |
-| `npm run check` | static security checks (RLS on every table, grants, no secrets in `app/`) |
-| `npm run config` | write `app/js/config.js` from `.env` or environment variables |
-| `npm run serve` | local web server on port 8000 |
-| `npm run test:ui` | browser test against a fake backend (needs Python + `playwright` + Chromium) |
+## Main files
 
-## Deploying
-Upload the `app/` folder to Netlify, Cloudflare Pages, GitHub Pages or Vercel (publish directory: `app`). Then add the live
-address in Supabase under Authentication > URL Configuration. The anon key in `config.js` is public by design; the database
-rules are what protect your data. **Never** put a service_role/secret key in `app/`.
+- `index.html` — entry / route page
+- `login.html` — registration, sign-in and password recovery
+- `reset-password.html` — password reset callback
+- `dashboard.html` — existing responsive dashboard and trading interface
+- `admin.html` — protected staff console
+- `setup-check.html` — connection and security self-check
+- `config.js` — public Supabase project URL and publishable key only
+- `supabase-client.js` — Supabase client/session setup
+- `api.js` — browser-to-database API calls
+- `setup_all.sql` — consolidated initial database setup
+- `migrations/` — incremental database migrations
 
-## Status
-See **docs/STAGE-1-REPORT.md** for what was built, what was tested (and how), and what still needs your Supabase setup.
+## Deployment
+
+The site is deployed from the repository's `main` branch through GitHub Pages.
+
+Live site: https://cletus-tech.github.io/demo/
+
+After changing authentication redirect URLs or the hosting domain, update Supabase Authentication > URL Configuration to include the deployed site and the login/reset-password callback pages.
+
+## Database changes
+
+The connected Supabase project is the **Demo Broker** project. Do not run `setup_all.sql` again on an already initialized database. Apply only migrations that have not already been applied, then run the setup check and database security advisors.
+
+## Validation
+
+1. Open `setup-check.html` while signed in.
+2. Confirm the authenticated trading-function validation rejects the intentionally invalid test order.
+3. Confirm the profile, service request access, demo wallets, and demo market prices checks.
+4. Use a dedicated authorized admin/superadmin account to test `admin.html`.
+5. Test demo transactions with practice funds only and verify resulting ledger/order/position records.
+
+Never place a Supabase `service_role` or secret key in browser code.
