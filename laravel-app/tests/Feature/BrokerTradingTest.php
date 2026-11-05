@@ -273,4 +273,15 @@ class BrokerTradingTest extends TestCase
         $this->assertTrue(Hash::check('new-password-123', $user->fresh()->password));
     }
 
+
+    public function test_dashboard_renders_original_brokerage_interface_through_laravel(): void
+    {
+        $this->actingAs($this->account(), 'web')
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Demo mode: practice funds')
+            ->assertSee('Buy')
+            ->assertDontSee('supabase-js');
+    }
+
 }
