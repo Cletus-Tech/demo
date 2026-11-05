@@ -70,6 +70,7 @@ class BrokerApiController
             }
             $wallet->refresh();
             $tx=BrokerTransaction::create(['user_id'=>$user->id,'type'=>$data['type'],'symbol'=>$symbol,'amount'=>$amount,'status'=>'completed','meta'=>['mode'=>'demo','to_symbol'=>$data['to_symbol']??null]]);
+            BrokerNotification::create(['user_id'=>$user->id,'title'=>'Demo '.ucfirst($data['type']).' completed','body'=>'Your demo '.$data['type'].' request for '.$symbol.' was recorded.']);
             return response()->json(['transaction'=>$tx,'wallet'=>$wallet,'mode'=>'demo'],201);
         });
     }
