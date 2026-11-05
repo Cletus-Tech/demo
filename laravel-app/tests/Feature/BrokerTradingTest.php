@@ -190,7 +190,7 @@ class BrokerTradingTest extends TestCase
         $this->assertDatabaseHas('broker_transactions', [
             'user_id' => $user->id, 'type' => 'demo_reset', 'symbol' => 'USD',
         ]);
-        $this->assertDatabaseCount('broker_transactions', 11);
+        $this->assertDatabaseCount('broker_transactions', 15);
     }
 
 
