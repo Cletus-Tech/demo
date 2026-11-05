@@ -1,0 +1,14 @@
+Demo Broker — Laravel application notes
+
+This folder contains the standalone Laravel 12 application for the Demo Broker conversion. It is separate from the original static/Supabase demo, which remains unchanged on the main branch.
+
+The Laravel application includes:
+- Laravel-native registration, login, logout and session authentication.
+- The original dashboard view and visual styling, adapted to Blade.
+- Server-side demo wallets, transactions, spot trades, conversions and leveraged positions.
+- Configured demo starting balances on signup and reset.
+- Admin access controls for account status/roles and service-request review.
+- SQLite local development and MySQL hosting configuration.
+- PHPUnit feature tests and GitHub Actions checks.
+
+Setup instructions are in README.md. This is a demo-only brokerage simulation: no live exchange feed, real-money payments, custody or live trading is connected. Do not describe the project as a live brokerage platform.
