@@ -19,7 +19,12 @@ class LoginController
             throw ValidationException::withMessages(['email' => 'The supplied credentials are incorrect.']);
         }
 
-        if (($request->user()->account_status ?? 'active') !== 'active') {\n            Auth::logout();\n            throw ValidationException::withMessages(['email' => 'This account is currently suspended.']);\n        }\n\n        $request->session()->regenerate();
+        if (($request->user()->account_status ?? 'active') !== 'active') {
+            Auth::logout();
+            throw ValidationException::withMessages(['email' => 'This account is currently suspended.']);
+        }
+
+        $request->session()->regenerate();
         return redirect()->intended(route('dashboard'));
     }
 
