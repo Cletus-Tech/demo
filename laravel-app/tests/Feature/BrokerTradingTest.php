@@ -193,4 +193,24 @@ class BrokerTradingTest extends TestCase
         $this->assertDatabaseCount('broker_transactions', 11);
     }
 
+
+    public function test_simulated_price_refresh_is_rate_limited_and_does_not_move_fiat(): void
+    {
+        $this->actingAs($this->account(), 'sanctum');
+
+        $this->postJson('/api/broker/prices/refresh')
+            ->assertOk()
+            ->assertJsonPath('updated', 0);
+
+        $this->travel(6)->seconds();
+
+        $this->postJson('/api/broker/prices/refresh')
+            ->assertOk()
+            ->assertJsonPath('updated', 4);
+
+        $this->assertDatabaseHas('broker_assets', [
+            'symbol' => 'USD', 'price' => 1,
+        ]);
+    }
+
 }
