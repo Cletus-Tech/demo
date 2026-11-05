@@ -116,7 +116,8 @@ class BrokerApiController
                 if (isset($data['amount_usd'])) $amount=round($conversionValue/$fromPrice, 10);
                 $targetQuantity=round($conversionValue/$toPrice, 10);
                 if ($conversionValue < 0.01 || $conversionValue > 10000000) throw ValidationException::withMessages(['amount'=>'Demo conversion value must be between $0.01 and $10,000,000.']);
-                if ($amount <= 0 || (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo asset balance.']);
+                if ($amount <= 0 || $targetQuantity <= 0) throw ValidationException::withMessages(['amount'=>'That demo conversion is too small.']);
+                if ((float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo asset balance.']);
                 $meta['execution_price']=$fromPrice; $meta['to_price']=$toPrice;
                 $meta['amount_usd']=$conversionValue; $meta['to_amount']=$targetQuantity;
                 $wallet->decrement('balance',$amount);
