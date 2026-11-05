@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest,BrokerNotification,User,BrokerReferral,BrokerLedgerEntry};
+use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest,BrokerNotification,User,BrokerReferral,BrokerLedgerEntry,BrokerAuditLog};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -255,6 +255,7 @@ class BrokerApiController
             }
             app(\App\Services\DemoAccountService::class)->grantStartingBalances($user, 'reset');
             BrokerNotification::create(['user_id'=>$userId,'title'=>'Demo account reset','body'=>'Your demo balances were restored to their configured starting amounts and open demo positions were closed.']);
+            BrokerAuditLog::create(['actor_id'=>$userId,'action'=>'demo_account_reset','target_type'=>'user','target_id'=>(string)$userId,'details'=>['mode'=>'demo']]);
         });
         return response()->json(['reset'=>true,'mode'=>'demo']);
     }
