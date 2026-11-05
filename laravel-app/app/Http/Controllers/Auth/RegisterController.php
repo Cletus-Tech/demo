@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers\Auth;
 use App\Models\User;
+use App\Services\DemoAccountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 class RegisterController
