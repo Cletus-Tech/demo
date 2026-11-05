@@ -39,7 +39,7 @@ class BrokerApiController
 
     public function transact(Request $request)
     {
-        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|min:0.01|max:10000000','to_symbol'=>'nullable|string|max:20']);
+        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0|max:10000000','to_symbol'=>'nullable|string|max:20']);
         return DB::transaction(function() use($request,$data) {
             // Serialize all balance mutations for this account. This also makes first-wallet creation safe.
             $user=User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
@@ -53,7 +53,10 @@ class BrokerApiController
             $meta=['mode'=>'demo','to_symbol'=>$data['to_symbol']??null];
             if(in_array($data['type'],['withdraw','sell','convert']) && (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
             if($data['type']==='deposit') $wallet->increment('balance',$amount);
-            if($data['type']==='withdraw') $wallet->decrement('balance',$amount);
+            if($data['type']==='withdraw') {
+                if ($amount < 0.01) throw ValidationException::withMessages(['amount'=>'Enter at least $0.01.']);
+                $wallet->decrement('balance',$amount);
+            }
             if($data['type']==='buy') {
                 $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
