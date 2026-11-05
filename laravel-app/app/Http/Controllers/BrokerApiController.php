@@ -31,8 +31,9 @@ class BrokerApiController
             ->get();
 
         foreach ($assets as $asset) {
-            $move = ((random_int(0, 10000) / 10000) - 0.5) * $volatility;
-            $next = max(0.00000001, (float) $asset->price * (1 + $move));
+            $move = ((random_int(0, 999999) / 1000000) - 0.5) * $volatility;
+            $anchor = (float) $asset->demo_anchor;
+            $next = max($anchor * 0.2, (float) $asset->price * (1 + $move) + ($anchor - (float) $asset->price) * 0.01);
             $asset->update(['price' => $next]);
         }
 
