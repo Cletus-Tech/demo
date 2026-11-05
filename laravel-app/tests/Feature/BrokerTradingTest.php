@@ -149,7 +149,8 @@ class BrokerTradingTest extends TestCase
             ->assertOk()
             ->assertSee('Demo wallet balances')
             ->assertSee('Recent demo transactions')
-            ->assertSee('Append-only demo wallet ledger');
+            ->assertSee('Append-only demo wallet ledger')
+            ->assertSee('Administrator audit trail');
     }
 
     public function test_admin_console_is_not_available_to_ordinary_users(): void
@@ -314,6 +315,11 @@ class BrokerTradingTest extends TestCase
             'status' => 'in_review',
             'admin_note' => 'Customer follow-up requested.',
         ]);
+        $this->assertDatabaseHas('broker_audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'service_request_status_changed',
+            'target_id' => (string) $request->id,
+        ]);
     }
 
 
@@ -369,6 +375,11 @@ class BrokerTradingTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseHas('users', ['id' => $target->id, 'role' => 'support']);
+        $this->actingAs($superadmin, 'web')
+            ->patch('/admin/users/'.$target->id, ['role' => 'support', 'account_status' => 'suspended'])
+            ->assertRedirect();
+        $this->assertDatabaseHas('broker_audit_logs', ['actor_id' => $superadmin->id, 'action' => 'role_changed', 'target_id' => (string) $target->id]);
+        $this->assertDatabaseHas('broker_audit_logs', ['actor_id' => $superadmin->id, 'action' => 'status_changed', 'target_id' => (string) $target->id]);
         $this->actingAs($superadmin, 'web')
             ->patch('/admin/users/'.$superadmin->id, ['role' => 'admin', 'account_status' => 'active'])
             ->assertStatus(422);
