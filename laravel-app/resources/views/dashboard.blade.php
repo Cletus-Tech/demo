@@ -674,8 +674,8 @@ $("langMenu").onclick=e=>{const b=e.target.closest("button");if(b)toast("Languag
 $("mmMenu").onclick=e=>{const b=e.target.closest("button");if(!b)return;if(b.id==="mmConv"){mode="Convert";$("tabs").querySelector('[data-m="Convert"]').click();$("secTrade").scrollIntoView({behavior:"smooth"})}else openMoney(b.dataset.a)};
 $("mReset").onclick=openEdit;
 $("mSettings").onclick=editProfile;
-$("mAdmin").onclick=()=>location.href="admin.html";
-$("mOut").onclick=async()=>{await API.signOut();location.replace("login.html")};
+$("mAdmin").onclick=()=>location.href="/admin";
+$("mOut").onclick=async()=>{await API.signOut();location.replace("/login")};
 $("eyeBtn").onclick=()=>{hidden=!hidden;render()};
 $("vaBtn").onclick=()=>{showAll=!showAll;render()};
 $("expBtn").onclick=()=>{
