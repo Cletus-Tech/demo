@@ -460,4 +460,27 @@ class BrokerTradingTest extends TestCase
         $this->assertEqualsWithDelta(1010, (float) BrokerWallet::where('user_id', $user->id)->where('symbol', 'USD')->value('balance'), 0.0000001);
     }
 
+
+    public function test_signup_succeeds_when_demo_starting_balance_grant_fails(): void
+    {
+        Notification::fake();
+        app()->instance(DemoAccountService::class, new class extends DemoAccountService {
+            public function grantStartingBalances(User $user, string $reason = 'signup'): void
+            {
+                throw new \\RuntimeException('Simulated demo grant failure.');
+            }
+        });
+
+        $email = uniqid('grant-failure-', true).'@example.test';
+        $this->post('/register', [
+            'name' => 'Grant Failure User',
+            'email' => $email,
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect('/email/verify');
+
+        $this->assertDatabaseHas('users', ['email' => $email]);
+        $this->assertDatabaseCount('broker_wallets', 0);
+    }
+
 }
