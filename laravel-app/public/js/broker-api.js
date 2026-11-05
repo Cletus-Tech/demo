@@ -112,7 +112,7 @@
       return post("/positions", {
         symbol, side: side === "short" ? "sell" : "buy",
         quantity: Number(marginUsd) * Number(leverage) / price,
-        leverage: Number(leverage), take_profit: Number(tp) || null, stop_loss: Number(sl) || null
+        leverage: Number(leverage), take_profit: Number(tp) || null, stop_loss: Number(sl) || null, duration_seconds: Number(arguments[6]) || 0
       });
     },
     closePosition: async function (id) {
@@ -120,7 +120,7 @@
       const p = result.position || {};
       return { symbol: p.symbol, side: p.side === "buy" ? "long" : "short", pnl: Number(p.pnl || 0) };
     },
-    settle: async function () { return []; },
+    settle: async function () { return post("/positions/settle", {}); },
     resetDemo: async function () { throw new Error("Demo account reset is not enabled in this Laravel package."); },
     loadNotifications: function () { return request("/notifications"); },
     markNotificationsRead: function () { return post("/notifications/read", {}); },
