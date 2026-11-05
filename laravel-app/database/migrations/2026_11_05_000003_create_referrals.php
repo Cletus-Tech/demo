@@ -16,7 +16,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('referrer_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('referred_id')->unique()->constrained('users')->cascadeOnDelete();
-            $table->string('status', 20)->default('registered');
+            $table->string('status', 20)->default('pending');
             $table->timestamps();
             $table->index(['referrer_id', 'created_at']);
         });
