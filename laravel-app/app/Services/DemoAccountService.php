@@ -15,6 +15,8 @@ class DemoAccountService
      */
     public function grantStartingBalances(User $user, string $reason = 'signup'): void
     {
+        $groupId = (string) Str::uuid();
+
         foreach (config('broker.starting_balances_usd', []) as $symbol => $usdValue) {
             $asset = BrokerAsset::query()
                 ->where('symbol', $symbol)
@@ -31,6 +33,8 @@ class DemoAccountService
                 ['user_id' => $user->id, 'symbol' => $symbol],
                 ['balance' => $quantity]
             );
+
+            app(DemoLedgerService::class)->record($user->id, $symbol, $quantity, 'demo_grant', 'Demo starting balance ('.$reason.')', $groupId);
 
             BrokerTransaction::create([
                 'user_id' => $user->id,
