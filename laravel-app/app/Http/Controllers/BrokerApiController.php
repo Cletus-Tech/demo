@@ -2,7 +2,7 @@
 
 namespace App\\Http\\Controllers;
 
-use App\\Models\\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition};
+use App\\Models\\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest};
 use Illuminate\\Http\\Request;
 use Illuminate\\Support\\Facades\\DB;
 use Illuminate\\Validation\\ValidationException;
@@ -60,13 +60,13 @@ class BrokerApiController
 
     public function services(Request $request)
     {
-        return response()->json($request->user()->brokerServiceRequests()->latest()->get());
+        return response()->json(BrokerServiceRequest::where('user_id',$request->user()->id)->latest()->get());
     }
 
     public function createService(Request $request)
     {
         $d=$request->validate(['service_key'=>'required|string|max:80','details'=>'nullable|string|max:3000']);
-        $row=$request->user()->brokerServiceRequests()->create($d);
+        $row=BrokerServiceRequest::create($d+['user_id'=>$request->user()->id]);
         return response()->json($row,201);
     }
 }
