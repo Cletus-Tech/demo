@@ -416,7 +416,7 @@ class BrokerTradingTest extends TestCase
             ['id' => $user->id, 'hash' => sha1($user->getEmailForVerification())]
         );
 
-        $this->actingAs($user)->get($url)->assertRedirect('/dashboard');
+        $this->get($url)->assertRedirect('/login');
         $this->assertNotNull($user->fresh()->email_verified_at);
     }
 
