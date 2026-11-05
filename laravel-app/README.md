@@ -1,30 +1,48 @@
-# Laravel Dashboard Integration Starter
+# Laravel Brokerage Dashboard — integration package
 
-This is a Laravel integration starter containing the existing brokerage dashboard Blade view plus Laravel-native session login and registration routes/controllers.
+A Laravel-native foundation for the brokerage dashboard shown in the supplied reference screenshots. The package preserves the original dark dashboard Blade interface and adds Laravel session authentication plus a database-backed demo brokerage API.
 
-## Important scope
-- The original dashboard markup, styles and browser-side interactions are preserved in `resources/views/dashboard.blade.php`.
-- Login and registration use Laravel's `Auth` facade, password hashing, CSRF protection, session regeneration and the host application's `users` table.
-- The dashboard route is protected by Laravel's `auth` middleware.
-- The current dashboard JavaScript still depends on the existing browser-side API/Supabase integration. This starter does **not** claim that wallet, deposits, withdrawals, swaps, orders, positions or admin operations have been migrated to Laravel controllers/database.
-- The client's own Laravel project has not yet been supplied. Routes, models, middleware, menu structure, asset paths and database schema must be reconciled against that project before final integration.
+## Included
+- Existing dashboard UI in `resources/views/dashboard.blade.php`.
+- Laravel login, registration and logout controllers/views.
+- Auth-protected dashboard route.
+- Database migration for demo assets, wallets, transactions, positions, notifications and service enquiries.
+- Eloquent models and a demo API controller for account state, demo deposits/withdrawals/buys/sells, opening/closing demo positions and service enquiries.
+- Seed market assets (BTC, ETH, SOL, USD and EUR) created by the migration.
 
-## Install into an existing Laravel application
-1. Copy the contents of this folder into the root of a Laravel application, preserving paths.
-2. Ensure the standard Laravel `users` migration and `App\\Models\\User` model exist.
-3. Merge the routes from `routes/web.php` into the host application's routes file (do not overwrite existing routes).
-4. Ensure `DashboardController`, `LoginController` and `RegisterController` are in the stated namespaces.
-5. Copy the previously supplied `laravel-conversion/public/js/` assets into the host app's `public/js/` directory and configure its public Supabase values if retaining the current API adapter.
-6. Configure `.env`, then run `php artisan key:generate` (new app only), `php artisan migrate`, and `php artisan serve`.
+## Install into a fresh Laravel application
+1. Create a Laravel application (Laravel 11/12 recommended).
+2. Copy the contents of this `laravel-app` directory into the Laravel project root, merging folders. Do not overwrite existing host-project files blindly.
+3. Install API authentication support if it is not already present: `php artisan install:api` (Sanctum).
+4. Merge the supplied `routes/web.php` and `routes/api.php` route definitions into the host application's route files. Keep existing routes.
+5. Confirm `App\\Models\\User` uses Laravel's standard authenticatable model and the standard `users` table migration. Registration uses `name`, `email` and `password`.
+6. Configure `.env` database credentials, then run:
+   ```bash
+   php artisan key:generate
+   php artisan migrate
+   php artisan serve
+   ```
+7. Visit `/register`, create a test account, then open `/dashboard`.
 
-## Test
-- Register a test user at `/register`.
-- Sign out and sign in at `/login`.
-- Confirm unauthenticated visits to `/dashboard` redirect to login.
-- Confirm successful login redirects to the protected dashboard.
+## API endpoints
+All endpoints are protected by `auth:sanctum` and intended for same-origin authenticated requests with Laravel Sanctum CSRF/session setup.
 
-## Next integration requirement
-Obtain the client's working Laravel project/repository. The final pass must map the dashboard to their actual menu/routes and migrate each data/action contract to their backend rather than duplicating their existing systems.
+- `GET /api/broker/state` — profile, assets, wallets, open positions and recent transactions.
+- `POST /api/broker/transactions` — demo deposit, withdrawal, buy or sell.
+- `POST /api/broker/positions` — open a demo leveraged position.
+- `POST /api/broker/positions/{id}/close` — close an owned open position.
+- `GET /api/broker/services` and `POST /api/broker/services` — list/create service enquiries.
 
-## Demo / financial safety
-This is a development integration starter. It is not a live brokerage or payment system. Do not use real funds or present simulated values as executable trading.
+Transaction payload: `{ "type":"deposit", "symbol":"USD", "amount":1000 }`.
+Position payload: `{ "symbol":"BTC", "side":"buy", "quantity":0.01, "leverage":2 }`.
+
+## Current scope and limitations
+This is a **Laravel integration package/foundation**, not yet a fully verified drop-in turnkey application. The Blade dashboard's existing inline JavaScript still contains the previous browser API contract and has not yet been fully switched over to the Laravel endpoints. Some dashboard interactions therefore still require the frontend adapter/integration pass.
+
+The included demo API is intentionally limited: it does not provide live market feeds, real exchange execution, real-money deposits/withdrawals, custody, KYC/AML, payment processing, liquidation engines, or production financial controls. It is for local demonstration and integration testing only. Never use real funds or describe simulated prices/balances as live trading.
+
+## Verification
+No Laravel runtime test has been run in this environment because no PHP/Laravel runtime or host application has been supplied. Run `php artisan migrate`, `php artisan route:list`, and the manual login/API checks above in a local Laravel installation before presenting it as tested.
+
+## Original project safety
+All work is isolated on the `laravel-native-starter` branch. The original root dashboard and production demo branch are not modified.
