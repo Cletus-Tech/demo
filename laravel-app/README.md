@@ -47,7 +47,7 @@ Replace the example email with the owner account you control.
 This conversion still simulates prices and funds. It is not connected to real exchange prices, payment rails, custody, or live brokerage execution. No real deposits or withdrawals are processed. Real financial operations require regulated providers, compliance and separate security review.
 
 ## Verification
-GitHub Actions currently runs Composer validation/install, database migrations, twelve PHPUnit feature tests (64 assertions), route registration, browser-adapter syntax checks and inline dashboard JavaScript syntax checks. These tests cover demo funding and ledger reconciliation, spot buy/sell, withdrawals, leveraged margin/close, reset, referral attribution, password recovery, simulated price throttling, dashboard rendering, user data isolation and admin access. A real PHP-hosted browser acceptance test is still required before production handover.
+GitHub Actions currently runs Composer validation/install, database migrations, fifteen PHPUnit feature tests (81 assertions), route registration, browser-adapter syntax checks and inline dashboard JavaScript syntax checks. These tests cover demo funding and ledger reconciliation, spot buy/sell, withdrawals, leveraged margin/close, duplicate-request idempotency, reset, referral attribution, password recovery, simulated price throttling, dashboard rendering, user data isolation and admin access. A real PHP-hosted browser acceptance test is still required before production handover.
 
 ## PHP hosting deployment checklist
 1. Choose hosting with PHP 8.2+, Composer 2, `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype` and `fileinfo`; create a MySQL database and database user.
