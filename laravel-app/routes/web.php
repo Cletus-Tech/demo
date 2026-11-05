@@ -6,7 +6,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 Route::middleware('guest')->group(function () {
@@ -21,10 +21,15 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::get('/email/verify', fn () => view('auth.verify-email'))->middleware('auth')->name('verification.notice');
-Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
-    $request->fulfill();
-    return redirect()->route('dashboard')->with('status', 'Your email address has been verified.');
-})->middleware(['auth', 'signed', 'throttle:6,1'])->name('verification.verify');
+Route::get('/email/verify/{id}/{hash}', function (Request $request, int $id, string $hash) {
+    abort_unless($request->hasValidSignature(), 403);
+    $user = User::findOrFail($id);
+    abort_unless(hash_equals(sha1($user->getEmailForVerification()), $hash), 403);
+    if (!$user->hasVerifiedEmail()) {
+        $user->markEmailAsVerified();
+    }
+    return redirect()->route('login')->with('status', 'Your email address has been verified. Please sign in.');
+})->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 Route::post('/email/verification-notification', function (Request $request) {
     $request->user()->sendEmailVerificationNotification();
     return back()->with('status', 'A fresh verification link has been sent to your email address.');
