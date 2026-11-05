@@ -18,6 +18,17 @@ class BrokerApiController
         return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user'],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(50)->get()]);
     }
 
+    public function refreshDemoPrices()
+    {
+        $assets=BrokerAsset::where('is_active',true)->get();
+        foreach ($assets as $asset) {
+            $move=random_int(-30,30)/10000;
+            $next=max(0.00000001,(float)$asset->price*(1+$move));
+            $asset->update(['price'=>$next]);
+        }
+        return response()->json(['updated'=>$assets->count(),'source'=>'simulated_demo']);
+    }
+
     public function transact(Request $request)
     {
         $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0','to_symbol'=>'nullable|string|max:20']);
