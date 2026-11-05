@@ -38,8 +38,8 @@ class BrokerApiController
             if (!$wallet) $wallet=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$symbol,'balance'=>0]);
             $amount=(float)$data['amount'];
             if(in_array($data['type'],['withdraw','sell','convert']) && (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
-            if($data['type']==='deposit') $wallet->balance=(float)$wallet->balance+$amount;
-            if($data['type']==='withdraw') $wallet->balance=(float)$wallet->balance-$amount;
+            if($data['type']==='deposit') $wallet->increment('balance',$amount);
+            if($data['type']==='withdraw') $wallet->decrement('balance',$amount);
             if($data['type']==='buy') {
                 $price=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
