@@ -23,7 +23,7 @@ Open `http://127.0.0.1:8000/register` and create a test account. The local maile
 php artisan tinker
 ```
 ```php
-App\\Models\\User::where('email', 'owner@example.com')->update(['role' => 'superadmin', 'account_status' => 'active']);
+App\Models\User::where('email', 'owner@example.com')->update(['role' => 'superadmin', 'account_status' => 'active']);
 ```
 Replace the example email with the owner account you control.
 
