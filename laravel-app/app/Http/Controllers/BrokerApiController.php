@@ -41,10 +41,17 @@ class BrokerApiController
 
     public function transact(Request $request)
     {
-        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0|max:10000000','to_symbol'=>'nullable|string|max:20']);
+        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0|max:10000000','to_symbol'=>'nullable|string|max:20','idempotency_key'=>'nullable|uuid']);
         return DB::transaction(function() use($request,$data) {
             // Serialize all balance mutations for this account. This also makes first-wallet creation safe.
             $user=User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+            if (!empty($data['idempotency_key'])) {
+                $existing=BrokerTransaction::where('user_id',$user->id)->where('idempotency_key',$data['idempotency_key'])->first();
+                if ($existing) {
+                    $currentWallet=BrokerWallet::where('user_id',$user->id)->where('symbol',strtoupper($existing->symbol))->first();
+                    return response()->json(['transaction'=>$existing,'wallet'=>$currentWallet,'mode'=>'demo','replayed'=>true],200);
+                }
+            }
             $symbol=strtoupper($data['symbol']);
             if (in_array($data['type'], ['deposit','withdraw'], true) && $symbol !== 'USD') {
                 throw ValidationException::withMessages(['symbol'=>'Demo deposits and withdrawals are USD-only.']);
@@ -111,7 +118,7 @@ class BrokerApiController
                 $ledger->record($user->id, $to, $targetQuantity, 'swap_in', 'Demo asset conversion', $ledgerGroup);
             }
             $wallet->refresh();
-            $tx=BrokerTransaction::create(['user_id'=>$user->id,'type'=>$data['type'],'symbol'=>$symbol,'amount'=>$amount,'status'=>'completed','meta'=>$meta]);
+            $tx=BrokerTransaction::create(['user_id'=>$user->id,'type'=>$data['type'],'symbol'=>$symbol,'amount'=>$amount,'status'=>'completed','meta'=>$meta,'idempotency_key'=>$data['idempotency_key']??null]);
             BrokerNotification::create(['user_id'=>$user->id,'title'=>'Demo '.ucfirst($data['type']).' completed','body'=>'Your demo '.$data['type'].' request for '.$symbol.' was recorded.']);
             return response()->json(['transaction'=>$tx,'wallet'=>$wallet,'mode'=>'demo'],201);
         });
@@ -119,9 +126,16 @@ class BrokerApiController
 
     public function openPosition(Request $request)
     {
-        $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','leverage'=>'required|integer|min:2|max:100','take_profit'=>'nullable|numeric|gt:0','stop_loss'=>'nullable|numeric|gt:0','duration_seconds'=>'nullable|integer|min:0|max:2592000']);
+        $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','leverage'=>'required|integer|min:2|max:100','take_profit'=>'nullable|numeric|gt:0','stop_loss'=>'nullable|numeric|gt:0','duration_seconds'=>'nullable|integer|min:0|max:2592000','idempotency_key'=>'nullable|uuid']);
         return DB::transaction(function () use ($request,$d) {
             $account=User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+            if (!empty($d['idempotency_key'])) {
+                $existing=BrokerTransaction::where('user_id',$account->id)->where('idempotency_key',$d['idempotency_key'])->first();
+                if ($existing) {
+                    $position=BrokerPosition::where('user_id',$account->id)->where('created_at',$existing->created_at)->where('symbol',$existing->symbol)->latest()->first();
+                    return response()->json(['position'=>$position,'mode'=>'demo','replayed'=>true],200);
+                }
+            }
             if (!empty($d['duration_seconds']) && (int)$d['duration_seconds'] < 10) {
                 throw ValidationException::withMessages(['duration_seconds'=>'Duration must be at least 10 seconds.']);
             }
@@ -146,7 +160,8 @@ class BrokerApiController
             BrokerTransaction::create([
                 'user_id'=>$request->user()->id,'type'=>'position_open','symbol'=>$asset->symbol,
                 'amount'=>$margin,'status'=>'completed',
-                'meta'=>['mode'=>'demo','quantity'=>(float)$d['quantity'],'entry_price'=>$entry,'leverage'=>(int)$d['leverage'],'side'=>$d['side']]
+                'meta'=>['mode'=>'demo','quantity'=>(float)$d['quantity'],'entry_price'=>$entry,'leverage'=>(int)$d['leverage'],'side'=>$d['side']],
+                'idempotency_key'=>$d['idempotency_key']??null
             ]);
             BrokerNotification::create([
                 'user_id'=>$request->user()->id,'title'=>'Opened '.$d['leverage'].'x '.$d['side'].' on '.$asset->symbol,
