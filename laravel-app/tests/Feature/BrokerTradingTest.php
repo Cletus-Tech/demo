@@ -483,4 +483,22 @@ class BrokerTradingTest extends TestCase
         $this->assertDatabaseCount('broker_wallets', 0);
     }
 
+
+    public function test_unknown_referral_code_does_not_block_original_signup_flow(): void
+    {
+        Notification::fake();
+        $email = uniqid('invalid-ref-', true).'@example.test';
+        $this->post('/register', [
+            'name' => 'No Referrer User',
+            'email' => $email,
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'ref' => 'NOTREAL8',
+        ])->assertRedirect('/email/verify');
+
+        $user = User::where('email', $email)->firstOrFail();
+        $this->assertNull($user->referred_by);
+        $this->assertDatabaseCount('broker_referrals', 0);
+    }
+
 }
