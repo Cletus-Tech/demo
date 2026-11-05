@@ -38,13 +38,16 @@ textarea{background:#090e13;color:#edf2f7;border:1px solid #293440;border-radius
 <section class="panel"><h2>Recent demo positions</h2><table><thead><tr><th>User ID</th><th>Asset</th><th>Side</th><th>Quantity</th><th>Leverage</th><th>Margin USD</th><th>Status</th><th>P&amp;L USD</th><th>Close reason</th></tr></thead><tbody>
 @forelse($positions as $position)<tr><td>{{ $position->user_id }}</td><td>{{ $position->symbol }}</td><td>{{ $position->side === 'buy' ? 'LONG' : 'SHORT' }}</td><td>{{ number_format((float)$position->quantity,8) }}</td><td>{{ $position->leverage }}x</td><td>{{ number_format((float)$position->margin,2) }}</td><td>{{ $position->status }}</td><td>{{ number_format((float)$position->pnl,2) }}</td><td>{{ $position->close_reason ?: '—' }}</td></tr>@empty<tr><td colspan="9">No demo positions yet.</td></tr>@endforelse
 </tbody></table></section>
-<section class="panel"><h2>Recent demo orders and transactions</h2><table><thead><tr><th>Time</th><th>User ID</th><th>Type</th><th>Side</th><th>Asset / route</th><th>Amount USD</th><th>Status</th><th>Mode</th></tr></thead><tbody>
+<section class="panel"><h2>Recent demo orders and transactions</h2><table><thead><tr><th>Time</th><th>User ID</th><th>Type</th><th>Side</th><th>Asset / route</th><th>Price</th><th>Quantity</th><th>Leverage</th><th>Amount USD</th><th>Status</th><th>Mode</th></tr></thead><tbody>
 @forelse($transactions as $transaction)<tr>
 <td>{{ $transaction->created_at?->format('Y-m-d H:i') }}</td><td>{{ $transaction->user_id }}</td><td>{{ $transaction->type }}</td>
 <td>{{ data_get($transaction->meta, 'side', in_array($transaction->type, ['buy','sell','convert'], true) ? $transaction->type : '—') }}</td>
 <td>{{ $transaction->type === 'convert' ? $transaction->symbol.' → '.data_get($transaction->meta, 'to_symbol', '?') : ($transaction->symbol ?: '—') }}</td>
+<td>{{ number_format((float)data_get($transaction->meta, 'execution_price', data_get($transaction->meta, 'entry_price', 0)),10) }}</td>
+<td>{{ number_format((float)data_get($transaction->meta, 'quantity', in_array($transaction->type, ['buy','sell','convert'], true) ? $transaction->amount : 0),10) }}</td>
+<td>{{ data_get($transaction->meta, 'leverage', '—') }}</td>
 <td>{{ number_format((float)data_get($transaction->meta, 'amount_usd', $transaction->amount),2) }}</td><td>{{ $transaction->status }}</td><td>Demo</td>
-</tr>@empty<tr><td colspan="8">No demo transactions yet.</td></tr>@endforelse
+</tr>@empty<tr><td colspan="11">No demo transactions yet.</td></tr>@endforelse
 </tbody></table></section>
 
 <section class="panel"><h2>Append-only demo wallet ledger</h2><p>Every wallet credit and debit is recorded with the balance immediately after the entry.</p><table><thead><tr><th>Time</th><th>User ID</th><th>Asset</th><th>Amount</th><th>Balance after</th><th>Entry type</th><th>Memo</th></tr></thead><tbody>
