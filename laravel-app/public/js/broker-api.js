@@ -123,9 +123,12 @@
     openPosition: async function (symbol, side, marginUsd, leverage, tp, sl, durationSec) {
       const s = await state(), price = priceOf(s, symbol);
       if (!(price > 0)) throw new Error("The selected demo asset has no valid price.");
+      const margin = moneyAmount(marginUsd);
       return post("/positions", {
         symbol, side: side === "short" ? "sell" : "buy",
-        quantity: Number(marginUsd) * Number(leverage) / price,
+        margin_usd: margin,
+        quantity: quantityAmount(margin * Number(leverage) / price),
+        idempotency_key: operationKey(),
         leverage: Number(leverage), take_profit: Number(tp) || null, stop_loss: Number(sl) || null, duration_seconds: Number(durationSec) || 0
       });
     },
