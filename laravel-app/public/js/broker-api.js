@@ -122,7 +122,7 @@
       return { symbol: p.symbol, side: p.side === "buy" ? "long" : "short", pnl: Number(p.pnl || 0) };
     },
     settle: async function () { return post("/positions/settle", {}); },
-    resetDemo: async function () { throw new Error("Demo account reset is not enabled in this Laravel package."); },
+    resetDemo: function () { return post("/reset", {}); },
     loadNotifications: function () { return request("/notifications"); },
     markNotificationsRead: function () { return post("/notifications/read", {}); },
     loadReferrals: async function () { return []; },
