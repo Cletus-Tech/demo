@@ -148,7 +148,7 @@ class BrokerTradingTest extends TestCase
             ->get('/admin')
             ->assertOk()
             ->assertSee('Demo wallet balances')
-            ->assertSee('Recent demo transactions')
+            ->assertSee('Recent demo orders and transactions')
             ->assertSee('Append-only demo wallet ledger')
             ->assertSee('Administrator audit trail');
     }
