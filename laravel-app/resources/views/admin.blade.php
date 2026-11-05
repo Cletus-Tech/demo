@@ -13,4 +13,14 @@
 <section class="panel"><h2>Service enquiries</h2><table><thead><tr><th>Service</th><th>User ID</th><th>Details</th><th>Status</th><th>Update</th></tr></thead><tbody>
 @forelse($requests as $item)<tr><td>{{ $item->service_key }}</td><td>{{ $item->user_id }}</td><td>{{ $item->details ?: '—' }}</td><td>{{ $item->status }}</td><td><form class="actions" method="POST" action="{{ route('admin.services.update',$item) }}">@csrf @method('PATCH')<select name="status">@foreach(['pending','in_review','approved','declined','closed'] as $status)<option value="{{ $status }}" @selected($item->status===$status)>{{ ucfirst(str_replace('_',' ',$status)) }}</option>@endforeach</select><button>Save</button></form></td></tr>@empty<tr><td colspan="5">No service enquiries yet.</td></tr>@endforelse
 </tbody></table></section>
+
+<section class="panel"><h2>Demo wallet balances</h2><p>Practice balances only. No real customer funds are held.</p><table><thead><tr><th>User ID</th><th>Asset</th><th>Balance</th><th>Updated</th></tr></thead><tbody>
+@forelse($wallets as $wallet)<tr><td>{{ $wallet->user_id }}</td><td>{{ $wallet->symbol }}</td><td>{{ number_format((float)$wallet->balance,8) }}</td><td>{{ $wallet->updated_at?->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="4">No demo wallets yet.</td></tr>@endforelse
+</tbody></table></section>
+<section class="panel"><h2>Recent demo positions</h2><table><thead><tr><th>User ID</th><th>Asset</th><th>Side</th><th>Quantity</th><th>Leverage</th><th>Margin USD</th><th>Status</th><th>P&amp;L USD</th><th>Close reason</th></tr></thead><tbody>
+@forelse($positions as $position)<tr><td>{{ $position->user_id }}</td><td>{{ $position->symbol }}</td><td>{{ strtoupper($position->side) }}</td><td>{{ number_format((float)$position->quantity,8) }}</td><td>{{ $position->leverage }}x</td><td>{{ number_format((float)$position->margin,2) }}</td><td>{{ $position->status }}</td><td>{{ number_format((float)$position->pnl,2) }}</td><td>{{ $position->close_reason ?: '—' }}</td></tr>@empty<tr><td colspan="9">No demo positions yet.</td></tr>@endforelse
+</tbody></table></section>
+<section class="panel"><h2>Recent demo transactions</h2><table><thead><tr><th>User ID</th><th>Type</th><th>Asset</th><th>Amount</th><th>Status</th><th>Recorded</th></tr></thead><tbody>
+@forelse($transactions as $transaction)<tr><td>{{ $transaction->user_id }}</td><td>{{ $transaction->type }}</td><td>{{ $transaction->symbol ?: '—' }}</td><td>{{ number_format((float)$transaction->amount,8) }}</td><td>{{ $transaction->status }}</td><td>{{ $transaction->created_at?->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="6">No demo transactions yet.</td></tr>@endforelse
+</tbody></table></section>
 </main></body></html>
