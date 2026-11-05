@@ -713,7 +713,7 @@ async function showReferrals(){
  try{
   const rows=await API.loadReferrals();
   const code=currentProfile&&currentProfile.referral_code||"Not available";
-  alert("Your referral code: "+code+"\nReferrals: "+rows.length+"\n\nReferral tracking is active; reward processing is not enabled in this demo.");
+  const link=location.origin+"/register?ref="+encodeURIComponent(code);prompt("Share this referral link (registered referrals: "+rows.length+"):",link);
  }catch(e){toast(e.message)}
 }
 const SERVICE_META={
