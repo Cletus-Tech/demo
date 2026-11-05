@@ -32,7 +32,7 @@ Replace the example email with the owner account you control.
 - Laravel session registration/login/logout and password reset; every new account receives the original configured demo starting portfolio (USD-value grants for BTC, ETH, USD, SOL and AAPL).
 - Unique referral codes, referral-link registration and account referral tracking.
 - Laravel API endpoints for account state, simulated prices, demo deposit/withdraw/buy/sell/convert, leveraged positions, TP/SL/expiry settlement, demo reset, profile, notifications and service enquiries.
-- Role-gated admin console for users and service enquiry workflow.
+- Role-gated admin console for users, demo orders, wallets, positions, service enquiries and an append-only administrator audit trail.
 
 ## Important integration notes
 - The dashboard uses `public/js/broker-api.js`; it does not load the Supabase browser SDK.
@@ -47,7 +47,7 @@ Replace the example email with the owner account you control.
 This conversion still simulates prices and funds. It is not connected to real exchange prices, payment rails, custody, or live brokerage execution. No real deposits or withdrawals are processed. Real financial operations require regulated providers, compliance and separate security review.
 
 ## Verification
-GitHub Actions currently runs Composer validation/install, database migrations, sixteen PHPUnit feature tests (86 assertions), route registration, browser-adapter syntax checks and inline dashboard JavaScript syntax checks. These tests cover demo funding and ledger reconciliation, spot buy/sell, withdrawals, leveraged margin/close, duplicate-request idempotency, reset, referral attribution, password recovery, simulated price throttling, dashboard rendering, user data isolation, admin access and role-change protections. A real PHP-hosted browser acceptance test is still required before production handover.
+GitHub Actions currently runs Composer validation/install, database migrations, sixteen PHPUnit feature tests (91 assertions), route registration, browser-adapter syntax checks and inline dashboard JavaScript syntax checks. These tests cover demo funding and ledger reconciliation, spot buy/sell, withdrawals, leveraged margin/close, duplicate-request idempotency, reset, referral attribution, password recovery, simulated price throttling, dashboard rendering, user data isolation, admin access, role-change protections and administrator audit logging. A real PHP-hosted browser acceptance test is still required before production handover.
 
 ## PHP hosting deployment checklist
 1. Choose hosting with PHP 8.2+, Composer 2, `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype` and `fileinfo`; create a MySQL database and database user.
