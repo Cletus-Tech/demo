@@ -127,6 +127,15 @@ class BrokerApiController
             if((float)$usd->balance<$margin) throw ValidationException::withMessages(['quantity'=>'Insufficient demo USD margin.']);
             $usd->decrement('balance',$margin);
             $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$entry,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
+            BrokerTransaction::create([
+                'user_id'=>$request->user()->id,'type'=>'position_open','symbol'=>$asset->symbol,
+                'amount'=>$margin,'status'=>'completed',
+                'meta'=>['mode'=>'demo','quantity'=>(float)$d['quantity'],'entry_price'=>$entry,'leverage'=>(int)$d['leverage'],'side'=>$d['side']]
+            ]);
+            BrokerNotification::create([
+                'user_id'=>$request->user()->id,'title'=>'Opened '.$d['leverage'].'x '.$d['side'].' on '.$asset->symbol,
+                'body'=>'Your demo position was opened at '.number_format($entry, 8, '.', '').'.'
+            ]);
             return response()->json(['position'=>$position,'mode'=>'demo'],201);
         });
     }
