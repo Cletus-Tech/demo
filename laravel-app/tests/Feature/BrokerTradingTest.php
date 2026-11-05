@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\BrokerAsset;
 use App\Models\BrokerWallet;
+use App\Services\DemoAccountService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -130,4 +130,47 @@ class BrokerTradingTest extends TestCase
         $this->actingAs($this->account(), 'web');
         $this->get('/admin')->assertForbidden();
     }
+
+    public function test_new_accounts_receive_the_original_configured_demo_portfolio(): void
+    {
+        $email = uniqid('new-user-', true).'@example.test';
+
+        $this->post('/register', [
+            'name' => 'New Demo User',
+            'email' => $email,
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect('/dashboard');
+
+        $user = User::where('email', $email)->firstOrFail();
+
+        $this->assertDatabaseHas('broker_wallets', [
+            'user_id' => $user->id, 'symbol' => 'BTC', 'balance' => 0.0625,
+        ]);
+        $this->assertDatabaseHas('broker_wallets', [
+            'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 3000,
+        ]);
+        $this->assertDatabaseCount('broker_wallets', 5);
+    }
+
+    public function test_demo_reset_restores_starting_balances_and_keeps_the_account_history(): void
+    {
+        $user = $this->account();
+        app(DemoAccountService::class)->grantStartingBalances($user, 'signup');
+        BrokerWallet::where('user_id', $user->id)->where('symbol', 'USD')->update(['balance' => 12]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/broker/reset')
+            ->assertOk()
+            ->assertJsonPath('reset', true);
+
+        $this->assertDatabaseHas('broker_wallets', [
+            'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 3000,
+        ]);
+        $this->assertDatabaseHas('broker_transactions', [
+            'user_id' => $user->id, 'type' => 'demo_reset', 'symbol' => 'USD',
+        ]);
+        $this->assertDatabaseCount('broker_transactions', 11);
+    }
+
 }
