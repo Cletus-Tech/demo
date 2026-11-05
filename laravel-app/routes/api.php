@@ -4,7 +4,7 @@ use App\Http\Controllers\BrokerApiController;
 use App\Http\Middleware\EnsureBrokerAccountActive;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', EnsureBrokerAccountActive::class])->prefix('broker')->group(function () {
+Route::middleware(['auth:sanctum', 'verified', EnsureBrokerAccountActive::class])->prefix('broker')->group(function () {
     Route::get('/state',[BrokerApiController::class,'state']);
     Route::post('/prices/refresh',[BrokerApiController::class,'refreshDemoPrices']);
     Route::post('/transactions',[BrokerApiController::class,'transact']);
