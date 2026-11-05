@@ -84,7 +84,7 @@
       catch (e) { if (e.status === 401) return null; throw e; }
     },
     signOut: async function () {
-      await post("/../logout", {});
+      await post("/logout", {});
       location.assign("/login");
     },
     loadState: state,
