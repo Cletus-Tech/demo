@@ -13,7 +13,7 @@ return new class extends Migration {
             $table->string('action', 80);
             $table->string('target_type', 80)->nullable();
             $table->string('target_id', 100)->nullable();
-            $table->json('details')->default('{}');
+            $table->json('details');
             $table->timestamp('created_at')->useCurrent();
             $table->index('created_at');
             $table->index(['target_type', 'target_id']);
