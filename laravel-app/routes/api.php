@@ -13,6 +13,7 @@ Route::middleware(['auth:sanctum', EnsureBrokerAccountActive::class])->prefix('b
     Route::post('/positions/settle',[BrokerApiController::class,'settlePositions']);
     Route::post('/positions/{position}/close',[BrokerApiController::class,'closePosition']);
     Route::get('/notifications',[BrokerApiController::class,'notifications']);
+    Route::get('/referrals',[BrokerApiController::class,'referrals']);
     Route::post('/notifications/read',[BrokerApiController::class,'markNotificationsRead']);
     Route::patch('/profile',[BrokerApiController::class,'updateProfile']);
     Route::get('/services',[BrokerApiController::class,'services']);
