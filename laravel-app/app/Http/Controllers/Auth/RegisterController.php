@@ -9,6 +9,7 @@ class RegisterController
  {
   $data = $request->validate(['name'=>'required|string|max:120','email'=>'required|email|max:255|unique:users,email','password'=>'required|confirmed|min:8']);
   $user = User::create(['name'=>$data['name'],'email'=>$data['email'],'password'=>bcrypt($data['password'])]);
+  app(DemoAccountService::class)->grantStartingBalances($user, 'signup');
   Auth::login($user);
   $request->session()->regenerate();
   return redirect()->route('dashboard');
