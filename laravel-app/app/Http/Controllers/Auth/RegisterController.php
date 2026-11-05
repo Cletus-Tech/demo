@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class RegisterController
 {
@@ -52,7 +53,11 @@ class RegisterController
                 ]);
             }
 
-            app(DemoAccountService::class)->grantStartingBalances($user, 'signup');
+            try {
+                DB::transaction(fn () => app(DemoAccountService::class)->grantStartingBalances($user, 'signup'));
+            } catch (Throwable $exception) {
+                report($exception);
+            }
 
             return $user;
         });
