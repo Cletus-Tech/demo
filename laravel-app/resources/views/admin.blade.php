@@ -6,9 +6,26 @@ textarea{background:#090e13;color:#edf2f7;border:1px solid #293440;border-radius
 <div class="top"><div><h1>Administration</h1><p>Demo brokerage management · {{ auth()->user()->email }}</p></div><a href="{{ route('dashboard') }}">← Back to dashboard</a></div>
 @if(session('status'))<div class="flash">{{ session('status') }}</div>@endif
 <section class="panel"><h2>User accounts</h2><table><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Update</th></tr></thead><tbody>
-@forelse($users as $user)<tr><td>{{ $user->name }}</td><td>{{ $user->email }}</td><td colspan="4"><form class="actions" method="POST" action="{{ route('admin.users.update',$user) }}">@csrf @method('PATCH')
+@forelse($users as $user)<tr>
+<td>{{ $user->name }}</td>
+<td>{{ $user->email }}</td>
+<td>
+@if(auth()->user()->role==='superadmin' && auth()->id()!==$user->id)
+<form class="actions" method="POST" action="{{ route('admin.users.update',$user) }}">@csrf @method('PATCH')
+<input type="hidden" name="account_status" value="{{ $user->account_status }}">
 <select name="role"><option value="user" @selected($user->role==='user')>User</option><option value="support" @selected($user->role==='support')>Support</option><option value="admin" @selected($user->role==='admin')>Admin</option><option value="superadmin" @selected($user->role==='superadmin')>Superadmin</option></select>
-<select name="account_status"><option value="active" @selected($user->account_status==='active')>Active</option><option value="suspended" @selected($user->account_status==='suspended')>Suspended</option></select><span class="muted">{{ $user->created_at?->format('Y-m-d') }}</span><button>Save</button></form></td></tr>@empty<tr><td colspan="6">No accounts found.</td></tr>@endforelse
+<button>Save role</button></form>
+@else{{ ucfirst($user->role ?? 'user') }}@endif
+</td>
+<td>
+<form class="actions" method="POST" action="{{ route('admin.users.update',$user) }}">@csrf @method('PATCH')
+<input type="hidden" name="role" value="{{ $user->role ?? 'user' }}">
+<select name="account_status"><option value="active" @selected($user->account_status==='active')>Active</option><option value="suspended" @selected($user->account_status==='suspended')>Suspended</option></select>
+<button>Save</button></form>
+</td>
+<td>{{ $user->created_at?->format('Y-m-d') }}</td>
+<td class="muted">Account controls</td>
+</tr>@empty<tr><td colspan="6">No accounts found.</td></tr>@endforelse
 </tbody></table></section>
 <section class="panel"><h2>Service enquiries</h2><table><thead><tr><th>Service</th><th>User ID</th><th>Details</th><th>Status</th><th>Update</th></tr></thead><tbody>
 @forelse($requests as $item)<tr><td>{{ $item->service_key }}</td><td>{{ $item->user_id }}</td><td>{{ $item->details ?: '—' }}</td><td>{{ $item->status }}</td><td><form class="actions" method="POST" action="{{ route('admin.services.update',$item) }}">@csrf @method('PATCH')<select name="status">@foreach(['pending','in_review','approved','declined','closed'] as $status)<option value="{{ $status }}" @selected($item->status===$status)>{{ ucfirst(str_replace('_',' ',$status)) }}</option>@endforeach</select><textarea name="admin_note" rows="2" placeholder="Private admin note">{{ $item->admin_note }}</textarea><button>Save</button></form></td></tr>@empty<tr><td colspan="5">No service enquiries yet.</td></tr>@endforelse
