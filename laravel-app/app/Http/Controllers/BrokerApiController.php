@@ -187,12 +187,16 @@ class BrokerApiController
             foreach ($openPositions as $position) {
                 $this->settlePosition($position->id, 'manual');
             }
+            $balances = BrokerWallet::where('user_id',$userId)->where('balance','>',0)->get();
+            foreach ($balances as $wallet) {
+                BrokerTransaction::create([
+                    'user_id'=>$userId,'type'=>'demo_reset','symbol'=>$wallet->symbol,
+                    'amount'=>-((float)$wallet->balance),'status'=>'completed',
+                    'meta'=>['mode'=>'demo','reason'=>'user_requested_reset']
+                ]);
+            }
             BrokerWallet::where('user_id',$userId)->update(['balance'=>0]);
             app(\App\Services\DemoAccountService::class)->grantStartingBalances($user, 'reset');
-            BrokerTransaction::create([
-                'user_id'=>$userId,'type'=>'demo_reset','symbol'=>'USD','amount'=>0,
-                'status'=>'completed','meta'=>['mode'=>'demo','reason'=>'user_requested_reset']
-            ]);
             BrokerNotification::create(['user_id'=>$userId,'title'=>'Demo account reset','body'=>'Your demo balances were restored to their configured starting amounts and open demo positions were closed.']);
         });
         return response()->json(['reset'=>true,'mode'=>'demo']);
@@ -223,7 +227,7 @@ class BrokerApiController
 
     public function createService(Request $request)
     {
-        $d=$request->validate(['service_key'=>'required|string|max:80','details'=>'nullable|string|max:3000']);
+        $d=$request->validate(['service_key'=>'required|in:cold_storage,cards,subscribe,signals,connect_wallet,investing,copy_trading,mining,real_estate,stake','details'=>'nullable|string|max:2000']);
         $row=BrokerServiceRequest::create($d+['user_id'=>$request->user()->id]);
         return response()->json($row,201);
     }
