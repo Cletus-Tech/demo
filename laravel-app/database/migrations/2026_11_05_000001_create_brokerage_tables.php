@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration {
     public function up(): void
@@ -40,7 +41,6 @@ return new class extends Migration {
             $table->string('service_key',80); $table->text('details')->nullable();
             $table->string('status',20)->default('pending'); $table->timestamps();
         });
-    }
 
         DB::table('broker_assets')->insert([
             ['symbol'=>'BTC','name'=>'Bitcoin','category'=>'crypto','price'=>68000,'is_active'=>true,'created_at'=>now(),'updated_at'=>now()],
