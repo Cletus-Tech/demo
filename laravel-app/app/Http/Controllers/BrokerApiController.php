@@ -20,13 +20,21 @@ class BrokerApiController
 
     public function refreshDemoPrices()
     {
-        $assets=BrokerAsset::where('is_active',true)->get();
+        $interval = max(1, (int) config('broker.price_refresh_interval_seconds', 5));
+        $volatility = max(0, (float) config('broker.price_volatility', 0.006));
+        $assets = BrokerAsset::query()
+            ->where('is_active', true)
+            ->where('category', '<>', 'fiat')
+            ->where('updated_at', '<=', now()->subSeconds($interval))
+            ->get();
+
         foreach ($assets as $asset) {
-            $move=random_int(-30,30)/10000;
-            $next=max(0.00000001,(float)$asset->price*(1+$move));
-            $asset->update(['price'=>$next]);
+            $move = ((random_int(0, 10000) / 10000) - 0.5) * $volatility;
+            $next = max(0.00000001, (float) $asset->price * (1 + $move));
+            $asset->update(['price' => $next]);
         }
-        return response()->json(['updated'=>$assets->count(),'source'=>'simulated_demo']);
+
+        return response()->json(['updated' => $assets->count(), 'source' => 'simulated_demo']);
     }
 
     public function transact(Request $request)
