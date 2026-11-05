@@ -10,7 +10,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class RegisterController
@@ -27,9 +26,6 @@ class RegisterController
         $referrer = null;
         if (!empty($data['ref'])) {
             $referrer = User::where('referral_code', strtoupper(trim($data['ref'])))->first();
-            if (!$referrer) {
-                throw ValidationException::withMessages(['ref' => 'That referral code is not valid.']);
-            }
         }
 
         do {
