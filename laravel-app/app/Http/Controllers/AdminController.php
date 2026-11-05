@@ -29,7 +29,8 @@ class AdminController
         $positions=BrokerPosition::query()->latest()->limit(100)->get();
         $wallets=BrokerWallet::query()->latest()->limit(100)->get();
         $ledger=BrokerLedgerEntry::query()->latest('created_at')->limit(200)->get();
-        return view('admin',compact('users','requests','transactions','positions','wallets','ledger'));
+        $auditLogs=BrokerAuditLog::query()->latest('created_at')->limit(200)->get();
+        return view('admin',compact('users','requests','transactions','positions','wallets','ledger','auditLogs'));
     }
 
     public function updateUser(Request $request, User $user)
@@ -46,8 +47,31 @@ class AdminController
             abort_unless(($user->role ?? 'user') === 'user',403,'Only ordinary user accounts can be updated by an admin.');
         }
         abort_if($actor->id===$user->id && $data['account_status']!=='active',422,'You cannot suspend your own account.');
-        $user->forceFill($data)->save();
-        return back()->with('status','User account updated.');
+        DB::transaction(function () use ($user, $actor, $data) {
+            $oldRole = $user->role ?? 'user';
+            $oldStatus = $user->account_status ?? 'active';
+            $user->forceFill($data)->save();
+
+            if ($oldRole !== $data['role']) {
+                BrokerAuditLog::create([
+                    'actor_id' => $actor->id,
+                    'action' => 'role_changed',
+                    'target_type' => 'user',
+                    'target_id' => (string) $user->id,
+                    'details' => ['from' => $oldRole, 'to' => $data['role']],
+                ]);
+            }
+            if ($oldStatus !== $data['account_status']) {
+                BrokerAuditLog::create([
+                    'actor_id' => $actor->id,
+                    'action' => 'status_changed',
+                    'target_type' => 'user',
+                    'target_id' => (string) $user->id,
+                    'details' => ['from' => $oldStatus, 'to' => $data['account_status']],
+                ]);
+            }
+        });
+        return back()->with('status','User account updated and audited.');
     }
 
     public function updateService(Request $request, BrokerServiceRequest $serviceRequest)
@@ -57,7 +81,19 @@ class AdminController
             'status' => ['required', Rule::in(['pending', 'in_review', 'approved', 'declined', 'closed'])],
             'admin_note' => ['nullable', 'string', 'max:2000'],
         ]);
-        $serviceRequest->update($data);
+        $oldStatus = $serviceRequest->status;
+        DB::transaction(function () use ($serviceRequest, $data, $oldStatus, $request) {
+            $serviceRequest->update($data);
+            if ($oldStatus !== $data['status']) {
+                BrokerAuditLog::create([
+                    'actor_id' => $request->user()->id,
+                    'action' => 'service_request_status_changed',
+                    'target_type' => 'service_request',
+                    'target_id' => (string) $serviceRequest->id,
+                    'details' => ['from' => $oldStatus, 'to' => $data['status']],
+                ]);
+            }
+        });
         return back()->with('status','Service enquiry updated.');
     }
 }
