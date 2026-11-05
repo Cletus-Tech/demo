@@ -45,6 +45,25 @@ jobs:
         run: node --check public/js/broker-api.js
       - name: Check inline dashboard syntax
         run: node scripts/check-dashboard-script.cjs
+      - name: Build clean Laravel handover ZIP
+        run: |
+          cd ..
+          zip -r demo-broker-laravel-handover.zip laravel-app \
+            -x "laravel-app/vendor/*" \
+               "laravel-app/.env" \
+               "laravel-app/database/database.sqlite" \
+               "laravel-app/storage/logs/*" \
+               "laravel-app/storage/framework/cache/data/*" \
+               "laravel-app/storage/framework/sessions/*" \
+               "laravel-app/storage/framework/views/*" \
+               "laravel-app/bootstrap/cache/*.php"
+      - name: Upload Laravel handover ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-broker-laravel-handover
+          path: demo-broker-laravel-handover.zip
+          if-no-files-found: error
+          retention-days: 14
 
   mysql-migrations:
     runs-on: ubuntu-latest
