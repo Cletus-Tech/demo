@@ -43,8 +43,8 @@ textarea{background:#090e13;color:#edf2f7;border:1px solid #293440;border-radius
 <td>{{ $transaction->created_at?->format('Y-m-d H:i') }}</td><td>{{ $transaction->user_id }}</td><td>{{ $transaction->type }}</td>
 <td>{{ data_get($transaction->meta, 'side', in_array($transaction->type, ['buy','sell','convert'], true) ? $transaction->type : '—') }}</td>
 <td>{{ $transaction->type === 'convert' ? $transaction->symbol.' → '.data_get($transaction->meta, 'to_symbol', '?') : ($transaction->symbol ?: '—') }}</td>
-<td>{{ number_format((float)data_get($transaction->meta, 'execution_price', data_get($transaction->meta, 'entry_price', 0)),10) }}</td>
-<td>{{ number_format((float)data_get($transaction->meta, 'quantity', in_array($transaction->type, ['buy','sell','convert'], true) ? $transaction->amount : 0),10) }}</td>
+<td>{{ data_get($transaction->meta, 'execution_price') || data_get($transaction->meta, 'entry_price') ? number_format((float)data_get($transaction->meta, 'execution_price', data_get($transaction->meta, 'entry_price')),10) : '—' }}</td>
+<td>{{ data_get($transaction->meta, 'quantity') || in_array($transaction->type, ['buy','sell','convert'], true) ? number_format((float)data_get($transaction->meta, 'quantity', $transaction->amount),10) : '—' }}</td>
 <td>{{ data_get($transaction->meta, 'leverage', '—') }}</td>
 <td>{{ number_format((float)data_get($transaction->meta, 'amount_usd', $transaction->amount),2) }}</td><td>{{ $transaction->status }}</td><td>Demo</td>
 </tr>@empty<tr><td colspan="11">No demo transactions yet.</td></tr>@endforelse
