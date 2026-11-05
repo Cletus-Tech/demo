@@ -132,7 +132,7 @@ class BrokerApiController
             if (!empty($d['idempotency_key'])) {
                 $existing=BrokerTransaction::where('user_id',$account->id)->where('idempotency_key',$d['idempotency_key'])->first();
                 if ($existing) {
-                    $position=BrokerPosition::where('user_id',$account->id)->where('created_at',$existing->created_at)->where('symbol',$existing->symbol)->latest()->first();
+                    $position=BrokerPosition::where('user_id',$account->id)->whereKey(data_get($existing->meta, 'position_id'))->first();
                     return response()->json(['position'=>$position,'mode'=>'demo','replayed'=>true],200);
                 }
             }
@@ -160,7 +160,7 @@ class BrokerApiController
             BrokerTransaction::create([
                 'user_id'=>$request->user()->id,'type'=>'position_open','symbol'=>$asset->symbol,
                 'amount'=>$margin,'status'=>'completed',
-                'meta'=>['mode'=>'demo','quantity'=>(float)$d['quantity'],'entry_price'=>$entry,'leverage'=>(int)$d['leverage'],'side'=>$d['side']],
+                'meta'=>['mode'=>'demo','quantity'=>(float)$d['quantity'],'entry_price'=>$entry,'leverage'=>(int)$d['leverage'],'side'=>$d['side'],'position_id'=>$position->id],
                 'idempotency_key'=>$d['idempotency_key']??null
             ]);
             BrokerNotification::create([
