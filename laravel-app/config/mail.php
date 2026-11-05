@@ -17,6 +17,10 @@ return [
         'log' => ['transport' => 'log', 'channel' => env('MAIL_LOG_CHANNEL')],
         'array' => ['transport' => 'array'],
     ],
+    'markdown' => [
+        'theme' => env('MAIL_MARKDOWN_THEME', 'default'),
+        'paths' => [resource_path('views/vendor/mail')],
+    ],
     'from' => [
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Demo Broker')),
