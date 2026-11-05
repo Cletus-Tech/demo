@@ -122,10 +122,10 @@
     },
     settle: async function () { return []; },
     resetDemo: async function () { throw new Error("Demo account reset is not enabled in this Laravel package."); },
-    loadNotifications: async function () { return []; },
-    markNotificationsRead: async function () { return true; },
+    loadNotifications: function () { return request("/notifications"); },
+    markNotificationsRead: function () { return post("/notifications/read", {}); },
     loadReferrals: async function () { return []; },
-    updateProfile: async function () { throw new Error("Profile editing is not yet enabled in this Laravel package."); },
+    updateProfile: function (changes) { return request("/profile", { method: "PATCH", body: { full_name: changes.full_name } }); },
     loadMyServiceRequests: function () { return request("/services"); },
     createServiceRequest: function (service_key, details) { return post("/services", { service_key, details }); }
   };
