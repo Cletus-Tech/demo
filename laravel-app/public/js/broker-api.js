@@ -106,13 +106,13 @@
       if (!(price > 0)) throw new Error("The selected source asset has no valid price.");
       return post("/transactions", { type: "convert", symbol: from, to_symbol: to, amount: Number(amountUsd) / price });
     },
-    openPosition: async function (symbol, side, marginUsd, leverage, tp, sl) {
+    openPosition: async function (symbol, side, marginUsd, leverage, tp, sl, durationSec) {
       const s = await state(), price = priceOf(s, symbol);
       if (!(price > 0)) throw new Error("The selected demo asset has no valid price.");
       return post("/positions", {
         symbol, side: side === "short" ? "sell" : "buy",
         quantity: Number(marginUsd) * Number(leverage) / price,
-        leverage: Number(leverage), take_profit: Number(tp) || null, stop_loss: Number(sl) || null, duration_seconds: Number(arguments[6]) || 0
+        leverage: Number(leverage), take_profit: Number(tp) || null, stop_loss: Number(sl) || null, duration_seconds: Number(durationSec) || 0
       });
     },
     closePosition: async function (id) {
