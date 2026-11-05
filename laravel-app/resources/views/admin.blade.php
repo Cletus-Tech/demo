@@ -6,7 +6,7 @@
 <div class="top"><div><h1>Administration</h1><p>Demo brokerage management · {{ auth()->user()->email }}</p></div><a href="{{ route('dashboard') }}">← Back to dashboard</a></div>
 @if(session('status'))<div class="flash">{{ session('status') }}</div>@endif
 <section class="panel"><h2>User accounts</h2><table><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Update</th></tr></thead><tbody>
-@forelse($users as $user)<tr><td>{{ $user->name }}</td><td>{{ $user->email }}</td><td colspan="3"><form class="actions" method="POST" action="{{ route('admin.users.update',$user) }}">@csrf @method('PATCH')
+@forelse($users as $user)<tr><td>{{ $user->name }}</td><td>{{ $user->email }}</td><td colspan="4"><form class="actions" method="POST" action="{{ route('admin.users.update',$user) }}">@csrf @method('PATCH')
 <select name="role"><option value="user" @selected($user->role==='user')>User</option><option value="support" @selected($user->role==='support')>Support</option><option value="admin" @selected($user->role==='admin')>Admin</option><option value="superadmin" @selected($user->role==='superadmin')>Superadmin</option></select>
 <select name="account_status"><option value="active" @selected($user->account_status==='active')>Active</option><option value="suspended" @selected($user->account_status==='suspended')>Suspended</option></select><span class="muted">{{ $user->created_at?->format('Y-m-d') }}</span><button>Save</button></form></td></tr>@empty<tr><td colspan="6">No accounts found.</td></tr>@endforelse
 </tbody></table></section>
