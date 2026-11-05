@@ -38,6 +38,7 @@ Replace the example email with the owner account you control.
 - The dashboard uses `public/js/broker-api.js`; it does not load the Supabase browser SDK.
 - Laravel Sanctum stateful middleware is enabled in `bootstrap/app.php` for same-origin session-authenticated API requests.
 - Default local DB is SQLite. Set `DB_CONNECTION=mysql` and the `DB_*` values in `.env` for MySQL hosting.
+- Existing Supabase users, password hashes, wallet balances, transaction history and referrals are not imported automatically. If existing-account continuity is required, complete a separate data migration and account-verification plan before switching users.
 - `config/broker.php` controls the demo starting portfolio and simulated-price cadence. Demo reset restores those configured starting balances and retains transaction history.
 - Do not copy any `.env` or secret key into Git. Configure `APP_KEY`, DB credentials and `APP_DEBUG=false` on the server.
 - Point the web server document root to this folder's `public/` directory. Do not expose the project root.
