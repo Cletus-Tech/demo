@@ -9,13 +9,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
     Route::view('/login', 'auth.login')->name('login');
-    Route::post('/login', [LoginController::class, 'store'])->name('login.store');
+    Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:5,1')->name('login.store');
     Route::view('/register', 'auth.register')->name('register');
-    Route::post('/register', [RegisterController::class, 'store'])->name('register.store');
+    Route::post('/register', [RegisterController::class, 'store'])->middleware('throttle:5,1')->name('register.store');
     Route::get('/forgot-password', [PasswordResetController::class, 'requestForm'])->name('password.request');
-    Route::post('/forgot-password', [PasswordResetController::class, 'sendLink'])->name('password.email');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendLink'])->middleware('throttle:5,1')->name('password.email');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'resetForm'])->name('password.reset');
-    Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
+    Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:5,1')->name('password.update');
 });
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
