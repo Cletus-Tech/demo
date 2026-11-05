@@ -154,12 +154,16 @@ class BrokerApiController
     {
         $userId=$request->user()->id;
         DB::transaction(function () use ($userId) {
-            User::whereKey($userId)->lockForUpdate()->firstOrFail();
-            BrokerWallet::where('user_id',$userId)->update(['balance'=>0]);
+            $user = User::whereKey($userId)->lockForUpdate()->firstOrFail();
             BrokerPosition::where('user_id',$userId)->where('status','open')->update([
                 'status'=>'closed','closed_at'=>now(),'close_reason'=>'reset','pnl'=>0
             ]);
-            BrokerNotification::create(['user_id'=>$userId,'title'=>'Demo account reset','body'=>'Your demo wallet balances were cleared and open demo positions were closed.']);
+            app(\\App\\Services\\DemoAccountService::class)->grantStartingBalances($user, 'reset');
+            BrokerTransaction::create([
+                'user_id'=>$userId,'type'=>'demo_reset','symbol'=>'USD','amount'=>0,
+                'status'=>'completed','meta'=>['mode'=>'demo','reason'=>'user_requested_reset']
+            ]);
+            BrokerNotification::create(['user_id'=>$userId,'title'=>'Demo account reset','body'=>'Your demo balances were restored to their configured starting amounts and open demo positions were closed.']);
         });
         return response()->json(['reset'=>true,'mode'=>'demo']);
     }
