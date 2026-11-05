@@ -448,9 +448,8 @@ class BrokerTradingTest extends TestCase
 
         BrokerAsset::where('symbol', 'BTC')->update(['price' => 80800]);
 
-        $closed = $this->postJson('/api/broker/positions/'.$positionId.'/close')
-            ->assertOk()
-            ->assertJsonPath('position.pnl', 10);
+        $closed = $this->postJson('/api/broker/positions/'.$positionId.'/close')->assertOk();
+        $this->assertEqualsWithDelta(10, (float) $closed->json('position.pnl'), 0.0000001);
 
         $this->assertEqualsWithDelta(1010, (float) BrokerWallet::where('user_id', $user->id)->where('symbol', 'USD')->value('balance'), 0.0000001);
     }
