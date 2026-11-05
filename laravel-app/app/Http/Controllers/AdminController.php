@@ -21,7 +21,10 @@ class AdminController
         $this->guard($request);
         $users=User::query()->latest()->limit(200)->get(['id','name','email','role','account_status','created_at']);
         $requests=BrokerServiceRequest::query()->latest()->limit(200)->get();
-        return view('admin',compact('users','requests'));
+        $transactions=BrokerTransaction::query()->latest()->limit(100)->get();
+        $positions=BrokerPosition::query()->latest()->limit(100)->get();
+        $wallets=BrokerWallet::query()->latest()->limit(100)->get();
+        return view('admin',compact('users','requests','transactions','positions','wallets'));
     }
 
     public function updateUser(Request $request, User $user)
