@@ -74,10 +74,10 @@
         from_symbol: t.symbol, amount_usd: Number((t.meta || {}).amount_usd || (Number(t.amount) * Number((t.meta || {}).execution_price || priceOf({ assets }, t.symbol)))),
         created_at: t.created_at
       })),
-      ledger: transactions.filter(t => ["deposit", "withdraw", "demo_grant"].includes(t.type)).map(t => ({
+      ledger: transactions.filter(t => ["deposit", "withdraw", "demo_grant", "demo_reset"].includes(t.type)).map(t => ({
         id: t.id, symbol: t.symbol, amount: t.type === "withdraw" ? -Number(t.amount) : Number(t.amount),
-        entry_type: t.type === "demo_grant" ? "demo_grant" : (t.type === "deposit" ? "demo_deposit" : "demo_withdrawal"),
-        memo: t.type === "demo_grant" ? "Starting demo balance" : "Demo transaction", created_at: t.created_at
+        entry_type: t.type === "demo_grant" ? "demo_grant" : (t.type === "demo_reset" ? "demo_reset" : (t.type === "deposit" ? "demo_deposit" : "demo_withdrawal")),
+        memo: t.type === "demo_grant" ? "Starting demo balance" : (t.type === "demo_reset" ? "Demo account reset" : "Demo transaction"), created_at: t.created_at
       })),
       referrals: []
     };
