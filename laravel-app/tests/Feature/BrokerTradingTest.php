@@ -353,7 +353,8 @@ class BrokerTradingTest extends TestCase
 
     public function test_only_superadmins_can_change_roles_and_users_cannot_change_their_own_role(): void
     {
-        $admin = $this->account(['role' => 'admin']);
+        $admin = $this->account();
+        $admin->forceFill(['role' => 'admin'])->save();
         $target = $this->account();
         $this->actingAs($admin, 'web')
             ->patch('/admin/users/'.$target->id, ['role' => 'admin', 'account_status' => 'suspended'])
@@ -361,7 +362,8 @@ class BrokerTradingTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $target->id, 'role' => 'user', 'account_status' => 'active']);
 
-        $superadmin = $this->account(['role' => 'superadmin']);
+        $superadmin = $this->account();
+        $superadmin->forceFill(['role' => 'superadmin'])->save();
         $this->actingAs($superadmin, 'web')
             ->patch('/admin/users/'.$target->id, ['role' => 'support', 'account_status' => 'active'])
             ->assertRedirect();
