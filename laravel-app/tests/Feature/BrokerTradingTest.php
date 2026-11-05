@@ -316,4 +316,38 @@ class BrokerTradingTest extends TestCase
         ]);
     }
 
+
+    public function test_repeated_demo_transaction_request_with_same_idempotency_key_is_not_applied_twice(): void
+    {
+        $user = $this->account();
+        $this->actingAs($user, 'sanctum');
+        $key = (string) \Illuminate\Support\Str::uuid();
+        $payload = ['type' => 'deposit', 'symbol' => 'USD', 'amount' => 250, 'idempotency_key' => $key];
+
+        $this->postJson('/api/broker/transactions', $payload)->assertCreated();
+        $this->postJson('/api/broker/transactions', $payload)->assertOk()->assertJsonPath('replayed', true);
+
+        $this->assertDatabaseHas('broker_wallets', ['user_id' => $user->id, 'symbol' => 'USD', 'balance' => 250]);
+        $this->assertDatabaseCount('broker_transactions', 1);
+        $this->assertDatabaseCount('broker_ledger_entries', 1);
+    }
+
+    public function test_repeated_leveraged_position_request_returns_the_original_position(): void
+    {
+        $user = $this->account();
+        BrokerWallet::create(['user_id' => $user->id, 'symbol' => 'USD', 'balance' => 1000]);
+        $this->actingAs($user, 'sanctum');
+        $key = (string) \Illuminate\Support\Str::uuid();
+        $payload = ['symbol' => 'BTC', 'side' => 'buy', 'quantity' => 0.1, 'leverage' => 10, 'idempotency_key' => $key];
+
+        $first = $this->postJson('/api/broker/positions', $payload)->assertCreated();
+        $second = $this->postJson('/api/broker/positions', $payload)->assertOk()->assertJsonPath('replayed', true);
+
+        $this->assertSame($first->json('position.id'), $second->json('position.id'));
+        $this->assertDatabaseCount('broker_positions', 1);
+        $this->assertDatabaseCount('broker_transactions', 1);
+        $this->assertDatabaseCount('broker_ledger_entries', 1);
+        $this->assertDatabaseHas('broker_wallets', ['user_id' => $user->id, 'symbol' => 'USD', 'balance' => 200]);
+    }
+
 }
