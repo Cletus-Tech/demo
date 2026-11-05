@@ -6,6 +6,7 @@ use App\Models\BrokerServiceRequest;
 use App\Models\BrokerTransaction;
 use App\Models\BrokerPosition;
 use App\Models\BrokerWallet;
+use App\Models\BrokerLedgerEntry;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +28,8 @@ class AdminController
         $transactions=BrokerTransaction::query()->latest()->limit(100)->get();
         $positions=BrokerPosition::query()->latest()->limit(100)->get();
         $wallets=BrokerWallet::query()->latest()->limit(100)->get();
-        return view('admin',compact('users','requests','transactions','positions','wallets'));
+        $ledger=BrokerLedgerEntry::query()->latest('created_at')->limit(200)->get();
+        return view('admin',compact('users','requests','transactions','positions','wallets','ledger'));
     }
 
     public function updateUser(Request $request, User $user)
