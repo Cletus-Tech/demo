@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BrokerServiceRequest;
+use App\Models\BrokerAuditLog;
 use App\Models\BrokerTransaction;
 use App\Models\BrokerPosition;
 use App\Models\BrokerWallet;
