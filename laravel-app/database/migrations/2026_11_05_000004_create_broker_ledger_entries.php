@@ -11,8 +11,8 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('symbol', 20);
-            $table->decimal('amount', 24, 8);
-            $table->decimal('balance_after', 24, 8);
+            $table->decimal('amount', 28, 10);
+            $table->decimal('balance_after', 28, 10);
             $table->string('entry_type', 30);
             $table->uuid('group_id')->nullable();
             $table->text('memo')->nullable();
