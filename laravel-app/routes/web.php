@@ -14,4 +14,4 @@ Route::middleware('guest')->group(function () {
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::get('/', fn () => redirect()->route('dashboard'));
-Route::get('/dashboard', DashboardController::class)->middleware('auth')->name('dashboard');
+Route::get('/dashboard', DashboardController::class)->middleware('auth')->name('dashboard');\nRoute::middleware('auth')->prefix('admin')->name('admin.')->group(function () {\n    Route::get('/', [AdminController::class, 'index'])->name('index');\n    Route::patch('/users/{user}', [AdminController::class, 'updateUser'])->name('users.update');\n    Route::patch('/services/{serviceRequest}', [AdminController::class, 'updateService'])->name('services.update');\n});
