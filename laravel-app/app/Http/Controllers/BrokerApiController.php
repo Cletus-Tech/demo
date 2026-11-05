@@ -93,13 +93,13 @@ class BrokerApiController
             if($data['type']==='sell') {
                 $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
-                $wallet->decrement('balance',$amount);
-                $ledger->record($user->id, $symbol, -$amount, 'spot_sell', 'Demo spot sell', $ledgerGroup);
                 $proceeds=round((float)($data['amount_usd'] ?? ($amount*$price)), 2);
                 if ($proceeds < 0.01 || $proceeds > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
                 if (isset($data['amount_usd'])) $amount=round($proceeds/$price, 10);
                 if ($amount <= 0 || (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo asset balance.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$proceeds;
+                $wallet->decrement('balance',$amount);
+                $ledger->record($user->id, $symbol, -$amount, 'spot_sell', 'Demo spot sell', $ledgerGroup);
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
                 $usd->increment('balance',$proceeds); $ledger->record($user->id, 'USD', $proceeds, 'spot_sell', 'Demo spot sell', $ledgerGroup);
