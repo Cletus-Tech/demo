@@ -29,7 +29,7 @@ return new class extends Migration {
             $table->decimal('entry_price',24,8); $table->decimal('leverage',8,2)->default(1); $table->decimal('margin',24,8)->default(0);
             $table->decimal('take_profit',24,8)->nullable(); $table->decimal('stop_loss',24,8)->nullable();
             $table->string('status',20)->default('open'); $table->decimal('pnl',24,8)->default(0);
-            $table->timestamp('closed_at')->nullable(); $table->timestamps();
+            $table->timestamp('closed_at')->nullable(); $table->timestamp('expires_at')->nullable(); $table->string('close_reason',30)->nullable(); $table->timestamps();
         });
         Schema::create('broker_notifications', function (Blueprint $table) {
             $table->id(); $table->foreignId('user_id')->constrained()->cascadeOnDelete();
