@@ -48,7 +48,7 @@ class RegisterController
                 BrokerReferral::create([
                     'referrer_id' => $referrer->id,
                     'referred_id' => $user->id,
-                    'status' => 'registered',
+                    'status' => 'pending',
                 ]);
             }
 
