@@ -370,8 +370,8 @@ const CONFIG={
  defaultDuration:120,
  volatility:.003,                     // (unused: price movement is now simulated on the server)
  //                     // size of each simulated price move
- defaultSymbol:"BTC",                // symbol the chart opens on
- tradeTypes:["Crypto","Stocks","Fiat"],      // options in the Trade type dropdown (match asset "cat")
+ defaultSymbol:"AAPL",                // symbol the chart opens on
+ tradeTypes:["Crypto","Stocks"],      // options in the Trade type dropdown (match asset "cat")
  topAssets:4,                         // rows shown before "View all assets"
  aiTpPct:.03, aiSlPct:.015,           // "Set with AI" take-profit / stop-loss distance
  nav:[                                // sidebar: {t,i,go} link, {g,items} collapsible group
