@@ -14,7 +14,7 @@ class BrokerApiController
         $user=$request->user();
         $wallets=BrokerWallet::where('user_id',$user->id)->get()->keyBy('symbol');
         $assets=BrokerAsset::where('is_active',true)->orderBy('symbol')->get();
-        $positions=BrokerPosition::where('user_id',$user->id)->where('status','open')->latest()->get();
+        $positions=BrokerPosition::where('user_id',$user->id)->latest()->limit(100)->get();
         return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'role'=>$user->role ?? 'user'],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(50)->get()]);
     }
 
