@@ -21,15 +21,16 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
    ```bash
    php artisan install:api
    ```
-4. In Laravel 11/12, enable Sanctum's stateful API middleware in `bootstrap/app.php`. Merge this into the existing `withMiddleware` configuration:
+4. In Laravel 11/12, enable Sanctum's stateful API middleware in `bootstrap/app.php`. The application's configuration should contain this middleware callback (merge the call into the existing callback rather than replacing other middleware):
    ```php
    use Illuminate\\Foundation\\Configuration\\Middleware;
 
+   // Inside Application::configure(...):
    ->withMiddleware(function (Middleware $middleware): void {
        $middleware->statefulApi();
    })
    ```
-   Keep the application's existing middleware configuration and add the stateful call; do not replace unrelated middleware.
+   Ensure `.env` has the host used by your browser in `SANCTUM_STATEFUL_DOMAINS`, for example `localhost,localhost:8000,127.0.0.1,127.0.0.1:8000` for local development. Keep the dashboard and API on the same origin for this package's session-based browser adapter.
 5. Merge the package's `routes/web.php` and `routes/api.php` entries into the host route files. Keep existing application routes. Ensure `routes/api.php` is loaded by Laravel.
 6. Confirm the host app uses the standard `App\\Models\\User` authenticatable model and standard `users` table with `name`, `email` and `password` columns. The migrations add brokerage-specific user columns.
 7. Run:
