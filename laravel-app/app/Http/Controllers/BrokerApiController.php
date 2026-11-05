@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest,BrokerNotification,User,BrokerReferral};
+use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest,BrokerNotification,User,BrokerReferral,BrokerLedgerEntry};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use App\Services\DemoLedgerService;
 use Illuminate\Validation\ValidationException;
 
 class BrokerApiController
@@ -15,7 +17,7 @@ class BrokerApiController
         $wallets=BrokerWallet::where('user_id',$user->id)->get()->keyBy('symbol');
         $assets=BrokerAsset::where('is_active',true)->orderBy('symbol')->get();
         $positions=BrokerPosition::where('user_id',$user->id)->latest()->limit(100)->get();
-        return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user','referral_code'=>$user->referral_code],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(50)->get(),'referrals'=>BrokerReferral::where('referrer_id',$user->id)->latest()->limit(100)->get()]);
+        return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user','referral_code'=>$user->referral_code],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(50)->get(),'referrals'=>BrokerReferral::where('referrer_id',$user->id)->latest()->limit(100)->get(),'ledger'=>BrokerLedgerEntry::where('user_id',$user->id)->latest('created_at')->limit(50)->get()]);
     }
 
     public function refreshDemoPrices()
@@ -50,12 +52,15 @@ class BrokerApiController
             $wallet=BrokerWallet::where('user_id',$user->id)->where('symbol',$symbol)->lockForUpdate()->first();
             if (!$wallet) $wallet=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$symbol,'balance'=>0]);
             $amount=(float)$data['amount'];
+            $ledgerGroup=(string) Str::uuid();
+            $ledger=app(DemoLedgerService::class);
             $meta=['mode'=>'demo','to_symbol'=>$data['to_symbol']??null];
             if(in_array($data['type'],['withdraw','sell','convert']) && (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
             if($data['type']==='deposit') $wallet->increment('balance',$amount);
             if($data['type']==='withdraw') {
                 if ($amount < 0.01) throw ValidationException::withMessages(['amount'=>'Enter at least $0.01.']);
                 $wallet->decrement('balance',$amount);
+                $ledger->record($user->id, $symbol, -$amount, 'demo_withdrawal', 'Demo funds - no real payout', $ledgerGroup);
             }
             if($data['type']==='buy') {
                 $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
@@ -66,18 +71,21 @@ class BrokerApiController
                 if ($cost < 0.01 || $cost > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$cost;
                 if((float)$usd->balance<$cost) throw ValidationException::withMessages(['amount'=>'Insufficient demo USD balance.']);
-                $usd->decrement('balance',$cost); $wallet->increment('balance',$amount);
+                $usd->decrement('balance',$cost); $ledger->record($user->id, 'USD', -$cost, 'spot_buy', 'Demo spot buy', $ledgerGroup);
+                $wallet->increment('balance',$amount); $ledger->record($user->id, $symbol, $amount, 'spot_buy', 'Demo spot buy', $ledgerGroup);
+                $ledger->record($user->id, $symbol, $amount, 'demo_deposit', 'Demo funds - no real payment', $ledgerGroup);
             }
             if($data['type']==='sell') {
                 $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
                 $wallet->decrement('balance',$amount);
+                $ledger->record($user->id, $symbol, -$amount, 'spot_sell', 'Demo spot sell', $ledgerGroup);
                 $proceeds=$amount*$price;
                 if ($proceeds < 0.01 || $proceeds > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$proceeds;
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
-                $usd->increment('balance',$proceeds);
+                $usd->increment('balance',$proceeds); $ledger->record($user->id, 'USD', $proceeds, 'spot_sell', 'Demo spot sell', $ledgerGroup);
             }
             if($data['type']==='convert') {
                 $to=strtoupper($data['to_symbol'] ?? '');
@@ -93,7 +101,9 @@ class BrokerApiController
                 $meta['execution_price']=$fromPrice; $meta['to_price']=$toPrice;
                 $meta['amount_usd']=$conversionValue; $meta['to_amount']=$targetQuantity;
                 $wallet->decrement('balance',$amount);
+                $ledger->record($user->id, $symbol, -$amount, 'swap_out', 'Demo asset conversion', $ledgerGroup);
                 $target->increment('balance',$targetQuantity);
+                $ledger->record($user->id, $to, $targetQuantity, 'swap_in', 'Demo asset conversion', $ledgerGroup);
             }
             $wallet->refresh();
             $tx=BrokerTransaction::create(['user_id'=>$user->id,'type'=>$data['type'],'symbol'=>$symbol,'amount'=>$amount,'status'=>'completed','meta'=>$meta]);
