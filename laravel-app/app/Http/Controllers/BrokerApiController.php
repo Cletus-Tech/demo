@@ -155,10 +155,11 @@ class BrokerApiController
         $userId=$request->user()->id;
         DB::transaction(function () use ($userId) {
             $user = User::whereKey($userId)->lockForUpdate()->firstOrFail();
+            BrokerWallet::where('user_id',$userId)->update(['balance'=>0]);
             BrokerPosition::where('user_id',$userId)->where('status','open')->update([
                 'status'=>'closed','closed_at'=>now(),'close_reason'=>'reset','pnl'=>0
             ]);
-            app(\\App\\Services\\DemoAccountService::class)->grantStartingBalances($user, 'reset');
+            app(\App\Services\DemoAccountService::class)->grantStartingBalances($user, 'reset');
             BrokerTransaction::create([
                 'user_id'=>$userId,'type'=>'demo_reset','symbol'=>'USD','amount'=>0,
                 'status'=>'completed','meta'=>['mode'=>'demo','reason'=>'user_requested_reset']
