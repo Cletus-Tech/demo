@@ -26,7 +26,6 @@ jobs:
           php-version: "8.3"
           extensions: mbstring, pdo_sqlite, sqlite3
           coverage: none
-      - uses: actions/checkout@v4
       - name: Validate Composer manifest
         run: composer validate --no-check-publish
       - name: Install dependencies
