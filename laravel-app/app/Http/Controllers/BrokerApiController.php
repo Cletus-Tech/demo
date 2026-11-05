@@ -120,6 +120,37 @@ class BrokerApiController
         return response()->json($closed);
     }
 
+    public function resetDemo(Request $request)
+    {
+        $userId=$request->user()->id;
+        DB::transaction(function () use ($userId) {
+            BrokerWallet::where('user_id',$userId)->update(['balance'=>0]);
+            BrokerPosition::where('user_id',$userId)->where('status','open')->update([
+                'status'=>'closed','closed_at'=>now(),'close_reason'=>'reset','pnl'=>0
+            ]);
+            BrokerNotification::create(['user_id'=>$userId,'title'=>'Demo account reset','body'=>'Your demo wallet balances were cleared and open demo positions were closed.']);
+        });
+        return response()->json(['reset'=>true,'mode'=>'demo']);
+    }
+
+    public function notifications(Request $request)
+    {
+        return response()->json(BrokerNotification::where('user_id',$request->user()->id)->latest()->limit(30)->get());
+    }
+
+    public function markNotificationsRead(Request $request)
+    {
+        BrokerNotification::where('user_id',$request->user()->id)->whereNull('read_at')->update(['read_at'=>now()]);
+        return response()->json(['updated'=>true]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $data=$request->validate(['full_name'=>'required|string|max:120','phone'=>'nullable|string|max:40','country'=>'nullable|string|max:100']);
+        $request->user()->forceFill(['name'=>$data['full_name'],'phone'=>$data['phone']??null,'country'=>$data['country']??null])->save();
+        return response()->json(['id'=>$request->user()->id,'email'=>$request->user()->email,'full_name'=>$request->user()->name,'phone'=>$request->user()->phone,'country'=>$request->user()->country,'role'=>$request->user()->role ?? 'user']);
+    }
+
     public function services(Request $request)
     {
         return response()->json(BrokerServiceRequest::where('user_id',$request->user()->id)->latest()->get());
