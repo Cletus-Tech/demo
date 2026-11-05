@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BrokerWallet;
+use App\Models\BrokerServiceRequest;
 use App\Services\DemoAccountService;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\Facades\Hash;
@@ -147,7 +148,8 @@ class BrokerTradingTest extends TestCase
             ->get('/admin')
             ->assertOk()
             ->assertSee('Demo wallet balances')
-            ->assertSee('Recent demo transactions');
+            ->assertSee('Recent demo transactions')
+            ->assertSee('Append-only demo wallet ledger');
     }
 
     public function test_admin_console_is_not_available_to_ordinary_users(): void
@@ -286,6 +288,32 @@ class BrokerTradingTest extends TestCase
             ->assertSee('Demo mode: practice funds')
             ->assertSee('Buy')
             ->assertDontSee('supabase-js');
+    }
+
+
+    public function test_admin_can_update_service_enquiry_status_and_private_note(): void
+    {
+        $admin = $this->account();
+        $admin->forceFill(['role' => 'admin'])->save();
+        $request = BrokerServiceRequest::create([
+            'user_id' => $this->account()->id,
+            'service_key' => 'cold_storage',
+            'details' => 'Please contact me.',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($admin, 'web')
+            ->patch('/admin/services/'.$request->id, [
+                'status' => 'in_review',
+                'admin_note' => 'Customer follow-up requested.',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('broker_service_requests', [
+            'id' => $request->id,
+            'status' => 'in_review',
+            'admin_note' => 'Customer follow-up requested.',
+        ]);
     }
 
 }
