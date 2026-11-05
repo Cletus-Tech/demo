@@ -753,8 +753,8 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"){close();closeMoney(
  if(!(await API.getSession())){location.replace("/login");return}
  let st;
  try{st=await API.loadState()}
- catch(e){document.body.innerHTML='<div style="padding:30px;font:15px system-ui;color:#f2f5f8"><h2>Could not load your account</h2><p style="color:#8b94a1"></p><p><a style="color:#2d9cff" href="/login">Run the setup check</a> &middot; <a style="color:#2d9cff" href="/login">Back to sign in</a></p></div>';document.body.querySelector("p").textContent=e.message;return}
- if(!st.profile){location.replace("setup-check.html");return}
+ catch(e){document.body.innerHTML='<div style="padding:30px;font:15px system-ui;color:#f2f5f8"><h2>Could not load your account</h2><p style="color:#8b94a1"></p><p><a style="color:#2d9cff" href="/login">Back to sign in</a></p></div>';document.body.querySelector("p").textContent=e.message;return}
+ if(!st.profile){location.replace("/login");return}
  // the database decides which assets exist; CONFIG.assets only supplies icons and colours
  const CAT={crypto:"Crypto",stocks:"Stocks",fiat:"Fiat",real_estate:"Real estate",forex:"Forex",etf:"ETFs",commodity:"Commodities",other:"Other"};
  const merged=st.assets.map(a=>{const b=CONFIG.assets.find(x=>x.id===a.symbol)||{};return{...b,id:a.symbol,name:a.name,cat:CAT[a.category]||a.category,price:b.price||1}});
