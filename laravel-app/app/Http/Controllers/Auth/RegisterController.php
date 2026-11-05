@@ -1,18 +1,58 @@
 <?php
+
 namespace App\Http\Controllers\Auth;
+
+use App\Models\BrokerReferral;
 use App\Models\User;
 use App\Services\DemoAccountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
 class RegisterController
 {
- public function store(Request $request)
- {
-  $data = $request->validate(['name'=>'required|string|max:120','email'=>'required|email|max:255|unique:users,email','password'=>'required|confirmed|min:8']);
-  $user = User::create(['name'=>$data['name'],'email'=>$data['email'],'password'=>bcrypt($data['password'])]);
-  app(DemoAccountService::class)->grantStartingBalances($user, 'signup');
-  Auth::login($user);
-  $request->session()->regenerate();
-  return redirect()->route('dashboard');
- }
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:120',
+            'email' => 'required|email|max:255|unique:users,email',
+            'password' => 'required|confirmed|min:8',
+            'ref' => 'nullable|string|max:12',
+        ]);
+
+        $referrer = null;
+        if (!empty($data['ref'])) {
+            $referrer = User::where('referral_code', strtoupper(trim($data['ref'])))->first();
+            if (!$referrer) {
+                throw ValidationException::withMessages(['ref' => 'That referral code is not valid.']);
+            }
+        }
+
+        do {
+            $referralCode = Str::upper(Str::random(8));
+        } while (User::where('referral_code', $referralCode)->exists());
+
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => $data['password'],
+            'referral_code' => $referralCode,
+            'referred_by' => $referrer?->id,
+        ]);
+
+        if ($referrer) {
+            BrokerReferral::create([
+                'referrer_id' => $referrer->id,
+                'referred_id' => $user->id,
+                'status' => 'registered',
+            ]);
+        }
+
+        app(DemoAccountService::class)->grantStartingBalances($user, 'signup');
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return redirect()->route('dashboard');
+    }
 }
