@@ -45,7 +45,7 @@ class AdminController
     public function updateService(Request $request, BrokerServiceRequest $serviceRequest)
     {
         $this->guard($request);
-        $data=$request->validate(['status'=>['required',Rule::in(['pending','in_review','approved','declined','closed')]]);
+        $data = $request->validate(['status' => ['required', Rule::in(['pending', 'in_review', 'approved', 'declined', 'closed'])]]);
         $serviceRequest->update($data);
         return back()->with('status','Service enquiry updated.');
     }
