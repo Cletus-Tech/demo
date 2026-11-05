@@ -173,7 +173,7 @@ class BrokerApiController
                 'idempotency_key'=>$d['idempotency_key']??null
             ]);
             BrokerNotification::create([
-                'user_id'=>$request->user()->id,'title'=>'Opened '.$d['leverage'].'x '.$d['side'].' on '.$asset->symbol,
+                'user_id'=>$request->user()->id,'title'=>'Opened '.$d['leverage'].'x '.($d['side']==='buy'?'long':'short').' on '.$asset->symbol,
                 'body'=>'Your demo position was opened at '.number_format($entry, 10, '.', '').'.'
             ]);
             return response()->json(['position'=>$position,'mode'=>'demo'],201);
