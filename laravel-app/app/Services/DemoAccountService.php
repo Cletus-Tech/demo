@@ -1,11 +1,11 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\BrokerAsset;
-use App\\Models\\BrokerTransaction;
-use App\\Models\\BrokerWallet;
-use App\\Models\\User;
+use App\Models\BrokerAsset;
+use App\Models\BrokerTransaction;
+use App\Models\BrokerWallet;
+use App\Models\User;
 
 class DemoAccountService
 {
