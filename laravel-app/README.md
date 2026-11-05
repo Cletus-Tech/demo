@@ -18,7 +18,7 @@ php artisan key:generate
 php artisan migrate
 php artisan serve
 ```
-Open `http://127.0.0.1:8000/register` and create a test account. After the first account is created, promote only the owner account:
+Open `http://127.0.0.1:8000/register` and create a test account. The local mailer writes the confirmation message to `storage/logs/laravel.log`; open the verification link from that log. Set the SMTP mail settings in `.env` for hosted use. After the first account is created, promote only the owner account:
 ```bash
 php artisan tinker
 ```
