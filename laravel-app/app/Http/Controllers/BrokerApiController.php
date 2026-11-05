@@ -63,7 +63,6 @@ class BrokerApiController
             $ledgerGroup=(string) Str::uuid();
             $ledger=app(DemoLedgerService::class);
             $meta=['mode'=>'demo','to_symbol'=>$data['to_symbol']??null];
-            if(in_array($data['type'],['withdraw','sell','convert']) && (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
             if($data['type']==='deposit') {
                 if ($amount < 0.01) throw ValidationException::withMessages(['amount'=>'Enter at least $0.01.']);
                 if ($amount > 100000) throw ValidationException::withMessages(['amount'=>'Demo deposits are limited to $100,000 per request.']);
@@ -72,6 +71,7 @@ class BrokerApiController
                 $ledger->record($user->id, $symbol, $amount, 'demo_deposit', 'Demo funds - no real payment', $ledgerGroup);
             }
             if($data['type']==='withdraw') {
+                if ((float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
                 if ($amount < 0.01) throw ValidationException::withMessages(['amount'=>'Enter at least $0.01.']);
                 $wallet->decrement('balance',$amount);
                 $ledger->record($user->id, $symbol, -$amount, 'demo_withdrawal', 'Demo funds - no real payout', $ledgerGroup);
@@ -83,6 +83,8 @@ class BrokerApiController
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
                 $cost=round((float)($data['amount_usd'] ?? ($amount*$price)), 2);
                 if ($cost < 0.01 || $cost > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
+                if (isset($data['amount_usd'])) $amount=round($cost/$price, 10);
+                if ($amount <= 0) throw ValidationException::withMessages(['amount'=>'That demo order is too small.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$cost;
                 if((float)$usd->balance<$cost) throw ValidationException::withMessages(['amount'=>'Insufficient demo USD balance.']);
                 $usd->decrement('balance',$cost); $ledger->record($user->id, 'USD', -$cost, 'spot_buy', 'Demo spot buy', $ledgerGroup);
@@ -95,6 +97,8 @@ class BrokerApiController
                 $ledger->record($user->id, $symbol, -$amount, 'spot_sell', 'Demo spot sell', $ledgerGroup);
                 $proceeds=round((float)($data['amount_usd'] ?? ($amount*$price)), 2);
                 if ($proceeds < 0.01 || $proceeds > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
+                if (isset($data['amount_usd'])) $amount=round($proceeds/$price, 10);
+                if ($amount <= 0 || (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo asset balance.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$proceeds;
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
@@ -109,8 +113,10 @@ class BrokerApiController
                 $target=BrokerWallet::where('user_id',$user->id)->where('symbol',$to)->lockForUpdate()->first();
                 if (!$target) $target=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$to,'balance'=>0]);
                 $conversionValue=round((float)($data['amount_usd'] ?? ($amount*$fromPrice)), 2);
+                if (isset($data['amount_usd'])) $amount=round($conversionValue/$fromPrice, 10);
                 $targetQuantity=round($conversionValue/$toPrice, 10);
                 if ($conversionValue < 0.01 || $conversionValue > 10000000) throw ValidationException::withMessages(['amount'=>'Demo conversion value must be between $0.01 and $10,000,000.']);
+                if ($amount <= 0 || (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo asset balance.']);
                 $meta['execution_price']=$fromPrice; $meta['to_price']=$toPrice;
                 $meta['amount_usd']=$conversionValue; $meta['to_amount']=$targetQuantity;
                 $wallet->decrement('balance',$amount);
