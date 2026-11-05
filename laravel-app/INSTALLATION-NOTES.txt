@@ -1,0 +1,5 @@
+Laravel Integration Notes
+
+This folder is an integration starter, not a complete generated Laravel framework distribution. Start with a fresh supported Laravel app, then merge these files. Do not overwrite the client's project. Preserve their existing routes, authentication and migrations; adapt this starter to those conventions.
+
+Authentication is Laravel-native. Dashboard financial data/actions remain on the original frontend API adapter until the client's backend contracts are available and mapped.
