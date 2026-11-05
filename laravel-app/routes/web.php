@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
 use App\Models\User;
+use App\Http\Middleware\EnsureBrokerAccountActive;
 use Illuminate\Http\Request;
 
 Route::middleware('guest')->group(function () {
@@ -37,8 +38,8 @@ Route::post('/email/verification-notification', function (Request $request) {
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::get('/', fn () => redirect()->route('dashboard'));
-Route::get('/dashboard', DashboardController::class)->middleware(['auth', 'verified'])->name('dashboard');
-Route::middleware(['auth', 'verified'])->prefix('admin')->name('admin.')->group(function () {
+Route::get('/dashboard', DashboardController::class)->middleware(['auth', 'verified', EnsureBrokerAccountActive::class])->name('dashboard');
+Route::middleware(['auth', 'verified', EnsureBrokerAccountActive::class])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->name('index');
     Route::patch('/users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
     Route::patch('/services/{serviceRequest}', [AdminController::class, 'updateService'])->name('services.update');
