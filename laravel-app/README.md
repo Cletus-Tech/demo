@@ -54,6 +54,7 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
 All browser API endpoints use `auth:sanctum` and same-origin session authentication. The browser adapter initializes the Sanctum CSRF cookie before write requests.
 
 - `GET /api/broker/state` — profile, assets, wallet balances, positions and transactions.
+- `POST /api/broker/prices/refresh` — move seeded prices using a small random simulated demo tick.
 - `POST /api/broker/transactions` — demo deposit, withdrawal, buy, sell or conversion.
 - `POST /api/broker/positions` — open demo leveraged position.
 - `POST /api/broker/positions/{id}/close` — manually close an owned position.
@@ -80,4 +81,4 @@ Example position payload:
 - This package is an integration foundation. The dashboard adapter covers the main trading and account flows, but a host-app integration and full regression test are still required before client handover.
 
 ## Verification status
-The repository changes have been committed to branch `laravel-native-starter`. No Laravel host application has been supplied or booted in this workspace, so migrations, `route:list`, login, browser flows and database accounting have **not** been runtime-tested here. Run those checks in a fresh Laravel host project before presenting this as production-ready. Do not use real funds.
+A GitHub Actions workflow has been added to lint PHP source files and check the browser adapter's JavaScript syntax on pushes to this branch. The repository changes have been committed to `laravel-native-starter`. No Laravel host application has been supplied or booted in this workspace, so migrations, `route:list`, login, browser flows and database accounting have **not** been runtime-tested here. A green syntax workflow does not replace those integration tests. Run those checks in a fresh Laravel host project before presenting this as production-ready. Do not use real funds.
