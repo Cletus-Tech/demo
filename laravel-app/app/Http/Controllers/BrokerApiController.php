@@ -34,7 +34,8 @@ class BrokerApiController
         $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0','to_symbol'=>'nullable|string|max:20']);
         return DB::transaction(function() use($request,$data) {
             $user=$request->user(); $symbol=strtoupper($data['symbol']);
-            $wallet=BrokerWallet::where('user_id',$user->id)->where('symbol',$symbol)->lockForUpdate()->first();\n            if (!$wallet) $wallet=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$symbol,'balance'=>0]);
+            $wallet=BrokerWallet::where('user_id',$user->id)->where('symbol',$symbol)->lockForUpdate()->first();
+            if (!$wallet) $wallet=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$symbol,'balance'=>0]);
             $amount=(float)$data['amount'];
             if(in_array($data['type'],['withdraw','sell','convert']) && (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
             if($data['type']==='deposit') $wallet->balance=(float)$wallet->balance+$amount;
@@ -42,7 +43,8 @@ class BrokerApiController
             if($data['type']==='buy') {
                 $price=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
-                $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();\n                if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
+                $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
+                if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
                 $cost=$amount*$price;
                 if((float)$usd->balance<$cost) throw ValidationException::withMessages(['amount'=>'Insufficient demo USD balance.']);
                 $usd->decrement('balance',$cost); $wallet->increment('balance',$amount);
@@ -60,7 +62,8 @@ class BrokerApiController
                 $fromPrice=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
                 $toPrice=(float)(BrokerAsset::where('symbol',$to)->value('price') ?? 0);
                 if($fromPrice<=0 || $toPrice<=0) throw ValidationException::withMessages(['to_symbol'=>'One of the selected assets is unavailable.']);
-                $target=BrokerWallet::where('user_id',$user->id)->where('symbol',$to)->lockForUpdate()->first();\n                if (!$target) $target=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$to,'balance'=>0]);
+                $target=BrokerWallet::where('user_id',$user->id)->where('symbol',$to)->lockForUpdate()->first();
+                if (!$target) $target=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$to,'balance'=>0]);
                 $wallet->decrement('balance',$amount);
                 $target->increment('balance',($amount*$fromPrice)/$toPrice);
             }
@@ -83,7 +86,8 @@ class BrokerApiController
                 throw ValidationException::withMessages(['stop_loss'=>'Stop loss must be below entry for a buy and above entry for a sell.']);
             }
             $margin=((float)$d['quantity']*$entry)/(float)$d['leverage'];
-            $usd=BrokerWallet::where('user_id',$request->user()->id)->where('symbol','USD')->lockForUpdate()->first();\n            if (!$usd) $usd=BrokerWallet::create(['user_id'=>$request->user()->id,'symbol'=>'USD','balance'=>0]);
+            $usd=BrokerWallet::where('user_id',$request->user()->id)->where('symbol','USD')->lockForUpdate()->first();
+            if (!$usd) $usd=BrokerWallet::create(['user_id'=>$request->user()->id,'symbol'=>'USD','balance'=>0]);
             if((float)$usd->balance<$margin) throw ValidationException::withMessages(['quantity'=>'Insufficient demo USD margin.']);
             $usd->decrement('balance',$margin);
             $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$entry,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
