@@ -33,7 +33,12 @@ class BrokerApiController
     {
         $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0','to_symbol'=>'nullable|string|max:20']);
         return DB::transaction(function() use($request,$data) {
-            $user=$request->user(); $symbol=strtoupper($data['symbol']);
+            // Serialize all balance mutations for this account. This also makes first-wallet creation safe.
+            $user=User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+            $symbol=strtoupper($data['symbol']);
+            if (in_array($data['type'], ['deposit','withdraw'], true) && $symbol !== 'USD') {
+                throw ValidationException::withMessages(['symbol'=>'Demo deposits and withdrawals are USD-only.']);
+            }
             $wallet=BrokerWallet::where('user_id',$user->id)->where('symbol',$symbol)->lockForUpdate()->first();
             if (!$wallet) $wallet=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$symbol,'balance'=>0]);
             $amount=(float)$data['amount'];
@@ -41,7 +46,7 @@ class BrokerApiController
             if($data['type']==='deposit') $wallet->increment('balance',$amount);
             if($data['type']==='withdraw') $wallet->decrement('balance',$amount);
             if($data['type']==='buy') {
-                $price=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
+                $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
@@ -60,8 +65,8 @@ class BrokerApiController
             if($data['type']==='convert') {
                 $to=strtoupper($data['to_symbol'] ?? '');
                 if(!$to || $to===$symbol) throw ValidationException::withMessages(['to_symbol'=>'Choose a different destination asset.']);
-                $fromPrice=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
-                $toPrice=(float)(BrokerAsset::where('symbol',$to)->value('price') ?? 0);
+                $fromPrice=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
+                $toPrice=(float)(BrokerAsset::where('symbol',$to)->where('is_active',true)->value('price') ?? 0);
                 if($fromPrice<=0 || $toPrice<=0) throw ValidationException::withMessages(['to_symbol'=>'One of the selected assets is unavailable.']);
                 $target=BrokerWallet::where('user_id',$user->id)->where('symbol',$to)->lockForUpdate()->first();
                 if (!$target) $target=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$to,'balance'=>0]);
@@ -79,6 +84,7 @@ class BrokerApiController
     {
         $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','leverage'=>'required|numeric|min:1|max:100','take_profit'=>'nullable|numeric','stop_loss'=>'nullable|numeric','duration_seconds'=>'nullable|integer|min:0|max:86400']);
         return DB::transaction(function () use ($request,$d) {
+            $account=User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $asset=BrokerAsset::where('symbol',strtoupper($d['symbol']))->where('is_active',true)->firstOrFail();
             $entry=(float)$asset->price;
             if (!empty($d['take_profit']) && (($d['side']==='buy' && (float)$d['take_profit']<=$entry) || ($d['side']==='sell' && (float)$d['take_profit']>=$entry))) {
@@ -148,6 +154,7 @@ class BrokerApiController
     {
         $userId=$request->user()->id;
         DB::transaction(function () use ($userId) {
+            User::whereKey($userId)->lockForUpdate()->firstOrFail();
             BrokerWallet::where('user_id',$userId)->update(['balance'=>0]);
             BrokerPosition::where('user_id',$userId)->where('status','open')->update([
                 'status'=>'closed','closed_at'=>now(),'close_reason'=>'reset','pnl'=>0
