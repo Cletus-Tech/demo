@@ -259,7 +259,7 @@ class BrokerTradingTest extends TestCase
         $this->assertDatabaseHas('broker_referrals', [
             'referrer_id' => $referrer->id,
             'referred_id' => $referred->id,
-            'status' => 'registered',
+            'status' => 'pending',
         ]);
 
         $this->actingAs($referrer, 'sanctum')
