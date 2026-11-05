@@ -29,7 +29,8 @@ Replace the example email with the owner account you control.
 
 ## Original functionality retained
 - The Blade dashboard is based on the existing original `dashboard.html` structure and visual styling, including the chart, chart toolbar/drawings, assets, account panels, trade form, TP/SL controls, responsive layout and navigation.
-- Laravel session registration/login/logout; every new account receives the original configured demo starting portfolio (USD-value grants for BTC, ETH, USD, SOL and AAPL).
+- Laravel session registration/login/logout and password reset; every new account receives the original configured demo starting portfolio (USD-value grants for BTC, ETH, USD, SOL and AAPL).
+- Unique referral codes, referral-link registration and account referral tracking.
 - Laravel API endpoints for account state, simulated prices, demo deposit/withdraw/buy/sell/convert, leveraged positions, TP/SL/expiry settlement, demo reset, profile, notifications and service enquiries.
 - Role-gated admin console for users and service enquiry workflow.
 
@@ -46,7 +47,7 @@ Replace the example email with the owner account you control.
 This conversion still simulates prices and funds. It is not connected to real exchange prices, payment rails, custody, or live brokerage execution. No real deposits or withdrawals are processed. Real financial operations require regulated providers, compliance and separate security review.
 
 ## Verification
-GitHub Actions currently runs Composer validation/install, database migrations, seven PHPUnit feature tests (22+ assertions), route registration and JavaScript syntax checks. These tests cover demo funding, spot buy/sell, withdrawals, leveraged margin/close, reset, user data isolation and admin access. A real PHP-hosted browser acceptance test is still required before production handover.
+GitHub Actions currently runs Composer validation/install, database migrations, eleven PHPUnit feature tests (56 assertions), route registration and JavaScript syntax checks. These tests cover demo funding, spot buy/sell, withdrawals, leveraged margin/close, reset, referral attribution, password recovery, simulated price throttling, user data isolation and admin access. A real PHP-hosted browser acceptance test is still required before production handover.
 
 ## PHP hosting deployment checklist
 1. Choose hosting with PHP 8.2+, Composer 2, `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype` and `fileinfo`; create a MySQL database and database user.
