@@ -265,7 +265,7 @@ class BrokerApiController
 
     public function services(Request $request)
     {
-        return response()->json(BrokerServiceRequest::where('user_id',$request->user()->id)->latest()->get());
+        return response()->json(BrokerServiceRequest::where('user_id',$request->user()->id)->latest()->get(['id','user_id','service_key','details','status','created_at','updated_at']));
     }
 
     public function createService(Request $request)
