@@ -55,7 +55,7 @@ class BrokerApiController
                 $usd->decrement('balance',$cost); $wallet->increment('balance',$amount);
             }
             if($data['type']==='sell') {
-                $price=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
+                $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
                 $wallet->decrement('balance',$amount);
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
