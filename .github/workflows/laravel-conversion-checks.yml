@@ -1,0 +1,44 @@
+name: Laravel conversion checks
+
+on:
+  push:
+    branches:
+      - laravel-conversion-from-original-demo
+    paths:
+      - "laravel-app/**"
+      - ".github/workflows/laravel-conversion-checks.yml"
+  pull_request:
+    branches:
+      - laravel-conversion-from-original-demo
+    paths:
+      - "laravel-app/**"
+
+jobs:
+  laravel:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: laravel-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_sqlite, sqlite3
+          coverage: none
+      - uses: actions/checkout@v4
+      - name: Validate Composer manifest
+        run: composer validate --no-check-publish
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Prepare SQLite database
+        run: |
+          touch database/database.sqlite
+          cp .env.example .env
+          php artisan key:generate
+      - name: Run database migrations
+        run: php artisan migrate --force
+      - name: Verify registered routes
+        run: php artisan route:list
+      - name: Check browser adapter syntax
+        run: node --check public/js/broker-api.js
