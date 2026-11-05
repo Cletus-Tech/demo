@@ -79,7 +79,7 @@
         entry_type: t.type === "demo_grant" ? "demo_grant" : (t.type === "demo_reset" ? "demo_reset" : (t.type === "deposit" ? "demo_deposit" : "demo_withdrawal")),
         memo: t.type === "demo_grant" ? "Starting demo balance" : (t.type === "demo_reset" ? "Demo account reset" : "Demo transaction"), created_at: t.created_at
       })),
-      referrals: []
+      referrals: raw.referrals || []
     };
   }
   const API = {
@@ -128,7 +128,7 @@
     resetDemo: function () { return post("/reset", {}); },
     loadNotifications: function () { return request("/notifications"); },
     markNotificationsRead: function () { return post("/notifications/read", {}); },
-    loadReferrals: async function () { return []; },
+    loadReferrals: function () { return request('/referrals'); },
     updateProfile: function (changes) { return request("/profile", { method: "PATCH", body: { full_name: changes.full_name, phone: changes.phone, country: changes.country } }); },
     loadMyServiceRequests: function () { return request("/services"); },
     createServiceRequest: function (service_key, details) { return post("/services", { service_key, details }); }
