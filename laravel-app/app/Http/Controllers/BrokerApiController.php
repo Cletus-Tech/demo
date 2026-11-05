@@ -77,7 +77,7 @@ class BrokerApiController
                 $ledger->record($user->id, $symbol, -$amount, 'demo_withdrawal', 'Demo funds - no real payout', $ledgerGroup);
             }
             if($data['type']==='buy') {
-                $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
+                $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->where('category','<>','fiat')->value('price') ?? 0);
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
@@ -146,7 +146,7 @@ class BrokerApiController
             if (!empty($d['duration_seconds']) && (int)$d['duration_seconds'] < 10) {
                 throw ValidationException::withMessages(['duration_seconds'=>'Duration must be at least 10 seconds.']);
             }
-            $asset=BrokerAsset::where('symbol',strtoupper($d['symbol']))->where('is_active',true)->firstOrFail();
+            $asset=BrokerAsset::where('symbol',strtoupper($d['symbol']))->where('is_active',true)->where('category','<>','fiat')->firstOrFail();
             $entry=(float)$asset->price;
             if (!empty($d['take_profit']) && (($d['side']==='buy' && (float)$d['take_profit']<=$entry) || ($d['side']==='sell' && (float)$d['take_profit']>=$entry))) {
                 throw ValidationException::withMessages(['take_profit'=>'Take profit must be above entry for a buy and below entry for a sell.']);
@@ -173,7 +173,7 @@ class BrokerApiController
             ]);
             BrokerNotification::create([
                 'user_id'=>$request->user()->id,'title'=>'Opened '.$d['leverage'].'x '.$d['side'].' on '.$asset->symbol,
-                'body'=>'Your demo position was opened at '.number_format($entry, 8, '.', '').'.'
+                'body'=>'Your demo position was opened at '.number_format($entry, 10, '.', '').'.'
             ]);
             return response()->json(['position'=>$position,'mode'=>'demo'],201);
         });
