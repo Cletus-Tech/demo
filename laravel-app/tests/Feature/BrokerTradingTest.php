@@ -42,7 +42,7 @@ class BrokerTradingTest extends TestCase
         ])->assertCreated();
 
         $this->assertDatabaseHas('broker_wallets', [
-            'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 320,
+            'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 200,
         ]);
         $this->assertDatabaseHas('broker_wallets', [
             'user_id' => $user->id, 'symbol' => 'BTC', 'balance' => 0.01,
@@ -100,7 +100,7 @@ class BrokerTradingTest extends TestCase
 
         $positionId = $opened->json('position.id');
         $this->assertDatabaseHas('broker_wallets', [
-            'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 320,
+            'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 200,
         ]);
 
         $this->postJson('/api/broker/positions/'.$positionId.'/close')
