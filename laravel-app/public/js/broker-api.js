@@ -47,6 +47,13 @@
     return data;
   }
   const post = (path, body) => request(path, { method: "POST", body });
+  function operationKey() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 3 | 8)).toString(16);
+    });
+  }
   const priceOf = (state, symbol) => {
     const asset = (state.assets || []).find(a => a.symbol === symbol);
     return asset ? Number(asset.price) : 0;
@@ -96,18 +103,18 @@
       return s.prices;
     },
     refreshPrices: function () { return post("/prices/refresh", {}); },
-    deposit: async function (amount) { return post("/transactions", { type: "deposit", symbol: "USD", amount }); },
-    withdraw: async function (amount) { return post("/transactions", { type: "withdraw", symbol: "USD", amount }); },
+    deposit: async function (amount) { return post("/transactions", { type: "deposit", symbol: "USD", amount, idempotency_key: operationKey() }); },
+    withdraw: async function (amount) { return post("/transactions", { type: "withdraw", symbol: "USD", amount, idempotency_key: operationKey() }); },
     spot: async function (symbol, side, amountUsd) {
       const s = await state(), price = priceOf(s, symbol);
       if (!(price > 0)) throw new Error("The selected demo asset has no valid price.");
       const quantity = Number(amountUsd) / price;
-      return post("/transactions", { type: side === "sell" ? "sell" : "buy", symbol, amount: quantity });
+      return post("/transactions", { type: side === "sell" ? "sell" : "buy", symbol, amount: quantity, idempotency_key: operationKey() });
     },
     swap: async function (from, to, amountUsd) {
       const s = await state(), price = priceOf(s, from);
       if (!(price > 0)) throw new Error("The selected source asset has no valid price.");
-      return post("/transactions", { type: "convert", symbol: from, to_symbol: to, amount: Number(amountUsd) / price });
+      return post("/transactions", { type: "convert", symbol: from, to_symbol: to, amount: Number(amountUsd) / price, idempotency_key: operationKey() });
     },
     openPosition: async function (symbol, side, marginUsd, leverage, tp, sl, durationSec) {
       const s = await state(), price = priceOf(s, symbol);
