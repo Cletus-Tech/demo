@@ -26,7 +26,8 @@
       if (token) headers["X-XSRF-TOKEN"] = token;
       headers["Content-Type"] = "application/json";
     }
-    const response = await fetch(path.startsWith("/") ? path : base + path, {
+    const url = path === "/logout" ? path : base + (path.startsWith("/") ? path : "/" + path);
+    const response = await fetch(url, {
       method, credentials: "same-origin", headers,
       body: options.body ? JSON.stringify(options.body) : undefined
     });
