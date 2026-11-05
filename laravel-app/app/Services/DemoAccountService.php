@@ -6,6 +6,7 @@ use App\Models\BrokerAsset;
 use App\Models\BrokerTransaction;
 use App\Models\BrokerWallet;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 class DemoAccountService
 {
