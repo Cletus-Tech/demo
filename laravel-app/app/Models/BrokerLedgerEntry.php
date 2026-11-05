@@ -14,8 +14,8 @@ class BrokerLedgerEntry extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:8',
-        'balance_after' => 'decimal:8',
+        'amount' => 'decimal:10',
+        'balance_after' => 'decimal:10',
         'created_at' => 'datetime',
     ];
 
