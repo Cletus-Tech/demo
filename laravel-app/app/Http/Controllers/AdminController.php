@@ -32,6 +32,7 @@ class AdminController
             'account_status'=>['required',Rule::in(['active','suspended'])],
         ]);
         $actor=$request->user();
+        abort_if($actor->id===$user->id && $data['role']!==($user->role ?? 'user'),422,'You cannot change your own role.');
         if (($actor->role ?? 'user') !== 'superadmin') {
             abort_unless($data['role'] === ($user->role ?? 'user'),403,'Only a superadmin can change roles.');
             abort_unless(($user->role ?? 'user') === 'user',403,'Only ordinary user accounts can be updated by an admin.');
