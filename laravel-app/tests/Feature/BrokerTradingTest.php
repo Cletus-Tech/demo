@@ -501,4 +501,14 @@ class BrokerTradingTest extends TestCase
         $this->assertDatabaseCount('broker_referrals', 0);
     }
 
+
+    public function test_suspended_accounts_cannot_open_dashboard_or_broker_api(): void
+    {
+        $user = $this->account();
+        $user->forceFill(['account_status' => 'suspended'])->save();
+
+        $this->actingAs($user, 'web')->get('/dashboard')->assertForbidden();
+        $this->actingAs($user, 'sanctum')->getJson('/api/broker/state')->assertForbidden();
+    }
+
 }
