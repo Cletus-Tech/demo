@@ -61,15 +61,34 @@ class BrokerApiController
 
     public function openPosition(Request $request)
     {
-        $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','leverage'=>'required|numeric|min:1|max:100','take_profit'=>'nullable|numeric','stop_loss'=>'nullable|numeric']);
+        $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','leverage'=>'required|numeric|min:1|max:100','take_profit'=>'nullable|numeric','stop_loss'=>'nullable|numeric','duration_seconds'=>'nullable|integer|min:0|max:86400']);
         return DB::transaction(function () use ($request,$d) {
             $asset=BrokerAsset::where('symbol',strtoupper($d['symbol']))->where('is_active',true)->firstOrFail();
             $margin=((float)$d['quantity']*(float)$asset->price)/(float)$d['leverage'];
             $usd=BrokerWallet::firstOrCreate(['user_id'=>$request->user()->id,'symbol'=>'USD'],['balance'=>0]);
             if((float)$usd->balance<$margin) throw ValidationException::withMessages(['quantity'=>'Insufficient demo USD margin.']);
             $usd->decrement('balance',$margin);
-            $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$asset->price,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null]);
+            $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$asset->price,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
             return response()->json(['position'=>$position,'mode'=>'demo'],201);
+        });
+    }
+
+    private function settlePosition(int $positionId, string $reason): ?BrokerPosition
+    {
+        return DB::transaction(function () use ($positionId,$reason) {
+            $position=BrokerPosition::whereKey($positionId)->lockForUpdate()->first();
+            if (!$position || $position->status!=='open') return null;
+            $price=(float)(BrokerAsset::where('symbol',$position->symbol)->value('price') ?? $position->entry_price);
+            $direction=$position->side==='buy' ? 1 : -1;
+            $pnl=((float)$position->quantity)*($price-(float)$position->entry_price)*$direction;
+            $release=max(0,(float)$position->margin+$pnl);
+            $usd=BrokerWallet::where('user_id',$position->user_id)->where('symbol','USD')->lockForUpdate()->first();
+            if (!$usd) $usd=BrokerWallet::create(['user_id'=>$position->user_id,'symbol'=>'USD','balance'=>0]);
+            $usd->increment('balance',$release);
+            $position->update(['status'=>'closed','closed_at'=>now(),'pnl'=>$pnl,'close_reason'=>$reason]);
+            BrokerTransaction::create(['user_id'=>$position->user_id,'type'=>'position_close','symbol'=>$position->symbol,'amount'=>$release,'status'=>'completed','meta'=>['mode'=>'demo','pnl'=>$pnl,'reason'=>$reason]]);
+            BrokerNotification::create(['user_id'=>$position->user_id,'title'=>$position->symbol.' position closed','body'=>'Your demo position closed: '.$reason.'.']);
+            return $position->fresh();
         });
     }
 
@@ -77,17 +96,28 @@ class BrokerApiController
     {
         abort_unless($position->user_id===$request->user()->id,404);
         abort_unless($position->status==='open',422);
-        return DB::transaction(function () use ($position) {
+        $closed=$this->settlePosition($position->id,'manual');
+        abort_unless($closed,422);
+        return response()->json(['position'=>$closed,'mode'=>'demo']);
+    }
+
+    public function settlePositions(Request $request)
+    {
+        $closed=[];
+        $positions=BrokerPosition::where('user_id',$request->user()->id)->where('status','open')->get();
+        foreach ($positions as $position) {
             $price=(float)(BrokerAsset::where('symbol',$position->symbol)->value('price') ?? $position->entry_price);
-            $direction=$position->side==='buy' ? 1 : -1;
-            $pnl=((float)$position->quantity)*($price-(float)$position->entry_price)*$direction;
-            $release=max(0,(float)$position->margin+$pnl);
-            $usd=BrokerWallet::firstOrCreate(['user_id'=>$position->user_id,'symbol'=>'USD'],['balance'=>0]);
-            $usd->increment('balance',$release);
-            $position->update(['status'=>'closed','closed_at'=>now(),'pnl'=>$pnl]);
-            BrokerTransaction::create(['user_id'=>$position->user_id,'type'=>'position_close','symbol'=>$position->symbol,'amount'=>$release,'status'=>'completed','meta'=>['mode'=>'demo','pnl'=>$pnl]]);
-            return response()->json(['position'=>$position->fresh(),'released_margin_and_pnl'=>$release,'mode'=>'demo']);
-        });
+            $long=$position->side==='buy';
+            $reason=null;
+            if ($position->take_profit && ($long ? $price >= (float)$position->take_profit : $price <= (float)$position->take_profit)) $reason='take_profit';
+            elseif ($position->stop_loss && ($long ? $price <= (float)$position->stop_loss : $price >= (float)$position->stop_loss)) $reason='stop_loss';
+            elseif ($position->expires_at && $position->expires_at->isPast()) $reason='duration_ended';
+            if ($reason) {
+                $row=$this->settlePosition($position->id,$reason);
+                if ($row) $closed[]=['id'=>$row->id,'symbol'=>$row->symbol,'side'=>$row->side==='buy'?'long':'short','reason'=>$reason,'pnl'=>(float)$row->pnl];
+            }
+        }
+        return response()->json($closed);
     }
 
     public function services(Request $request)
