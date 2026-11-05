@@ -118,11 +118,31 @@ class BrokerTradingTest extends TestCase
         $other = $this->account();
         BrokerWallet::create(['user_id' => $owner->id, 'symbol' => 'USD', 'balance' => 500]);
 
+        $this->actingAs($owner, 'sanctum');
+        $opened = $this->postJson('/api/broker/positions', [
+            'symbol' => 'BTC', 'side' => 'buy', 'quantity' => 0.001, 'leverage' => 10,
+        ])->assertCreated();
+        $positionId = $opened->json('position.id');
+
         $this->actingAs($other, 'sanctum');
         $this->getJson('/api/broker/state')->assertOk()->assertJsonPath('wallets', []);
+        $this->postJson('/api/broker/positions/'.$positionId.'/close')->assertNotFound();
+
         $this->assertDatabaseHas('broker_wallets', [
-            'user_id' => $owner->id, 'symbol' => 'USD', 'balance' => 500,
+            'user_id' => $owner->id, 'symbol' => 'USD', 'balance' => 492,
         ]);
+    }
+
+    public function test_admin_can_open_the_management_overview(): void
+    {
+        $admin = $this->account();
+        $admin->forceFill(['role' => 'admin'])->save();
+
+        $this->actingAs($admin, 'web')
+            ->get('/admin')
+            ->assertOk()
+            ->assertSee('Demo wallet balances')
+            ->assertSee('Recent demo transactions');
     }
 
     public function test_admin_console_is_not_available_to_ordinary_users(): void
