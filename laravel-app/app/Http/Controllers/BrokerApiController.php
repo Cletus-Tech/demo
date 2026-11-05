@@ -27,16 +27,33 @@ class BrokerApiController
             $amount=(float)$data['amount'];
             if(in_array($data['type'],['withdraw','sell']) && (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
             if($data['type']==='deposit') $wallet->balance=(float)$wallet->balance+$amount;
-            if(in_array($data['type'],['withdraw','sell'])) $wallet->balance=(float)$wallet->balance-$amount;
+            if($data['type']==='withdraw') $wallet->balance=(float)$wallet->balance-$amount;
             if($data['type']==='buy') {
                 $price=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
-                if($price<=0) throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable.']);
+                if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
                 $usd=BrokerWallet::firstOrCreate(['user_id'=>$user->id,'symbol'=>'USD'],['balance'=>0]);
                 $cost=$amount*$price;
                 if((float)$usd->balance<$cost) throw ValidationException::withMessages(['amount'=>'Insufficient demo USD balance.']);
                 $usd->decrement('balance',$cost); $wallet->increment('balance',$amount);
             }
-            $wallet->save();
+            if($data['type']==='sell') {
+                $price=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
+                if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
+                $wallet->decrement('balance',$amount);
+                $usd=BrokerWallet::firstOrCreate(['user_id'=>$user->id,'symbol'=>'USD'],['balance'=>0]);
+                $usd->increment('balance',$amount*$price);
+            }
+            if($data['type']==='convert') {
+                $to=strtoupper($data['to_symbol'] ?? '');
+                if(!$to || $to===$symbol) throw ValidationException::withMessages(['to_symbol'=>'Choose a different destination asset.']);
+                $fromPrice=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
+                $toPrice=(float)(BrokerAsset::where('symbol',$to)->value('price') ?? 0);
+                if($fromPrice<=0 || $toPrice<=0) throw ValidationException::withMessages(['to_symbol'=>'One of the selected assets is unavailable.']);
+                $target=BrokerWallet::firstOrCreate(['user_id'=>$user->id,'symbol'=>$to],['balance'=>0]);
+                $wallet->decrement('balance',$amount);
+                $target->increment('balance',($amount*$fromPrice)/$toPrice);
+            }
+            $wallet->refresh();
             $tx=BrokerTransaction::create(['user_id'=>$user->id,'type'=>$data['type'],'symbol'=>$symbol,'amount'=>$amount,'status'=>'completed','meta'=>['mode'=>'demo','to_symbol'=>$data['to_symbol']??null]]);
             return response()->json(['transaction'=>$tx,'wallet'=>$wallet,'mode'=>'demo'],201);
         });
