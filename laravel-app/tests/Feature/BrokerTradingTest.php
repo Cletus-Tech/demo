@@ -179,6 +179,9 @@ class BrokerTradingTest extends TestCase
         $user = User::where('email', $email)->firstOrFail();
         $this->assertNull($user->email_verified_at);
         Notification::assertSentTo($user, VerifyEmail::class);
+        $this->get('/dashboard')->assertRedirect('/email/verify');
+        $this->post('/logout')->assertRedirect('/login');
+        $this->post('/login', ['email' => $email, 'password' => 'password123'])->assertRedirect('/email/verify');
 
         $this->assertDatabaseHas('broker_wallets', [
             'user_id' => $user->id, 'symbol' => 'BTC', 'balance' => 0.0625,
