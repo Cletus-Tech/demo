@@ -141,6 +141,7 @@ class BrokerApiController
             if (!$usd) $usd=BrokerWallet::create(['user_id'=>$request->user()->id,'symbol'=>'USD','balance'=>0]);
             if((float)$usd->balance<$margin) throw ValidationException::withMessages(['quantity'=>'Insufficient demo USD margin.']);
             $usd->decrement('balance',$margin);
+            app(DemoLedgerService::class)->record($request->user()->id, 'USD', -$margin, 'position_open', 'Demo leveraged position margin', (string) Str::uuid());
             $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$entry,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
             BrokerTransaction::create([
                 'user_id'=>$request->user()->id,'type'=>'position_open','symbol'=>$asset->symbol,
@@ -167,7 +168,10 @@ class BrokerApiController
             $pnl=$release-(float)$position->margin;
             $usd=BrokerWallet::where('user_id',$position->user_id)->where('symbol','USD')->lockForUpdate()->first();
             if (!$usd) $usd=BrokerWallet::create(['user_id'=>$position->user_id,'symbol'=>'USD','balance'=>0]);
-            $usd->increment('balance',$release);
+            if ($release > 0) {
+                $usd->increment('balance',$release);
+                app(DemoLedgerService::class)->record($position->user_id, 'USD', $release, 'position_close', 'Demo leveraged position payout', (string) Str::uuid());
+            }
             $position->update(['status'=>'closed','closed_at'=>now(),'pnl'=>$pnl,'close_reason'=>$reason]);
             BrokerTransaction::create(['user_id'=>$position->user_id,'type'=>'position_close','symbol'=>$position->symbol,'amount'=>$release,'status'=>'completed','meta'=>['mode'=>'demo','pnl'=>$pnl,'reason'=>$reason,'close_price'=>$price]]);
             BrokerNotification::create(['user_id'=>$position->user_id,'title'=>$position->symbol.' position closed','body'=>'Your demo position closed: '.$reason.'.']);
@@ -216,13 +220,15 @@ class BrokerApiController
             }
             $balances = BrokerWallet::where('user_id',$userId)->where('balance','>',0)->get();
             foreach ($balances as $wallet) {
+                $amount = (float) $wallet->balance;
+                $wallet->update(['balance'=>0]);
+                app(DemoLedgerService::class)->record($userId, $wallet->symbol, -$amount, 'demo_reset', 'Demo account reset', (string) Str::uuid());
                 BrokerTransaction::create([
                     'user_id'=>$userId,'type'=>'demo_reset','symbol'=>$wallet->symbol,
-                    'amount'=>-((float)$wallet->balance),'status'=>'completed',
+                    'amount'=>-$amount,'status'=>'completed',
                     'meta'=>['mode'=>'demo','reason'=>'user_requested_reset']
                 ]);
             }
-            BrokerWallet::where('user_id',$userId)->update(['balance'=>0]);
             app(\App\Services\DemoAccountService::class)->grantStartingBalances($user, 'reset');
             BrokerNotification::create(['user_id'=>$userId,'title'=>'Demo account reset','body'=>'Your demo balances were restored to their configured starting amounts and open demo positions were closed.']);
         });
