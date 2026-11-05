@@ -63,7 +63,7 @@
       })),
       closed: positions.filter(p => p.status === "closed").map(p => Object.assign({}, p, {
         margin_usd: p.margin, leverage: p.leverage, pnl_usd: p.pnl,
-        side: p.side === "buy" ? "long" : "short", close_reason: "manual", closed_at: p.closed_at
+        side: p.side === "buy" ? "long" : "short", close_reason: p.close_reason || "manual", closed_at: p.closed_at
       })),
       orders: transactions.filter(t => ["buy", "sell", "convert"].includes(t.type)).map(t => ({
         kind: t.type === "convert" ? "swap" : "spot",
