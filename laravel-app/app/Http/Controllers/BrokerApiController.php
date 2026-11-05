@@ -39,7 +39,7 @@ class BrokerApiController
 
     public function transact(Request $request)
     {
-        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0','to_symbol'=>'nullable|string|max:20']);
+        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|min:0.01|max:10000000','to_symbol'=>'nullable|string|max:20']);
         return DB::transaction(function() use($request,$data) {
             // Serialize all balance mutations for this account. This also makes first-wallet creation safe.
             $user=User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
@@ -60,6 +60,7 @@ class BrokerApiController
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
                 $cost=$amount*$price;
+                if ($cost < 0.01 || $cost > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$cost;
                 if((float)$usd->balance<$cost) throw ValidationException::withMessages(['amount'=>'Insufficient demo USD balance.']);
                 $usd->decrement('balance',$cost); $wallet->increment('balance',$amount);
@@ -69,6 +70,7 @@ class BrokerApiController
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
                 $wallet->decrement('balance',$amount);
                 $proceeds=$amount*$price;
+                if ($proceeds < 0.01 || $proceeds > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$proceeds;
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
@@ -83,8 +85,10 @@ class BrokerApiController
                 $target=BrokerWallet::where('user_id',$user->id)->where('symbol',$to)->lockForUpdate()->first();
                 if (!$target) $target=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$to,'balance'=>0]);
                 $targetQuantity=($amount*$fromPrice)/$toPrice;
+                $conversionValue=$amount*$fromPrice;
+                if ($conversionValue < 0.01 || $conversionValue > 10000000) throw ValidationException::withMessages(['amount'=>'Demo conversion value must be between $0.01 and $10,000,000.']);
                 $meta['execution_price']=$fromPrice; $meta['to_price']=$toPrice;
-                $meta['amount_usd']=$amount*$fromPrice; $meta['to_amount']=$targetQuantity;
+                $meta['amount_usd']=$conversionValue; $meta['to_amount']=$targetQuantity;
                 $wallet->decrement('balance',$amount);
                 $target->increment('balance',$targetQuantity);
             }
