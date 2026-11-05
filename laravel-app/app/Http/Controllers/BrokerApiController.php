@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest,BrokerNotification,User};
+use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest,BrokerNotification,User,BrokerReferral};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -15,7 +15,7 @@ class BrokerApiController
         $wallets=BrokerWallet::where('user_id',$user->id)->get()->keyBy('symbol');
         $assets=BrokerAsset::where('is_active',true)->orderBy('symbol')->get();
         $positions=BrokerPosition::where('user_id',$user->id)->latest()->limit(100)->get();
-        return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user'],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(50)->get()]);
+        return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user','referral_code'=>$user->referral_code],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(50)->get(),'referrals'=>BrokerReferral::where('referrer_id',$user->id)->latest()->limit(100)->get()]);
     }
 
     public function refreshDemoPrices()
@@ -212,6 +212,16 @@ class BrokerApiController
             BrokerNotification::create(['user_id'=>$userId,'title'=>'Demo account reset','body'=>'Your demo balances were restored to their configured starting amounts and open demo positions were closed.']);
         });
         return response()->json(['reset'=>true,'mode'=>'demo']);
+    }
+
+    public function referrals(Request $request)
+    {
+        return response()->json(
+            BrokerReferral::where('referrer_id', $request->user()->id)
+                ->latest()
+                ->limit(100)
+                ->get(['id', 'referred_id', 'status', 'created_at'])
+        );
     }
 
     public function notifications(Request $request)
