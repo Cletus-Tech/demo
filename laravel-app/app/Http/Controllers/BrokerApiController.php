@@ -56,7 +56,13 @@ class BrokerApiController
             $ledger=app(DemoLedgerService::class);
             $meta=['mode'=>'demo','to_symbol'=>$data['to_symbol']??null];
             if(in_array($data['type'],['withdraw','sell','convert']) && (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
-            if($data['type']==='deposit') $wallet->increment('balance',$amount);
+            if($data['type']==='deposit') {
+                if ($amount < 0.01) throw ValidationException::withMessages(['amount'=>'Enter at least $0.01.']);
+                if ($amount > 100000) throw ValidationException::withMessages(['amount'=>'Demo deposits are limited to $100,000 per request.']);
+                if ((float)$wallet->balance + $amount > 1000000) throw ValidationException::withMessages(['amount'=>'This would exceed the $1,000,000 demo USD balance limit.']);
+                $wallet->increment('balance',$amount);
+                $ledger->record($user->id, $symbol, $amount, 'demo_deposit', 'Demo funds - no real payment', $ledgerGroup);
+            }
             if($data['type']==='withdraw') {
                 if ($amount < 0.01) throw ValidationException::withMessages(['amount'=>'Enter at least $0.01.']);
                 $wallet->decrement('balance',$amount);
@@ -73,7 +79,6 @@ class BrokerApiController
                 if((float)$usd->balance<$cost) throw ValidationException::withMessages(['amount'=>'Insufficient demo USD balance.']);
                 $usd->decrement('balance',$cost); $ledger->record($user->id, 'USD', -$cost, 'spot_buy', 'Demo spot buy', $ledgerGroup);
                 $wallet->increment('balance',$amount); $ledger->record($user->id, $symbol, $amount, 'spot_buy', 'Demo spot buy', $ledgerGroup);
-                $ledger->record($user->id, $symbol, $amount, 'demo_deposit', 'Demo funds - no real payment', $ledgerGroup);
             }
             if($data['type']==='sell') {
                 $price=(float)(BrokerAsset::where('symbol',$symbol)->where('is_active',true)->value('price') ?? 0);
