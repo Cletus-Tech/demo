@@ -44,4 +44,8 @@ textarea{background:#090e13;color:#edf2f7;border:1px solid #293440;border-radius
 <section class="panel"><h2>Append-only demo wallet ledger</h2><p>Every wallet credit and debit is recorded with the balance immediately after the entry.</p><table><thead><tr><th>Time</th><th>User ID</th><th>Asset</th><th>Amount</th><th>Balance after</th><th>Entry type</th><th>Memo</th></tr></thead><tbody>
 @forelse($ledger as $entry)<tr><td>{{ $entry->created_at?->format('Y-m-d H:i:s') }}</td><td>{{ $entry->user_id }}</td><td>{{ $entry->symbol }}</td><td>{{ number_format((float)$entry->amount,8) }}</td><td>{{ number_format((float)$entry->balance_after,8) }}</td><td>{{ $entry->entry_type }}</td><td>{{ $entry->memo ?: '—' }}</td></tr>@empty<tr><td colspan="7">No ledger entries yet.</td></tr>@endforelse
 </tbody></table></section>
+
+<section class="panel"><h2>Administrator audit trail</h2><p>Append-only records of role, account-status and service-request changes, including who made each change.</p><table><thead><tr><th>Time</th><th>Administrator</th><th>Action</th><th>Target</th><th>Change details</th></tr></thead><tbody>
+@forelse($auditLogs as $entry)<tr><td>{{ $entry->created_at?->format('Y-m-d H:i:s') }}</td><td>{{ $entry->actor_id ?: 'System' }}</td><td>{{ $entry->action }}</td><td>{{ $entry->target_type }} #{{ $entry->target_id }}</td><td>{{ json_encode($entry->details, JSON_UNESCAPED_SLASHES) }}</td></tr>@empty<tr><td colspan="5">No administrator changes recorded yet.</td></tr>@endforelse
+</tbody></table></section>
 </main></body></html>
