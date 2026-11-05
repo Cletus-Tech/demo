@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\DemoAccountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -33,23 +34,27 @@ class RegisterController
             $referralCode = Str::upper(Str::random(8));
         } while (User::where('referral_code', $referralCode)->exists());
 
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => $data['password'],
-            'referral_code' => $referralCode,
-            'referred_by' => $referrer?->id,
-        ]);
-
-        if ($referrer) {
-            BrokerReferral::create([
-                'referrer_id' => $referrer->id,
-                'referred_id' => $user->id,
-                'status' => 'registered',
+        $user = DB::transaction(function () use ($data, $referrer, $referralCode) {
+            $user = User::create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => $data['password'],
+                'referral_code' => $referralCode,
+                'referred_by' => $referrer?->id,
             ]);
-        }
 
-        app(DemoAccountService::class)->grantStartingBalances($user, 'signup');
+            if ($referrer) {
+                BrokerReferral::create([
+                    'referrer_id' => $referrer->id,
+                    'referred_id' => $user->id,
+                    'status' => 'registered',
+                ]);
+            }
+
+            app(DemoAccountService::class)->grantStartingBalances($user, 'signup');
+
+            return $user;
+        });
         Auth::login($user);
         $request->session()->regenerate();
 
