@@ -45,7 +45,7 @@ class AdminController
         abort_if($actor->id===$user->id && $data['role']!==($user->role ?? 'user'),422,'You cannot change your own role.');
         if (($actor->role ?? 'user') !== 'superadmin') {
             abort_unless($data['role'] === ($user->role ?? 'user'),403,'Only a superadmin can change roles.');
-            abort_unless(($user->role ?? 'user') === 'user',403,'Only ordinary user accounts can be updated by an admin.');
+            abort_unless(!in_array(($user->role ?? 'user'), ['admin','superadmin'], true),403,'Only a superadmin can change another administrator account.');
         }
         abort_if($actor->id===$user->id && $data['account_status']!=='active',422,'You cannot suspend your own account.');
         DB::transaction(function () use ($user, $actor, $data) {
