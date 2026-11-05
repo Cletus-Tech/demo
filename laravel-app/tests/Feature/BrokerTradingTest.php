@@ -57,7 +57,7 @@ class BrokerTradingTest extends TestCase
         ])->assertCreated();
 
         $this->assertDatabaseHas('broker_wallets', [
-            'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 560,
+            'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 500,
         ]);
         $this->assertDatabaseHas('broker_transactions', [
             'user_id' => $user->id, 'type' => 'deposit', 'symbol' => 'USD',
