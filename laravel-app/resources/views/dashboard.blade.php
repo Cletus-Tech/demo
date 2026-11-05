@@ -304,7 +304,7 @@ body{overflow-x:hidden}
    <label><span id="aLbl">Amount</span><div class="amtbox"><input id="tAmt" type="number" min="0" step="any" placeholder="100"><select id="tAsset" aria-label="Asset"></select></div></label>
    <div class="kv">Current USD balance <b id="kUsd"></b></div>
    <div class="kv">Current <span id="kSym" style="margin-left:4px"></span> price <b id="kPx" class="g"></b></div>
-   <div id="levBox"><label>Leverage:<div class="levrow"><div class="sl"><input type="range" id="lev" min="2" max="100" value="2"><div class="ticks"></div><div class="tlab" id="tlab"></div></div><div class="lvbox" id="levV">2x</div></div></label></div>
+   <div id="levBox"><label>Leverage:<div class="levrow"><div class="sl"><input type="range" id="lev" min="1" max="100" value="1"><div class="ticks"></div><div class="tlab" id="tlab"></div></div><div class="lvbox" id="levV">1x</div></div></label></div>
    <label class="chk tprow"><span style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="tpOn"> Use TP/SL</span><button type="button" class="ai" id="aiBtn">Set with AI</button></label>
    <div id="tpBox" hidden><input id="tp" type="number" step="any" placeholder="Take profit"><input id="sl" type="number" step="any" placeholder="Stop loss"></div>
    <label id="durBox">Duration (leveraged trades)<select id="dur"></select></label>
@@ -782,7 +782,7 @@ $("scrim").onclick=()=>document.body.classList.remove("nav-open");
 window.addEventListener("resize",()=>{if(innerWidth>820)document.body.classList.remove("nav-open")});
 $("tType").innerHTML=CONFIG.tradeTypes.map(t=>`<option>${t}</option>`).join("");
 $("lev").max=CONFIG.maxLeverage;
-const ml=CONFIG.maxLeverage;$("tlab").innerHTML=[0,.25,.5,.75,1].map(f=>`<span>${Math.round(2+(ml-2)*f)}x</span>`).join("");
+const ml=CONFIG.maxLeverage;$("tlab").innerHTML=[0,.25,.5,.75,1].map(f=>`<span>${Math.round(ml*f)}x</span>`).join("");
 $("dur").innerHTML=CONFIG.durations.map(d=>`<option value="${d.sec}">${d.label}</option>`).join("");$("dur").value=CONFIG.defaultDuration;
 $("cSym").innerHTML=ASSETS.filter(a=>a.id!=="USD").map(a=>`<option value="${a.id}">${a.id}</option>`).join("");
 $("cSym").value=CONFIG.defaultSymbol;fillTrade();gen();render();drawPos();draw();updTitle();setInterval(tick,CONFIG.tickMs);refreshNotes();
