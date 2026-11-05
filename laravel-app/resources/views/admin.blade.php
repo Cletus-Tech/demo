@@ -41,7 +41,7 @@ textarea{background:#090e13;color:#edf2f7;border:1px solid #293440;border-radius
 <section class="panel"><h2>Recent demo orders and transactions</h2><table><thead><tr><th>Time</th><th>User ID</th><th>Type</th><th>Side</th><th>Asset / route</th><th>Amount USD</th><th>Status</th><th>Mode</th></tr></thead><tbody>
 @forelse($transactions as $transaction)<tr>
 <td>{{ $transaction->created_at?->format('Y-m-d H:i') }}</td><td>{{ $transaction->user_id }}</td><td>{{ $transaction->type }}</td>
-<td>{{ data_get($transaction->meta, 'side', in_array($transaction->type, ['buy','sell'], true) ? $transaction->type : '—') }}</td>
+<td>{{ data_get($transaction->meta, 'side', in_array($transaction->type, ['buy','sell','convert'], true) ? $transaction->type : '—') }}</td>
 <td>{{ $transaction->type === 'convert' ? $transaction->symbol.' → '.data_get($transaction->meta, 'to_symbol', '?') : ($transaction->symbol ?: '—') }}</td>
 <td>{{ number_format((float)data_get($transaction->meta, 'amount_usd', $transaction->amount),2) }}</td><td>{{ $transaction->status }}</td><td>Demo</td>
 </tr>@empty<tr><td colspan="8">No demo transactions yet.</td></tr>@endforelse
