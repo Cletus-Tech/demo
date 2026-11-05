@@ -65,6 +65,7 @@ class BrokerTradingTest extends TestCase
         $this->assertDatabaseHas('broker_transactions', [
             'user_id' => $user->id, 'type' => 'deposit', 'symbol' => 'USD',
         ]);
+        $this->assertDatabaseCount('broker_ledger_entries', 6);
     }
 
     public function test_deposits_are_usd_only_and_insufficient_funds_are_rejected(): void
@@ -113,6 +114,7 @@ class BrokerTradingTest extends TestCase
         $this->assertDatabaseHas('broker_wallets', [
             'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 1000,
         ]);
+        $this->assertDatabaseCount('broker_ledger_entries', 3);
     }
 
     public function test_users_cannot_close_another_users_position_or_read_their_wallets(): void
@@ -174,6 +176,7 @@ class BrokerTradingTest extends TestCase
             'user_id' => $user->id, 'symbol' => 'USD', 'balance' => 3000,
         ]);
         $this->assertDatabaseCount('broker_wallets', 5);
+        $this->assertDatabaseCount('broker_ledger_entries', 5);
     }
 
     public function test_demo_reset_restores_starting_balances_and_keeps_the_account_history(): void
@@ -194,6 +197,7 @@ class BrokerTradingTest extends TestCase
             'user_id' => $user->id, 'type' => 'demo_reset', 'symbol' => 'USD',
         ]);
         $this->assertDatabaseCount('broker_transactions', 15);
+        $this->assertDatabaseCount('broker_ledger_entries', 15);
     }
 
 
