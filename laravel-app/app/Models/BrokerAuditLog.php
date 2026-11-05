@@ -14,7 +14,7 @@ class BrokerAuditLog extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new \\LogicException('Administrator audit logs are append-only.'));
-        static::deleting(fn () => throw new \\LogicException('Administrator audit logs are append-only.'));
+        static::updating(fn () => throw new \LogicException('Administrator audit logs are append-only.'));
+        static::deleting(fn () => throw new \LogicException('Administrator audit logs are append-only.'));
     }
 }
