@@ -25,6 +25,9 @@ class LoginController
         }
 
         $request->session()->regenerate();
+        if (!$request->user()->hasVerifiedEmail()) {
+            return redirect()->route('verification.notice');
+        }
         return redirect()->intended(route('dashboard'));
     }
 
