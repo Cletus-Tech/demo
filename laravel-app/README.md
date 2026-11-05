@@ -29,7 +29,7 @@ Replace the example email with the owner account you control.
 
 ## Original functionality retained
 - The Blade dashboard is based on the existing original `dashboard.html` structure and visual styling, including the chart, chart toolbar/drawings, assets, account panels, trade form, TP/SL controls, responsive layout and navigation.
-- Laravel session registration/login/logout.
+- Laravel session registration/login/logout; every new account receives the original configured demo starting portfolio (USD-value grants for BTC, ETH, USD, SOL and AAPL).
 - Laravel API endpoints for account state, simulated prices, demo deposit/withdraw/buy/sell/convert, leveraged positions, TP/SL/expiry settlement, demo reset, profile, notifications and service enquiries.
 - Role-gated admin console for users and service enquiry workflow.
 
@@ -37,6 +37,7 @@ Replace the example email with the owner account you control.
 - The dashboard uses `public/js/broker-api.js`; it does not load the Supabase browser SDK.
 - Laravel Sanctum stateful middleware is enabled in `bootstrap/app.php` for same-origin session-authenticated API requests.
 - Default local DB is SQLite. Set `DB_CONNECTION=mysql` and the `DB_*` values in `.env` for MySQL hosting.
+- `config/broker.php` controls the demo starting portfolio and simulated-price cadence. Demo reset restores those configured starting balances and retains transaction history.
 - Do not copy any `.env` or secret key into Git. Configure `APP_KEY`, DB credentials and `APP_DEBUG=false` on the server.
 - Point the web server document root to this folder's `public/` directory. Do not expose the project root.
 - GitHub Pages and static Vercel output cannot execute Laravel PHP. Deploy this application to PHP hosting, a VPS, or Laravel Cloud, then connect the intended domain.
@@ -45,4 +46,12 @@ Replace the example email with the owner account you control.
 This conversion still simulates prices and funds. It is not connected to real exchange prices, payment rails, custody, or live brokerage execution. No real deposits or withdrawals are processed. Real financial operations require regulated providers, compliance and separate security review.
 
 ## Verification
-The repository contains syntax checks, but this workspace has not executed Composer, Laravel migrations or browser tests against a running PHP/database server. Run `composer install`, `php artisan migrate`, `php artisan route:list`, then test signup, login, wallet operations, trades, TP/SL, logout and admin access before client handover.
+GitHub Actions currently runs Composer validation/install, database migrations, seven PHPUnit feature tests (22+ assertions), route registration and JavaScript syntax checks. These tests cover demo funding, spot buy/sell, withdrawals, leveraged margin/close, reset, user data isolation and admin access. A real PHP-hosted browser acceptance test is still required before production handover.
+
+## PHP hosting deployment checklist
+1. Choose hosting with PHP 8.2+, Composer 2, `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype` and `fileinfo`; create a MySQL database and database user.
+2. Upload/clone the repository and run Composer from `laravel-app`: `composer install --no-dev --optimize-autoloader`.
+3. Copy `.env.example` to `.env`; set `APP_ENV=production`, `APP_DEBUG=false`, the HTTPS `APP_URL`, a generated `APP_KEY`, `DB_CONNECTION=mysql`, and the host's database credentials. Set `SESSION_SECURE_COOKIE=true` for HTTPS.
+4. Set the site's document root to `laravel-app/public` (not the repository root), ensure `storage` and `bootstrap/cache` are writable, then run `php artisan migrate --force`, `php artisan storage:link`, `php artisan config:cache`, `php artisan route:cache` and `php artisan view:cache`.
+5. Register the owner account, then promote that account using the Tinker command above. Confirm `/login`, `/register`, `/dashboard`, `/admin`, demo wallet actions and position settlement over HTTPS.
+6. Keep the original GitHub Pages demo online until the Laravel host passes acceptance testing. GitHub Pages itself cannot run PHP.
