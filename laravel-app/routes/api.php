@@ -1,7 +1,7 @@
 <?php
 
-use App\\Http\\Controllers\\BrokerApiController;
-use Illuminate\\Support\\Facades\\Route;
+use App\Http\Controllers\BrokerApiController;
+use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->prefix('broker')->group(function () {
     Route::get('/state',[BrokerApiController::class,'state']);
