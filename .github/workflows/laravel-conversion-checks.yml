@@ -43,3 +43,5 @@ jobs:
         run: php artisan route:list
       - name: Check browser adapter syntax
         run: node --check public/js/broker-api.js
+      - name: Check inline dashboard syntax
+        run: node scripts/check-dashboard-script.cjs
