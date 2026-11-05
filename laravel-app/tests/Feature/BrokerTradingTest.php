@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BrokerWallet;
+use App\Models\BrokerAsset;
 use App\Models\BrokerServiceRequest;
 use App\Services\DemoAccountService;
 use Illuminate\Auth\Notifications\ResetPassword;
@@ -431,6 +432,27 @@ class BrokerTradingTest extends TestCase
 
         $this->assertDatabaseHas('broker_wallets', ['user_id' => $user->id, 'symbol' => 'USD', 'balance' => 200]);
         $this->assertDatabaseHas('broker_wallets', ['user_id' => $user->id, 'symbol' => 'BTC', 'balance' => 0.01]);
+    }
+
+
+    public function test_leveraged_pnl_uses_original_margin_leverage_and_price_formula(): void
+    {
+        $user = $this->account();
+        BrokerWallet::create(['user_id' => $user->id, 'symbol' => 'USD', 'balance' => 1000]);
+        $this->actingAs($user, 'sanctum');
+
+        $opened = $this->postJson('/api/broker/positions', [
+            'symbol' => 'BTC', 'side' => 'buy', 'quantity' => 0.001, 'margin_usd' => 100, 'leverage' => 10,
+        ])->assertCreated();
+        $positionId = $opened->json('position.id');
+
+        BrokerAsset::where('symbol', 'BTC')->update(['price' => 80800]);
+
+        $closed = $this->postJson('/api/broker/positions/'.$positionId.'/close')
+            ->assertOk()
+            ->assertJsonPath('position.pnl', 10);
+
+        $this->assertEqualsWithDelta(1010, (float) BrokerWallet::where('user_id', $user->id)->where('symbol', 'USD')->value('balance'), 0.0000001);
     }
 
 }
