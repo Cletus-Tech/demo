@@ -42,6 +42,15 @@ return new class extends Migration {
         });
     }
 
+        DB::table('broker_assets')->insert([
+            ['symbol'=>'BTC','name'=>'Bitcoin','category'=>'crypto','price'=>68000,'is_active'=>true,'created_at'=>now(),'updated_at'=>now()],
+            ['symbol'=>'ETH','name'=>'Ethereum','category'=>'crypto','price'=>3500,'is_active'=>true,'created_at'=>now(),'updated_at'=>now()],
+            ['symbol'=>'SOL','name'=>'Solana','category'=>'crypto','price'=>160,'is_active'=>true,'created_at'=>now(),'updated_at'=>now()],
+            ['symbol'=>'USD','name'=>'US Dollar','category'=>'fiat','price'=>1,'is_active'=>true,'created_at'=>now(),'updated_at'=>now()],
+            ['symbol'=>'EUR','name'=>'Euro','category'=>'fiat','price'=>1.08,'is_active'=>true,'created_at'=>now(),'updated_at'=>now()],
+        ]);
+    }
+
     public function down(): void
     {
         Schema::dropIfExists('broker_service_requests'); Schema::dropIfExists('broker_notifications');
