@@ -215,13 +215,13 @@ class BrokerApiController
     public function settlePositions(Request $request)
     {
         $closed=[];
-        $positions=BrokerPosition::where('user_id',$request->user()->id)->where('status','open')->get();
+        $positions=BrokerPosition::where('user_id',$request->user()->id)->where('status','open')->orderBy('created_at')->get();
         foreach ($positions as $position) {
             $price=(float)(BrokerAsset::where('symbol',$position->symbol)->value('price') ?? $position->entry_price);
             $long=$position->side==='buy';
             $reason=null;
             $pnl=(float)$position->margin*(float)$position->leverage*(($price/(float)$position->entry_price)-1)*($long ? 1 : -1);
-            if ($position->expires_at && $position->expires_at->isPast()) $reason='duration_ended';
+            if ($position->expires_at && now()->greaterThanOrEqualTo($position->expires_at)) $reason='duration_ended';
             elseif ($pnl <= -(float)$position->margin) $reason='liquidated';
             elseif ($position->take_profit && ($long ? $price >= (float)$position->take_profit : $price <= (float)$position->take_profit)) $reason='take_profit';
             elseif ($position->stop_loss && ($long ? $price <= (float)$position->stop_loss : $price >= (float)$position->stop_loss)) $reason='stop_loss';
