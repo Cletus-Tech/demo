@@ -42,7 +42,7 @@ class BrokerApiController
 
     public function transact(Request $request)
     {
-        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0|max:10000000','to_symbol'=>'nullable|string|max:20','idempotency_key'=>'nullable|uuid']);
+        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0|max:10000000','amount_usd'=>'nullable|numeric|gt:0|max:10000000','to_symbol'=>'nullable|string|max:20','idempotency_key'=>'nullable|uuid']);
         return DB::transaction(function() use($request,$data) {
             // Serialize all balance mutations for this account. This also makes first-wallet creation safe.
             $user=User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
@@ -59,7 +59,7 @@ class BrokerApiController
             }
             $wallet=BrokerWallet::where('user_id',$user->id)->where('symbol',$symbol)->lockForUpdate()->first();
             if (!$wallet) $wallet=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$symbol,'balance'=>0]);
-            $amount=(float)$data['amount'];
+            $amount=in_array($data['type'], ['deposit','withdraw'], true) ? round((float)$data['amount'], 2) : round((float)$data['amount'], 10);
             $ledgerGroup=(string) Str::uuid();
             $ledger=app(DemoLedgerService::class);
             $meta=['mode'=>'demo','to_symbol'=>$data['to_symbol']??null];
@@ -81,7 +81,7 @@ class BrokerApiController
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
                 if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
-                $cost=$amount*$price;
+                $cost=round((float)($data['amount_usd'] ?? ($amount*$price)), 2);
                 if ($cost < 0.01 || $cost > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$cost;
                 if((float)$usd->balance<$cost) throw ValidationException::withMessages(['amount'=>'Insufficient demo USD balance.']);
@@ -93,7 +93,7 @@ class BrokerApiController
                 if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
                 $wallet->decrement('balance',$amount);
                 $ledger->record($user->id, $symbol, -$amount, 'spot_sell', 'Demo spot sell', $ledgerGroup);
-                $proceeds=$amount*$price;
+                $proceeds=round((float)($data['amount_usd'] ?? ($amount*$price)), 2);
                 if ($proceeds < 0.01 || $proceeds > 10000000) throw ValidationException::withMessages(['amount'=>'Demo order value must be between $0.01 and $10,000,000.']);
                 $meta['execution_price']=$price; $meta['amount_usd']=$proceeds;
                 $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
@@ -108,8 +108,8 @@ class BrokerApiController
                 if($fromPrice<=0 || $toPrice<=0) throw ValidationException::withMessages(['to_symbol'=>'One of the selected assets is unavailable.']);
                 $target=BrokerWallet::where('user_id',$user->id)->where('symbol',$to)->lockForUpdate()->first();
                 if (!$target) $target=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$to,'balance'=>0]);
-                $targetQuantity=($amount*$fromPrice)/$toPrice;
-                $conversionValue=$amount*$fromPrice;
+                $conversionValue=round((float)($data['amount_usd'] ?? ($amount*$fromPrice)), 2);
+                $targetQuantity=round($conversionValue/$toPrice, 10);
                 if ($conversionValue < 0.01 || $conversionValue > 10000000) throw ValidationException::withMessages(['amount'=>'Demo conversion value must be between $0.01 and $10,000,000.']);
                 $meta['execution_price']=$fromPrice; $meta['to_price']=$toPrice;
                 $meta['amount_usd']=$conversionValue; $meta['to_amount']=$targetQuantity;
@@ -127,7 +127,7 @@ class BrokerApiController
 
     public function openPosition(Request $request)
     {
-        $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','leverage'=>'required|integer|min:2|max:100','take_profit'=>'nullable|numeric|gt:0','stop_loss'=>'nullable|numeric|gt:0','duration_seconds'=>'nullable|integer|min:0|max:2592000','idempotency_key'=>'nullable|uuid']);
+        $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','margin_usd'=>'nullable|numeric|gt:0|max:10000000','leverage'=>'required|integer|min:2|max:100','take_profit'=>'nullable|numeric|gt:0','stop_loss'=>'nullable|numeric|gt:0','duration_seconds'=>'nullable|integer|min:0|max:2592000','idempotency_key'=>'nullable|uuid']);
         return DB::transaction(function () use ($request,$d) {
             $account=User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             if (!empty($d['idempotency_key'])) {
@@ -148,8 +148,9 @@ class BrokerApiController
             if (!empty($d['stop_loss']) && (($d['side']==='buy' && (float)$d['stop_loss']>=$entry) || ($d['side']==='sell' && (float)$d['stop_loss']<=$entry))) {
                 throw ValidationException::withMessages(['stop_loss'=>'Stop loss must be below entry for a buy and above entry for a sell.']);
             }
-            $margin=((float)$d['quantity']*$entry)/(float)$d['leverage'];
-            if ($margin < 0.01 || $margin > 10000000) {
+            $margin=round((float)($d['margin_usd'] ?? (((float)$d['quantity']*$entry)/(float)$d['leverage'])), 2);
+            $quantity=isset($d['margin_usd']) ? round($margin*(float)$d['leverage']/$entry, 10) : round((float)$d['quantity'], 10);
+            if ($margin < 0.01 || $margin > 10000000 || $quantity <= 0) {
                 throw ValidationException::withMessages(['quantity'=>'Demo position margin must be between $0.01 and $10,000,000.']);
             }
             $usd=BrokerWallet::where('user_id',$request->user()->id)->where('symbol','USD')->lockForUpdate()->first();
@@ -157,11 +158,11 @@ class BrokerApiController
             if((float)$usd->balance<$margin) throw ValidationException::withMessages(['quantity'=>'Insufficient demo USD margin.']);
             $usd->decrement('balance',$margin);
             app(DemoLedgerService::class)->record($request->user()->id, 'USD', -$margin, 'position_open', 'Demo leveraged position margin', (string) Str::uuid());
-            $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$entry,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
+            $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$quantity,'entry_price'=>$entry,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
             BrokerTransaction::create([
                 'user_id'=>$request->user()->id,'type'=>'position_open','symbol'=>$asset->symbol,
                 'amount'=>$margin,'status'=>'completed',
-                'meta'=>['mode'=>'demo','quantity'=>(float)$d['quantity'],'entry_price'=>$entry,'leverage'=>(int)$d['leverage'],'side'=>$d['side'],'position_id'=>$position->id],
+                'meta'=>['mode'=>'demo','quantity'=>$quantity,'entry_price'=>$entry,'leverage'=>(int)$d['leverage'],'side'=>$d['side'],'position_id'=>$position->id],
                 'idempotency_key'=>$d['idempotency_key']??null
             ]);
             BrokerNotification::create([
@@ -179,9 +180,9 @@ class BrokerApiController
             if (!$position || $position->status!=='open') return null;
             $price=(float)(BrokerAsset::where('symbol',$position->symbol)->value('price') ?? $position->entry_price);
             $direction=$position->side==='buy' ? 1 : -1;
-            $rawPnl=((float)$position->quantity)*($price-(float)$position->entry_price)*$direction;
-            $release=max(0,(float)$position->margin+$rawPnl);
-            $pnl=$release-(float)$position->margin;
+            $rawPnl=(float)$position->margin*(float)$position->leverage*(($price/(float)$position->entry_price)-1)*$direction;
+            $release=round(max(0,(float)$position->margin+$rawPnl),10);
+            $pnl=round($release-(float)$position->margin,10);
             $usd=BrokerWallet::where('user_id',$position->user_id)->where('symbol','USD')->lockForUpdate()->first();
             if (!$usd) $usd=BrokerWallet::create(['user_id'=>$position->user_id,'symbol'=>'USD','balance'=>0]);
             if ($release > 0) {
@@ -212,7 +213,7 @@ class BrokerApiController
             $price=(float)(BrokerAsset::where('symbol',$position->symbol)->value('price') ?? $position->entry_price);
             $long=$position->side==='buy';
             $reason=null;
-            $pnl=((float)$position->quantity)*($price-(float)$position->entry_price)*($long ? 1 : -1);
+            $pnl=(float)$position->margin*(float)$position->leverage*(($price/(float)$position->entry_price)-1)*($long ? 1 : -1);
             if ($position->expires_at && $position->expires_at->isPast()) $reason='duration_ended';
             elseif ($pnl <= -(float)$position->margin) $reason='liquidated';
             elseif ($position->take_profit && ($long ? $price >= (float)$position->take_profit : $price <= (float)$position->take_profit)) $reason='take_profit';
