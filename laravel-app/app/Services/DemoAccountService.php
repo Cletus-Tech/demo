@@ -28,7 +28,7 @@ class DemoAccountService
                 continue;
             }
 
-            $quantity = round((float) $usdValue / (float) $asset->price, 8);
+            $quantity = round((float) $usdValue / (float) $asset->price, 10);
 
             BrokerWallet::query()->updateOrCreate(
                 ['user_id' => $user->id, 'symbol' => $symbol],
