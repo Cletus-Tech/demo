@@ -126,7 +126,7 @@
     loadNotifications: function () { return request("/notifications"); },
     markNotificationsRead: function () { return post("/notifications/read", {}); },
     loadReferrals: async function () { return []; },
-    updateProfile: function (changes) { return request("/profile", { method: "PATCH", body: { full_name: changes.full_name } }); },
+    updateProfile: function (changes) { return request("/profile", { method: "PATCH", body: { full_name: changes.full_name, phone: changes.phone, country: changes.country } }); },
     loadMyServiceRequests: function () { return request("/services"); },
     createServiceRequest: function (service_key, details) { return post("/services", { service_key, details }); }
   };
