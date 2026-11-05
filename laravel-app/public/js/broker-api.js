@@ -67,8 +67,9 @@
       })),
       orders: transactions.filter(t => ["buy", "sell", "convert"].includes(t.type)).map(t => ({
         kind: t.type === "convert" ? "swap" : "spot",
-        side: t.type, symbol: t.symbol, from_symbol: t.symbol,
-        amount_usd: Number(t.amount), created_at: t.created_at
+        side: t.type, symbol: t.type === "convert" ? ((t.meta || {}).to_symbol || t.symbol) : t.symbol,
+        from_symbol: t.symbol, amount_usd: Number(t.amount) * priceOf({ assets }, t.symbol),
+        created_at: t.created_at
       })),
       ledger: transactions.filter(t => ["deposit", "withdraw"].includes(t.type)).map(t => ({
         id: t.id, symbol: t.symbol, amount: t.type === "withdraw" ? -Number(t.amount) : Number(t.amount),
