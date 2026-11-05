@@ -467,7 +467,7 @@ class BrokerTradingTest extends TestCase
         app()->instance(DemoAccountService::class, new class extends DemoAccountService {
             public function grantStartingBalances(User $user, string $reason = 'signup'): void
             {
-                throw new \\RuntimeException('Simulated demo grant failure.');
+                throw new \RuntimeException('Simulated demo grant failure.');
             }
         });
 
