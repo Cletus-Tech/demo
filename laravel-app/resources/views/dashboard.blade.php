@@ -326,7 +326,7 @@ body{overflow-x:hidden}
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
  <div class="sheet">
   <h2 id="mt">Reset demo account</h2>
-  <div class="lbl">This closes your open trades and restores your demo balances to the starting amounts. Your trade history is kept.</div>
+  <div class="lbl">This closes your open demo trades and clears your demo wallet balances. Your trade history is kept.</div>
   <div class="acts">
    <button class="btn ghost" id="cancel">Cancel</button>
    <button class="btn" id="reset">Reset demo account</button>
