@@ -1,0 +1,33 @@
+name: Laravel package static checks
+
+on:
+  push:
+    branches:
+      - laravel-native-starter
+    paths:
+      - "laravel-app/**"
+      - ".github/workflows/laravel-package-lint.yml"
+  pull_request:
+    branches:
+      - laravel-native-starter
+    paths:
+      - "laravel-app/**"
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+      - name: Lint PHP source files
+        run: |
+          find laravel-app -type f -name "*.php" ! -name "*.blade.php" -print0 | xargs -0 -n1 php -l
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check dashboard API adapter syntax
+        run: node --check laravel-app/public/js/broker-api.js
