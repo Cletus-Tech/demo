@@ -25,11 +25,13 @@ class BrokerTradingTest extends TestCase
 
     private function account(array $overrides = []): User
     {
-        return User::create(array_merge([
+        $user = User::create(array_merge([
             'name' => 'Demo Trader',
             'email' => uniqid('trader-', true).'@example.test',
             'password' => 'password123',
         ], $overrides));
+        $user->forceFill(['email_verified_at' => now()])->save();
+        return $user;
     }
 
     public function test_demo_usd_deposit_buy_sell_and_withdraw_are_recorded_atomically(): void
@@ -161,6 +163,7 @@ class BrokerTradingTest extends TestCase
 
     public function test_new_accounts_receive_the_original_configured_demo_portfolio(): void
     {
+        Notification::fake();
         $email = uniqid('new-user-', true).'@example.test';
 
         $this->post('/register', [
@@ -168,9 +171,11 @@ class BrokerTradingTest extends TestCase
             'email' => $email,
             'password' => 'password123',
             'password_confirmation' => 'password123',
-        ])->assertRedirect('/dashboard');
+        ])->assertRedirect('/email/verify');
 
         $user = User::where('email', $email)->firstOrFail();
+        $this->assertNull($user->email_verified_at);
+        Notification::assertSentTo($user, VerifyEmail::class);
 
         $this->assertDatabaseHas('broker_wallets', [
             'user_id' => $user->id, 'symbol' => 'BTC', 'balance' => 0.0625,
@@ -226,6 +231,7 @@ class BrokerTradingTest extends TestCase
 
     public function test_referral_code_is_created_and_valid_referrals_are_tracked(): void
     {
+        Notification::fake();
         $referrer = $this->account(['referral_code' => 'REFCODE8']);
         $email = uniqid('referred-', true).'@example.test';
 
@@ -235,7 +241,7 @@ class BrokerTradingTest extends TestCase
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'ref' => 'refcode8',
-        ])->assertRedirect('/dashboard');
+        ])->assertRedirect('/email/verify');
 
         $referred = User::where('email', $email)->firstOrFail();
 
@@ -383,6 +389,29 @@ class BrokerTradingTest extends TestCase
         $this->actingAs($superadmin, 'web')
             ->patch('/admin/users/'.$superadmin->id, ['role' => 'admin', 'account_status' => 'active'])
             ->assertStatus(422);
+    }
+
+
+    public function test_signed_email_verification_link_activates_the_account(): void
+    {
+        Notification::fake();
+        $email = uniqid('verify-', true).'@example.test';
+        $this->post('/register', [
+            'name' => 'Email Verification User',
+            'email' => $email,
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect('/email/verify');
+
+        $user = User::where('email', $email)->firstOrFail();
+        $url = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(30),
+            ['id' => $user->id, 'hash' => sha1($user->getEmailForVerification())]
+        );
+
+        $this->actingAs($user)->get($url)->assertRedirect('/dashboard');
+        $this->assertNotNull($user->fresh()->email_verified_at);
     }
 
 }
