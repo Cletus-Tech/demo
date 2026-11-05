@@ -213,4 +213,34 @@ class BrokerTradingTest extends TestCase
         ]);
     }
 
+
+    public function test_referral_code_is_created_and_valid_referrals_are_tracked(): void
+    {
+        $referrer = $this->account(['referral_code' => 'REFCODE8']);
+        $email = uniqid('referred-', true).'@example.test';
+
+        $this->post('/register', [
+            'name' => 'Referred Trader',
+            'email' => $email,
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'ref' => 'refcode8',
+        ])->assertRedirect('/dashboard');
+
+        $referred = User::where('email', $email)->firstOrFail();
+
+        $this->assertNotEmpty($referred->referral_code);
+        $this->assertSame($referrer->id, $referred->referred_by);
+        $this->assertDatabaseHas('broker_referrals', [
+            'referrer_id' => $referrer->id,
+            'referred_id' => $referred->id,
+            'status' => 'registered',
+        ]);
+
+        $this->actingAs($referrer, 'sanctum')
+            ->getJson('/api/broker/referrals')
+            ->assertOk()
+            ->assertJsonCount(1);
+    }
+
 }
