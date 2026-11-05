@@ -40,7 +40,9 @@
     }
     if (!response.ok) {
       const first = data.errors && Object.values(data.errors)[0];
-      throw new Error((Array.isArray(first) && first[0]) || data.message || "The request could not be completed.");
+      const error = new Error((Array.isArray(first) && first[0]) || data.message || "The request could not be completed.");
+      error.status = response.status;
+      throw error;
     }
     return data;
   }
@@ -83,7 +85,7 @@
   const API = {
     getSession: async function () {
       try { await request("/state"); return { user: true }; }
-      catch (e) { if (e.status === 401) return null; throw e; }
+      catch (e) { if (e.status === 401) return null; if (e.status === 403) { try { await post("/logout", {}); } catch (_) {} return null; } throw e; }
     },
     signOut: async function () {
       await post("/logout", {});
