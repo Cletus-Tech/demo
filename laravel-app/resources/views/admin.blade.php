@@ -2,9 +2,10 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Broker administration</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#07090c;color:#edf2f7;font:14px/1.5 system-ui,sans-serif;padding:24px}main{max-width:1180px;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}.panel{background:#10151b;border:1px solid #202a34;border-radius:14px;padding:18px;margin:14px 0;overflow:auto}h1{font-size:24px}h2{font-size:17px;margin-bottom:12px}p,.muted{color:#9aa7b5}a{color:#56b4ff;text-decoration:none}button{background:#168b70;color:#fff;border:0;border-radius:8px;padding:8px 12px;cursor:pointer}select{background:#090e13;color:#edf2f7;border:1px solid #293440;padding:8px;border-radius:8px}table{width:100%;border-collapse:collapse;min-width:700px}th,td{text-align:left;padding:10px;border-bottom:1px solid #202a34;vertical-align:middle}th{color:#9aa7b5;font-weight:600}.flash{background:#103b30;color:#9ff0d6;padding:10px;border-radius:8px;margin-bottom:14px}.actions{display:flex;gap:6px;align-items:center}
-textarea{background:#090e13;color:#edf2f7;border:1px solid #293440;border-radius:8px;padding:8px;min-width:180px;max-width:260px} </style></head><body><main>
+textarea{background:#090e13;color:#edf2f7;border:1px solid #293440;border-radius:8px;padding:8px;min-width:180px;max-width:260px}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}.metric{background:#0d1014;border:1px solid #1a1f26;border-radius:13px;padding:14px}.metric span{display:block;color:#8b94a1;font-size:12px}.metric b{display:block;font-size:23px;margin-top:4px}@media(max-width:760px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}} </style></head><body><main>
 <div class="top"><div><h1>Administration</h1><p>Demo brokerage management · {{ auth()->user()->email }}</p></div><a href="{{ route('dashboard') }}">← Back to dashboard</a></div>
 @if(session('status'))<div class="flash">{{ session('status') }}</div>@endif
+<section class="cards"><div class="metric"><span>Registered users loaded</span><b>{{ $users->count() }}</b></div><div class="metric"><span>Orders / transactions loaded</span><b>{{ $transactions->count() }}</b></div><div class="metric"><span>Open positions loaded</span><b>{{ $positions->where('status','open')->count() }}</b></div><div class="metric"><span>Ledger entries loaded</span><b>{{ $ledger->count() }}</b></div></section>
 <section class="panel"><h2>User accounts</h2><table><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Update</th></tr></thead><tbody>
 @forelse($users as $user)<tr>
 <td>{{ $user->name }}</td>
@@ -37,8 +38,13 @@ textarea{background:#090e13;color:#edf2f7;border:1px solid #293440;border-radius
 <section class="panel"><h2>Recent demo positions</h2><table><thead><tr><th>User ID</th><th>Asset</th><th>Side</th><th>Quantity</th><th>Leverage</th><th>Margin USD</th><th>Status</th><th>P&amp;L USD</th><th>Close reason</th></tr></thead><tbody>
 @forelse($positions as $position)<tr><td>{{ $position->user_id }}</td><td>{{ $position->symbol }}</td><td>{{ strtoupper($position->side) }}</td><td>{{ number_format((float)$position->quantity,8) }}</td><td>{{ $position->leverage }}x</td><td>{{ number_format((float)$position->margin,2) }}</td><td>{{ $position->status }}</td><td>{{ number_format((float)$position->pnl,2) }}</td><td>{{ $position->close_reason ?: '—' }}</td></tr>@empty<tr><td colspan="9">No demo positions yet.</td></tr>@endforelse
 </tbody></table></section>
-<section class="panel"><h2>Recent demo transactions</h2><table><thead><tr><th>User ID</th><th>Type</th><th>Asset</th><th>Amount</th><th>Status</th><th>Recorded</th></tr></thead><tbody>
-@forelse($transactions as $transaction)<tr><td>{{ $transaction->user_id }}</td><td>{{ $transaction->type }}</td><td>{{ $transaction->symbol ?: '—' }}</td><td>{{ number_format((float)$transaction->amount,8) }}</td><td>{{ $transaction->status }}</td><td>{{ $transaction->created_at?->format('Y-m-d H:i') }}</td></tr>@empty<tr><td colspan="6">No demo transactions yet.</td></tr>@endforelse
+<section class="panel"><h2>Recent demo orders and transactions</h2><table><thead><tr><th>Time</th><th>User ID</th><th>Type</th><th>Side</th><th>Asset / route</th><th>Amount USD</th><th>Status</th><th>Mode</th></tr></thead><tbody>
+@forelse($transactions as $transaction)<tr>
+<td>{{ $transaction->created_at?->format('Y-m-d H:i') }}</td><td>{{ $transaction->user_id }}</td><td>{{ $transaction->type }}</td>
+<td>{{ data_get($transaction->meta, 'side', in_array($transaction->type, ['buy','sell'], true) ? $transaction->type : '—') }}</td>
+<td>{{ $transaction->type === 'convert' ? $transaction->symbol.' → '.data_get($transaction->meta, 'to_symbol', '?') : ($transaction->symbol ?: '—') }}</td>
+<td>{{ number_format((float)data_get($transaction->meta, 'amount_usd', $transaction->amount),2) }}</td><td>{{ $transaction->status }}</td><td>Demo</td>
+</tr>@empty<tr><td colspan="8">No demo transactions yet.</td></tr>@endforelse
 </tbody></table></section>
 
 <section class="panel"><h2>Append-only demo wallet ledger</h2><p>Every wallet credit and debit is recorded with the balance immediately after the entry.</p><table><thead><tr><th>Time</th><th>User ID</th><th>Asset</th><th>Amount</th><th>Balance after</th><th>Entry type</th><th>Memo</th></tr></thead><tbody>
