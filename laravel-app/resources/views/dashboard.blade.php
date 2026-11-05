@@ -352,10 +352,8 @@ body{overflow-x:hidden}
  </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="{{ asset('js/config.js') }}"></script>
-<script src="{{ asset('js/supabase-client.js') }}"></script>
-<script src="{{ asset('js/api.js') }}"></script>
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script src="{{ asset('js/broker-api.js') }}"></script>
 <script>
 /* ============================================================
    CONFIG: edit everything here. No other code needs to change.
@@ -372,8 +370,8 @@ const CONFIG={
  defaultDuration:120,
  volatility:.003,                     // (unused: price movement is now simulated on the server)
  //                     // size of each simulated price move
- defaultSymbol:"AAPL",                // symbol the chart opens on
- tradeTypes:["Crypto","Stocks"],      // options in the Trade type dropdown (match asset "cat")
+ defaultSymbol:"BTC",                // symbol the chart opens on
+ tradeTypes:["Crypto","Stocks","Fiat"],      // options in the Trade type dropdown (match asset "cat")
  topAssets:4,                         // rows shown before "View all assets"
  aiTpPct:.03, aiSlPct:.015,           // "Set with AI" take-profit / stop-loss distance
  nav:[                                // sidebar: {t,i,go} link, {g,items} collapsible group
@@ -752,11 +750,10 @@ function goTo(g){
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){close();closeMoney();document.body.classList.remove("nav-open")}});
 /* ---------- boot ---------- */
 (async function boot(){
- if(!window.AppSupabase||!AppSupabase.ready){location.replace("setup-check.html");return}
- if(!(await API.getSession())){location.replace("login.html");return}
+ if(!(await API.getSession())){location.replace("/login");return}
  let st;
  try{st=await API.loadState()}
- catch(e){document.body.innerHTML='<div style="padding:30px;font:15px system-ui;color:#f2f5f8"><h2>Could not load your account</h2><p style="color:#8b94a1"></p><p><a style="color:#2d9cff" href="setup-check.html">Run the setup check</a> &middot; <a style="color:#2d9cff" href="login.html">Back to sign in</a></p></div>';document.body.querySelector("p").textContent=e.message;return}
+ catch(e){document.body.innerHTML='<div style="padding:30px;font:15px system-ui;color:#f2f5f8"><h2>Could not load your account</h2><p style="color:#8b94a1"></p><p><a style="color:#2d9cff" href="/login">Run the setup check</a> &middot; <a style="color:#2d9cff" href="/login">Back to sign in</a></p></div>';document.body.querySelector("p").textContent=e.message;return}
  if(!st.profile){location.replace("setup-check.html");return}
  // the database decides which assets exist; CONFIG.assets only supplies icons and colours
  const CAT={crypto:"Crypto",stocks:"Stocks",fiat:"Fiat",real_estate:"Real estate",forex:"Forex",etf:"ETFs",commodity:"Commodities",other:"Other"};
