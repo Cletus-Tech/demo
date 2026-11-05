@@ -71,7 +71,7 @@
       orders: transactions.filter(t => ["buy", "sell", "convert"].includes(t.type)).map(t => ({
         kind: t.type === "convert" ? "swap" : "spot",
         side: t.type, symbol: t.type === "convert" ? ((t.meta || {}).to_symbol || t.symbol) : t.symbol,
-        from_symbol: t.symbol, amount_usd: Number(t.amount) * priceOf({ assets }, t.symbol),
+        from_symbol: t.symbol, amount_usd: Number((t.meta || {}).amount_usd || (Number(t.amount) * Number((t.meta || {}).execution_price || priceOf({ assets }, t.symbol)))),
         created_at: t.created_at
       })),
       ledger: transactions.filter(t => ["deposit", "withdraw", "demo_grant"].includes(t.type)).map(t => ({
