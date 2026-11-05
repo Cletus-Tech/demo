@@ -38,7 +38,7 @@ jobs:
       - name: Run database migrations
         run: php artisan migrate --force
       - name: Run Laravel feature tests
-        run: php artisan test
+        run: vendor/bin/phpunit
       - name: Verify registered routes
         run: php artisan route:list
       - name: Check browser adapter syntax
