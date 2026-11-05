@@ -15,7 +15,7 @@ cp .env.example .env
 php artisan key:generate
 # SQLite: create the empty database file if it does not exist
 # Windows PowerShell: New-Item -ItemType File database/database.sqlite -Force
-php artisan migrate --seed
+php artisan migrate
 php artisan serve
 ```
 Open `http://127.0.0.1:8000/register` and create a test account. After the first account is created, promote only the owner account:
