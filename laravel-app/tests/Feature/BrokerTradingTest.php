@@ -416,4 +416,21 @@ class BrokerTradingTest extends TestCase
         $this->assertNotNull($user->fresh()->email_verified_at);
     }
 
+
+    public function test_spot_order_quantity_is_calculated_server_side_from_the_usd_order_value(): void
+    {
+        $user = $this->account();
+        $this->actingAs($user, 'sanctum');
+        $this->postJson('/api/broker/transactions', [
+            'type' => 'deposit', 'symbol' => 'USD', 'amount' => 1000,
+        ])->assertCreated();
+
+        $this->postJson('/api/broker/transactions', [
+            'type' => 'buy', 'symbol' => 'BTC', 'amount' => 0.000001, 'amount_usd' => 800,
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('broker_wallets', ['user_id' => $user->id, 'symbol' => 'USD', 'balance' => 200]);
+        $this->assertDatabaseHas('broker_wallets', ['user_id' => $user->id, 'symbol' => 'BTC', 'balance' => 0.01]);
+    }
+
 }
