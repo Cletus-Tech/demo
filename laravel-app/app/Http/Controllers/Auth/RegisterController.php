@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Models\BrokerReferral;
 use App\Models\User;
 use App\Services\DemoAccountService;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -55,9 +56,10 @@ class RegisterController
 
             return $user;
         });
+        event(new Registered($user));
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('dashboard');
+        return redirect()->route('verification.notice');
     }
 }
