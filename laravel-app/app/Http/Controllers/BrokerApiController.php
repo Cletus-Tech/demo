@@ -64,11 +64,18 @@ class BrokerApiController
         $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','leverage'=>'required|numeric|min:1|max:100','take_profit'=>'nullable|numeric','stop_loss'=>'nullable|numeric','duration_seconds'=>'nullable|integer|min:0|max:86400']);
         return DB::transaction(function () use ($request,$d) {
             $asset=BrokerAsset::where('symbol',strtoupper($d['symbol']))->where('is_active',true)->firstOrFail();
-            $margin=((float)$d['quantity']*(float)$asset->price)/(float)$d['leverage'];
+            $entry=(float)$asset->price;
+            if (!empty($d['take_profit']) && (($d['side']==='buy' && (float)$d['take_profit']<=$entry) || ($d['side']==='sell' && (float)$d['take_profit']>=$entry))) {
+                throw ValidationException::withMessages(['take_profit'=>'Take profit must be above entry for a buy and below entry for a sell.']);
+            }
+            if (!empty($d['stop_loss']) && (($d['side']==='buy' && (float)$d['stop_loss']>=$entry) || ($d['side']==='sell' && (float)$d['stop_loss']<=$entry))) {
+                throw ValidationException::withMessages(['stop_loss'=>'Stop loss must be below entry for a buy and above entry for a sell.']);
+            }
+            $margin=((float)$d['quantity']*$entry)/(float)$d['leverage'];
             $usd=BrokerWallet::firstOrCreate(['user_id'=>$request->user()->id,'symbol'=>'USD'],['balance'=>0]);
             if((float)$usd->balance<$margin) throw ValidationException::withMessages(['quantity'=>'Insufficient demo USD margin.']);
             $usd->decrement('balance',$margin);
-            $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$asset->price,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
+            $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$entry,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
             return response()->json(['position'=>$position,'mode'=>'demo'],201);
         });
     }
