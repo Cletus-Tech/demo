@@ -93,7 +93,7 @@
       const s = await state();
       return s.prices;
     },
-    refreshPrices: async function () { return true; },
+    refreshPrices: function () { return post("/prices/refresh", {}); },
     deposit: async function (amount) { return post("/transactions", { type: "deposit", symbol: "USD", amount }); },
     withdraw: async function (amount) { return post("/transactions", { type: "withdraw", symbol: "USD", amount }); },
     spot: async function (symbol, side, amountUsd) {
