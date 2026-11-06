@@ -47,7 +47,7 @@ class RegisterController
             return $user;
         }, 3);
 
-        Auth::login($user);
+        Auth::guard('web')->login($user);
         $request->session()->regenerate();
 
         return redirect()->route('dashboard');
