@@ -9,6 +9,7 @@ use App\Models\BrokerServiceRequest;
 use App\Models\BrokerWallet;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class BrokerApiTest extends TestCase
