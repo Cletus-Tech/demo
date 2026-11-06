@@ -21,6 +21,9 @@ class LoginController
 
         if (($request->user()->account_status ?? 'active') !== 'active') {
             Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
             throw ValidationException::withMessages(['email' => 'This account is currently suspended.']);
         }
 
