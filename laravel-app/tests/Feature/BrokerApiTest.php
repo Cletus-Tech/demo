@@ -250,6 +250,12 @@ class BrokerApiTest extends TestCase
             'type' => 'position_close',
             'status' => 'completed',
         ]);
+
+        // The same persisted rows power the dashboard's recent trade/history panels.
+        $this->getJson('/api/broker/state')
+            ->assertOk()
+            ->assertJsonCount(2, 'transactions')
+            ->assertJsonFragment(['id' => $position->id, 'status' => 'closed']);
     }
 
     public function test_fiat_assets_cannot_be_used_for_leveraged_demo_positions_and_usd_stays_at_one(): void

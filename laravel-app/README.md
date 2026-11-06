@@ -107,7 +107,7 @@ php artisan route:list --except-vendor
 php artisan test
 ```
 
-The tests cover demo buy/sell/convert accounting, rejection of overspending, reserved leveraged margin and realized demo P/L release, USD quote-currency stability, fiat leveraged-position rejection, notification ownership/read state, cross-account position access, and admin role restrictions.
+The tests cover server-authoritative trade quotes, buy/sell/convert accounting, overspending rejection, persisted trade/position history, margin reservation and realized demo P/L release, TP/SL settlement, USD quote stability and shared price-tick throttling, notification and service-request ownership, suspended-account blocking, cross-account position access, and admin role restrictions.
 
 GitHub Actions also creates a fresh Laravel 12 host application, installs Sanctum API support, merges this package, compiles the Blade views, lists routes and runs the feature suite. These integration jobs are the verification gate for changes to this package. The local execution environment used to author this package did not include Composer or a Laravel host application, so local Laravel runtime tests could not be run.
 
