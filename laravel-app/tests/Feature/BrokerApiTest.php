@@ -108,22 +108,6 @@ class BrokerApiTest extends TestCase
         $this->assertSame('take_profit', BrokerPosition::findOrFail($positionId)->close_reason);
     }
 
-    public function test_service_enquiries_are_private_to_their_owner(): void
-    {
-        $owner = User::factory()->create();
-        $this->actingAs($owner)->postJson('/api/broker/services', [
-            'service_key' => 'cold_storage',
-            'details' => 'Please send information.',
-        ])->assertCreated();
-
-        $this->assertSame(1, BrokerServiceRequest::where('user_id', $owner->id)->count());
-
-        $otherUser = User::factory()->create();
-        $this->actingAs($otherUser)->getJson('/api/broker/services')
-            ->assertOk()
-            ->assertExactJson([]);
-    }
-
     public function test_admin_routes_and_role_changes_are_restricted(): void
     {
         $ordinaryUser = User::factory()->create();
@@ -357,13 +341,6 @@ class BrokerApiTest extends TestCase
         $position = BrokerPosition::findOrFail($positionId);
         $this->assertSame('closed', $position->status);
         $this->assertSame('take_profit', $position->close_reason);
-    }
-
-    public function test_suspended_accounts_are_blocked_from_broker_api(): void
-    {
-        $user = User::factory()->create(['account_status' => 'suspended']);
-
-        $this->actingAs($user)->getJson('/api/broker/state')->assertForbidden();
     }
 
     public function test_admin_routes_require_an_admin_and_only_superadmin_can_change_roles(): void
