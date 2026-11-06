@@ -73,5 +73,5 @@ jobs:
           php artisan view:cache
           php artisan route:list --except-vendor
           php artisan migrate --force
-          php artisan db:seed --class='Database\\Seeders\\BrokerDemoSeeder' --no-interaction
+          php artisan db:seed --class='Database\Seeders\BrokerDemoSeeder' --no-interaction
           php artisan test
