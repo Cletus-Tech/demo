@@ -674,4 +674,77 @@ class BrokerApiTest extends TestCase
         }
     }
 
+
+    public function test_profile_updates_are_validated_and_persist_only_allowed_fields(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->patchJson('/api/broker/profile', [
+            'full_name' => 'Updated Demo Trader',
+            'phone' => '+2348000000000',
+            'country' => 'Nigeria',
+            'email' => 'attacker@example.test',
+            'role' => 'superadmin',
+        ])->assertOk()
+            ->assertJsonPath('full_name', 'Updated Demo Trader')
+            ->assertJsonPath('role', 'user');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'name' => 'Updated Demo Trader',
+            'phone' => '+2348000000000',
+            'country' => 'Nigeria',
+            'email' => $user->email,
+            'role' => 'user',
+        ]);
+
+        $this->patchJson('/api/broker/profile', [
+            'full_name' => '',
+            'phone' => str_repeat('1', 50),
+            'country' => 'Nigeria',
+        ])->assertUnprocessable();
+    }
+
+    public function test_demo_reset_clears_wallets_closes_positions_and_preserves_history(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->postJson('/api/broker/transactions', [
+            'type' => 'deposit',
+            'symbol' => 'USD',
+            'amount' => 500,
+        ])->assertCreated();
+
+        $opened = $this->postJson('/api/broker/positions', [
+            'symbol' => 'BTC',
+            'side' => 'buy',
+            'margin_usd' => 100,
+            'leverage' => 2,
+        ])->assertCreated();
+        $positionId = $opened->json('position.id');
+
+        $this->postJson('/api/broker/reset', [])
+            ->assertOk()
+            ->assertJsonPath('reset', true)
+            ->assertJsonPath('mode', 'demo');
+
+        $this->assertSame('closed', BrokerPosition::findOrFail($positionId)->status);
+        $this->assertSame('reset', BrokerPosition::findOrFail($positionId)->close_reason);
+        $this->assertEqualsWithDelta(
+            0.0,
+            (float) BrokerWallet::where('user_id', $user->id)->where('symbol', 'USD')->value('balance'),
+            0.00000001
+        );
+        $this->assertDatabaseCount('broker_transactions', 1);
+        $this->assertDatabaseHas('broker_notifications', [
+            'user_id' => $user->id,
+            'title' => 'Demo account reset',
+        ]);
+
+        $this->getJson('/api/broker/state')
+            ->assertOk()
+            ->assertJsonCount(1, 'transactions')
+            ->assertJsonFragment(['id' => $positionId, 'status' => 'closed']);
+    }
+
 }
