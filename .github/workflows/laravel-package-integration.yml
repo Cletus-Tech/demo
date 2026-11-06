@@ -1,0 +1,120 @@
+name: Laravel package integration tests
+
+on:
+  push:
+    branches:
+      - laravel-native-starter
+    paths:
+      - "laravel-app/**"
+      - ".github/workflows/laravel-package-integration.yml"
+  pull_request:
+    branches:
+      - laravel-native-starter
+    paths:
+      - "laravel-app/**"
+      - ".github/workflows/laravel-package-integration.yml"
+
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        laravel: ["12.0"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Create a disposable Laravel host
+        run: composer create-project --prefer-dist "laravel/laravel:^${{ matrix.laravel }}" "$RUNNER_TEMP/broker-host" --no-interaction
+
+      - name: Install Sanctum and merge the package
+        run: |
+          cd "$RUNNER_TEMP/broker-host"
+          touch database/database.sqlite
+          export APP_ENV=testing
+          export DB_CONNECTION=sqlite
+          export DB_DATABASE=database/database.sqlite
+          {
+            echo "APP_ENV=testing"
+            echo "DB_CONNECTION=sqlite"
+            echo "DB_DATABASE=database/database.sqlite"
+            echo "SESSION_DRIVER=file"
+            echo "CACHE_STORE=file"
+            echo "APP_URL=http://127.0.0.1:8000"
+            echo "SESSION_SECURE_COOKIE=false"
+            echo "SANCTUM_STATEFUL_DOMAINS=127.0.0.1:8000,localhost,localhost:8000,127.0.0.1"
+          } >> "$GITHUB_ENV"
+          php artisan key:generate --force
+          php artisan install:api --no-interaction
+
+          cp -R "$GITHUB_WORKSPACE/laravel-app/app/Http/Controllers/." app/Http/Controllers/
+          cp -R "$GITHUB_WORKSPACE/laravel-app/app/Http/Middleware/." app/Http/Middleware/
+          cp -R "$GITHUB_WORKSPACE/laravel-app/app/Models/." app/Models/
+          cp -R "$GITHUB_WORKSPACE/laravel-app/database/migrations/." database/migrations/
+          mkdir -p database/seeders
+          cp -R "$GITHUB_WORKSPACE/laravel-app/database/seeders/." database/seeders/
+          cp -R "$GITHUB_WORKSPACE/laravel-app/resources/views/." resources/views/
+          mkdir -p public/js tests/Feature
+          cp -R "$GITHUB_WORKSPACE/laravel-app/public/js/." public/js/
+          cp "$GITHUB_WORKSPACE/laravel-app/routes/web.php" routes/web.php
+          cp "$GITHUB_WORKSPACE/laravel-app/routes/api.php" routes/api.php
+          cp "$GITHUB_WORKSPACE/laravel-app/tests/Feature/BrokerApiTest.php" tests/Feature/
+          mkdir -p tests/browser
+          cp "$GITHUB_WORKSPACE/laravel-app/tests/browser/dashboard-smoke.mjs" tests/browser/
+          rm -f tests/Feature/ExampleTest.php
+
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("bootstrap/app.php")
+          source = path.read_text()
+          if "statefulApi()" not in source:
+              marker = "->withMiddleware(function (Middleware $middleware): void {"
+              if marker not in source:
+                  raise SystemExit("Could not locate Laravel middleware configuration")
+              source = source.replace(marker, marker + "\n            $middleware->statefulApi();", 1)
+              path.write_text(source)
+          PY
+
+          php artisan view:cache
+          php artisan route:list --except-vendor
+          php artisan migrate --force
+          php artisan db:seed --class='Database\Seeders\BrokerDemoSeeder' --no-interaction
+          php artisan test
+
+      - name: Set up Node for browser smoke tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Playwright
+        working-directory: ${{ runner.temp }}/broker-host
+        run: npm install --no-save --no-package-lock playwright@1.56.1
+
+      - name: Install Chromium
+        working-directory: ${{ runner.temp }}/broker-host
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the disposable Laravel host
+        working-directory: ${{ runner.temp }}/broker-host
+        run: |
+          php artisan serve --host=127.0.0.1 --port=8000 > /tmp/broker-laravel.log 2>&1 &
+          echo $! > /tmp/broker-laravel.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/login > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/broker-laravel.log
+          exit 1
+
+      - name: Check dashboard at desktop and mobile widths
+        working-directory: ${{ runner.temp }}/broker-host
+        env:
+          BROKER_BASE_URL: http://127.0.0.1:8000
+        run: node tests/browser/dashboard-smoke.mjs
