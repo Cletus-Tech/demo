@@ -1,4 +1,4 @@
-name: Laravel package static checks
+name: Laravel package checks
 
 on:
   push:
@@ -12,6 +12,7 @@ on:
       - laravel-native-starter
     paths:
       - "laravel-app/**"
+      - ".github/workflows/laravel-package-lint.yml"
 
 jobs:
   syntax:
@@ -31,3 +32,49 @@ jobs:
           node-version: "22"
       - name: Check dashboard API adapter syntax
         run: node --check laravel-app/public/js/broker-api.js
+
+  laravel-integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        laravel: ["11.0", "12.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_sqlite, sqlite3
+          coverage: none
+      - name: Create a fresh Laravel host application
+        run: composer create-project --prefer-dist laravel/laravel host "^${{ matrix.laravel }}" --no-interaction
+      - name: Install Sanctum API support
+        working-directory: host
+        run: |
+          touch database/database.sqlite
+          export DB_CONNECTION=sqlite
+          export DB_DATABASE=database/database.sqlite
+          php artisan key:generate --force
+          php artisan install:api --no-interaction
+      - name: Merge the reusable package into the clean host
+        run: |
+          cp -R laravel-app/app/Http host/app/
+          cp -R laravel-app/app/Models/*.php host/app/Models/
+          cp -R laravel-app/database/migrations/*.php host/database/migrations/
+          mkdir -p host/public/js host/resources/views host/tests/Feature
+          cp -R laravel-app/public/js/. host/public/js/
+          cp -R laravel-app/resources/views/. host/resources/views/
+          cp laravel-app/routes/web.php host/routes/web.php
+          cp laravel-app/routes/api.php host/routes/api.php
+          cp laravel-app/tests/Feature/BrokerApiTest.php host/tests/Feature/
+      - name: Compile views, verify routes and run feature tests
+        working-directory: host
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: |
+          php artisan view:cache
+          php artisan route:list --except-vendor
+          php artisan test

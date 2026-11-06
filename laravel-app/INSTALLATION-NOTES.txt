@@ -7,3 +7,7 @@ The dashboard Blade view loads public/js/broker-api.js. That adapter uses same-o
 Demo deposits and withdrawals affect simulated USD only. Buy, sell, convert and leveraged position quantities are calculated on the server from the current seeded demo prices; the browser does not submit an execution price. No live market feed, payments, custody or exchange execution is connected.
 
 See README.md for setup, route contracts, demo limitations and the required host-application smoke tests.
+
+Feature tests are in tests/Feature/BrokerApiTest.php. Copy them into the host application's tests/Feature directory and run php artisan test. The GitHub Actions integration matrix provisions fresh Laravel 11 and 12 hosts and runs the Blade compile, route listing and feature tests.
+
+USD is the fixed demo accounting currency (price 1). Other active assets may receive small simulated server-side price ticks. Leveraged positions are restricted to non-fiat assets. The chart's earlier candles are generated illustration, not historical exchange data.

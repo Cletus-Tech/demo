@@ -21,22 +21,36 @@ class BrokerApiController
 
     public function refreshDemoPrices()
     {
-        $count = DB::transaction(function () {
+        $updated = DB::transaction(function () {
             $assets = BrokerAsset::where('is_active', true)
                 ->orderBy('symbol')
                 ->lockForUpdate()
                 ->get();
 
+            $updated = 0;
             foreach ($assets as $asset) {
+                // USD is the accounting quote currency for this demo and must remain pegged at 1.
+                if ($asset->symbol === 'USD') {
+                    if ((float) $asset->price !== 1.0) {
+                        $asset->update(['price' => 1]);
+                    }
+                    continue;
+                }
+
                 $move = random_int(-30, 30) / 10000;
                 $next = max(0.00000001, (float) $asset->price * (1 + $move));
                 $asset->update(['price' => round($next, 8)]);
+                $updated++;
             }
 
-            return $assets->count();
+            return $updated;
         }, 3);
 
-        return response()->json(['updated' => $count, 'source' => 'simulated_demo']);
+        return response()->json([
+            'updated' => $updated,
+            'source' => 'simulated_demo',
+            'base_currency' => 'USD',
+        ]);
     }
 
     public function transact(Request $request)
@@ -233,7 +247,7 @@ class BrokerApiController
             'symbol' => ['required', 'string', 'max:20', 'regex:/^[A-Z0-9]{2,20}$/i'],
             'side' => 'required|in:buy,sell',
             'margin_usd' => ['required', 'numeric', 'gt:0', 'lte:1000000000000', 'decimal:0,8'],
-            'leverage' => 'required|numeric|min:1|max:100',
+            'leverage' => ['required', 'numeric', 'min:1', 'max:100', 'decimal:0,2'],
             'take_profit' => ['nullable', 'numeric', 'gt:0', 'lte:1000000000000', 'decimal:0,8'],
             'stop_loss' => ['nullable', 'numeric', 'gt:0', 'lte:1000000000000', 'decimal:0,8'],
             'duration_seconds' => 'nullable|integer|min:0|max:86400',
@@ -244,9 +258,16 @@ class BrokerApiController
             $asset = BrokerAsset::where('symbol', $symbol)
                 ->where('is_active', true)
                 ->lockForUpdate()
-                ->firstOrFail();
-            $entry = (float) $asset->price;
+                ->first();
 
+            if (!$asset) {
+                throw ValidationException::withMessages(['symbol' => 'The selected demo asset is unavailable.']);
+            }
+            if ($asset->category === 'fiat') {
+                throw ValidationException::withMessages(['symbol' => 'Leveraged demo positions are available for non-fiat assets only.']);
+            }
+
+            $entry = (float) $asset->price;
             if ($entry <= 0) {
                 throw ValidationException::withMessages(['symbol' => 'The selected demo asset has no valid price.']);
             }
@@ -306,7 +327,11 @@ class BrokerApiController
         }, 3);
     }
 
-    private function settlePosition(int $positionId, string $reason): ?BrokerPosition
+    /**
+     * Close a position at one locked demo quote. A null reason means that TP,
+     * SL or expiry must be evaluated inside this same transaction.
+     */
+    private function settlePosition(int $positionId, ?string $reason): ?BrokerPosition
     {
         return DB::transaction(function () use ($positionId, $reason) {
             $position = BrokerPosition::whereKey($positionId)->lockForUpdate()->first();
@@ -314,15 +339,25 @@ class BrokerApiController
                 return null;
             }
 
-            $asset = BrokerAsset::where('symbol', $position->symbol)->lockForUpdate()->first();
+            $asset = BrokerAsset::where('symbol', $position->symbol)
+                ->lockForUpdate()
+                ->first();
             $price = (float) ($asset?->price ?? $position->entry_price);
 
-            // Recheck automatic exit conditions against the locked server price.
-            if ($reason !== 'manual') {
-                $long = $position->side === 'buy';
-                if ($position->take_profit && ($long ? $price >= (float) $position->take_profit : $price <= (float) $position->take_profit)) {
+            if ($reason === null) {
+                $isLong = $position->side === 'buy';
+
+                if ($position->take_profit !== null && (
+                    $isLong
+                        ? $price >= (float) $position->take_profit
+                        : $price <= (float) $position->take_profit
+                )) {
                     $reason = 'take_profit';
-                } elseif ($position->stop_loss && ($long ? $price <= (float) $position->stop_loss : $price >= (float) $position->stop_loss)) {
+                } elseif ($position->stop_loss !== null && (
+                    $isLong
+                        ? $price <= (float) $position->stop_loss
+                        : $price >= (float) $position->stop_loss
+                )) {
                     $reason = 'stop_loss';
                 } elseif ($position->expires_at && $position->expires_at->isPast()) {
                     $reason = 'duration_ended';
@@ -332,7 +367,10 @@ class BrokerApiController
             }
 
             $direction = $position->side === 'buy' ? 1 : -1;
-            $rawPnl = (float) $position->quantity * ($price - (float) $position->entry_price) * $direction;
+            $rawPnl = (float) $position->quantity
+                * ($price - (float) $position->entry_price)
+                * $direction;
+            // Demo loss is capped at the reserved margin; the released amount can never be negative.
             $pnl = round(max(-(float) $position->margin, $rawPnl), 8);
             $release = round(max(0, (float) $position->margin + $pnl), 8);
 
@@ -345,6 +383,7 @@ class BrokerApiController
                 'pnl' => $pnl,
                 'close_reason' => $reason,
             ]);
+
             BrokerTransaction::create([
                 'user_id' => $position->user_id,
                 'type' => 'position_close',
@@ -374,20 +413,25 @@ class BrokerApiController
 
     public function settlePositions(Request $request)
     {
-        $closed=[];
-        $positions=BrokerPosition::where('user_id',$request->user()->id)->where('status','open')->get();
-        foreach ($positions as $position) {
-            $price=(float)(BrokerAsset::where('symbol',$position->symbol)->value('price') ?? $position->entry_price);
-            $long=$position->side==='buy';
-            $reason=null;
-            if ($position->take_profit && ($long ? $price >= (float)$position->take_profit : $price <= (float)$position->take_profit)) $reason='take_profit';
-            elseif ($position->stop_loss && ($long ? $price <= (float)$position->stop_loss : $price >= (float)$position->stop_loss)) $reason='stop_loss';
-            elseif ($position->expires_at && $position->expires_at->isPast()) $reason='duration_ended';
-            if ($reason) {
-                $row=$this->settlePosition($position->id,$reason);
-                if ($row) $closed[]=['id'=>$row->id,'symbol'=>$row->symbol,'side'=>$row->side==='buy'?'long':'short','reason'=>$row->close_reason,'pnl'=>(float)$row->pnl];
+        $closed = [];
+        $positionIds = BrokerPosition::where('user_id', $request->user()->id)
+            ->where('status', 'open')
+            ->orderBy('id')
+            ->pluck('id');
+
+        foreach ($positionIds as $positionId) {
+            $row = $this->settlePosition((int) $positionId, null);
+            if ($row) {
+                $closed[] = [
+                    'id' => $row->id,
+                    'symbol' => $row->symbol,
+                    'side' => $row->side === 'buy' ? 'long' : 'short',
+                    'reason' => $row->close_reason,
+                    'pnl' => (float) $row->pnl,
+                ];
             }
         }
+
         return response()->json($closed);
     }
 

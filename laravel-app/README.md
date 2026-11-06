@@ -93,3 +93,25 @@ For buy/sell/convert and leveraged positions, the server reads the current seede
 
 ## Verification status
 GitHub Actions runs PHP/JavaScript syntax checks and creates a disposable Laravel 12 + SQLite host to run package feature tests on pushes to this branch. The repository changes have been committed to `laravel-native-starter`. The CI integration job exercises the package in a disposable Laravel 12 + SQLite host. It does not deploy or include a production host. Browser-session behaviour, production database locking characteristics, deployment configuration and any client-specific integration still require verification in the eventual hosting environment. Do not use real funds.
+
+
+## Automated integration tests
+
+The package includes feature tests in `tests/Feature/BrokerApiTest.php`. Copy that file into the host application's `tests/Feature/` directory after merging the package, then run:
+
+```bash
+php artisan view:cache
+php artisan route:list --except-vendor
+php artisan test
+```
+
+The tests cover demo buy/sell/convert accounting, rejection of overspending, reserved leveraged margin and realized demo P/L release, USD quote-currency stability, fiat leveraged-position rejection, notification ownership/read state, cross-account position access, and admin role restrictions.
+
+GitHub Actions also creates a fresh Laravel 11 and Laravel 12 host application, installs Sanctum API support, merges this package, compiles the Blade views, lists routes and runs the feature suite. These integration jobs are the verification gate for changes to this package. The local execution environment used to author this package did not include Composer or a Laravel host application, so local Laravel runtime tests could not be run.
+
+## Accounting and quote safeguards
+
+- USD is the fixed accounting quote currency and is never randomly moved with simulated market ticks. If a test or operator changes its stored price, the next demo price refresh restores it to 1.
+- Leveraged demo positions reject fiat-category assets.
+- Leverage precision is limited to the two decimal places stored by the database.
+- TP/SL/expiry evaluation and settlement now use the same locked position and asset quote inside one database transaction, preventing the trigger decision and settlement price from drifting apart.
