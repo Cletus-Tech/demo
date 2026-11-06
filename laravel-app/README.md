@@ -10,7 +10,8 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
 - Migrations and Eloquent models for assets, wallets, transactions, leveraged positions, notifications and service requests.
 - User role, account status, phone and country fields.
 - Demo market assets: BTC, ETH, SOL, USD and EUR.
-- Demo deposit, withdrawal, buy, sell, convert, open/close position, timed expiry, TP/SL settlement and demo account reset endpoints.
+- Demo USD deposit/withdrawal and USD-valued buy/sell/convert endpoints; the server calculates quantities from locked current demo prices.
+- Open/close leveraged positions using a USD margin budget, timed expiry, TP/SL settlement and demo account reset.
 - Profile editing, notification list/read endpoints, service enquiry submission/history.
 - Admin page for account roles/status and service-enquiry status.
 
@@ -55,8 +56,8 @@ All browser API endpoints use `auth:sanctum` and same-origin session authenticat
 
 - `GET /api/broker/state` — profile, assets, wallet balances, positions and transactions.
 - `POST /api/broker/prices/refresh` — move seeded prices using a small random simulated demo tick.
-- `POST /api/broker/transactions` — demo deposit, withdrawal, buy, sell or conversion.
-- `POST /api/broker/positions` — open demo leveraged position.
+- `POST /api/broker/transactions` — demo USD deposit/withdrawal or USD-valued buy/sell/convert. For buy/sell/convert, send `quote_amount_usd`; do not send a client-computed token quantity or price.
+- `POST /api/broker/positions` — open a demo leveraged position using `margin_usd`; the server calculates quantity and locked margin.
 - `POST /api/broker/positions/{id}/close` — manually close an owned position.
 - `POST /api/broker/positions/settle` — evaluate configured TP/SL and expiry conditions.
 - `POST /api/broker/reset` — clear demo balances and close open demo positions.
@@ -68,16 +69,26 @@ Example transaction payload:
 ```json
 { "type": "deposit", "symbol": "USD", "amount": 1000 }
 ```
-Example position payload:
+Example buy payload:
 ```json
-{ "symbol": "BTC", "side": "buy", "quantity": 0.01, "leverage": 2, "duration_seconds": 120 }
+{ "type": "buy", "symbol": "BTC", "quote_amount_usd": 250 }
+```
+Example conversion payload:
+```json
+{ "type": "convert", "symbol": "BTC", "to_symbol": "ETH", "quote_amount_usd": 100 }
+```
+Example leveraged position payload:
+```json
+{ "symbol": "BTC", "side": "buy", "margin_usd": 100, "leverage": 2, "duration_seconds": 120 }
 ```
 
+For buy/sell/convert and leveraged positions, the server reads the current seeded demo price and calculates asset quantity itself. The browser does not submit an execution price or authoritative quantity. A stable wallet-lock order and database transaction retries reduce concurrent swap/settlement conflicts.
+
 ## Demo-only limitations
-- Market prices are seeded demonstration values; no live exchange feed is connected.
+- Market prices are seeded demonstration values and moved with simulated random ticks; no licensed live exchange feed is connected.
 - Deposits and withdrawals only alter simulated demo balances. There is no payment gateway, real-money settlement, crypto custody or live trading.
 - Admin access is role-gated; role changes must be performed by a superadmin.
-- Referral reward processing, real customer support chat, live market data and external financial services are not implemented.
+- Referral tracking/reward processing, real customer support chat, live market data and external financial services are not implemented. Service cards record enquiries only.
 - This package is an integration foundation. The dashboard adapter covers the main trading and account flows, but a host-app integration and full regression test are still required before client handover.
 
 ## Verification status

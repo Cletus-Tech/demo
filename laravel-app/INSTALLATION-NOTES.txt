@@ -1,5 +1,9 @@
 Laravel Integration Notes
 
-This folder is an integration starter, not a complete generated Laravel framework distribution. Start with a fresh supported Laravel app, then merge these files. Do not overwrite the client's project. Preserve their existing routes, authentication and migrations; adapt this starter to those conventions.
+This folder is a reusable Laravel 11/12 integration package, not a complete generated Laravel framework distribution. Start with a fresh supported Laravel app, then merge these files. Do not overwrite an existing host application's routes, authentication, migrations, bootstrap or composer files.
 
-Authentication is Laravel-native. Dashboard financial data/actions remain on the original frontend API adapter until the client's backend contracts are available and mapped.
+The dashboard Blade view loads public/js/broker-api.js. That adapter uses same-origin Laravel endpoints protected by Sanctum session authentication and CSRF cookies. It does not use the Supabase browser client.
+
+Demo deposits and withdrawals affect simulated USD only. Buy, sell, convert and leveraged position quantities are calculated on the server from the current seeded demo prices; the browser does not submit an execution price. No live market feed, payments, custody or exchange execution is connected.
+
+See README.md for setup, route contracts, demo limitations and the required host-application smoke tests.

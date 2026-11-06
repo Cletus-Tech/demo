@@ -6,6 +6,7 @@ use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,Broker
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 
 class BrokerApiController
 {
@@ -15,110 +16,340 @@ class BrokerApiController
         $wallets=BrokerWallet::where('user_id',$user->id)->get()->keyBy('symbol');
         $assets=BrokerAsset::where('is_active',true)->orderBy('symbol')->get();
         $positions=BrokerPosition::where('user_id',$user->id)->latest()->limit(100)->get();
-        return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user'],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(50)->get()]);
+        return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user'],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(100)->get()]);
     }
 
     public function refreshDemoPrices()
     {
-        $assets=BrokerAsset::where('is_active',true)->get();
-        foreach ($assets as $asset) {
-            $move=random_int(-30,30)/10000;
-            $next=max(0.00000001,(float)$asset->price*(1+$move));
-            $asset->update(['price'=>$next]);
-        }
-        return response()->json(['updated'=>$assets->count(),'source'=>'simulated_demo']);
+        $count = DB::transaction(function () {
+            $assets = BrokerAsset::where('is_active', true)
+                ->orderBy('symbol')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($assets as $asset) {
+                $move = random_int(-30, 30) / 10000;
+                $next = max(0.00000001, (float) $asset->price * (1 + $move));
+                $asset->update(['price' => round($next, 8)]);
+            }
+
+            return $assets->count();
+        }, 3);
+
+        return response()->json(['updated' => $count, 'source' => 'simulated_demo']);
     }
 
     public function transact(Request $request)
     {
-        $data=$request->validate(['type'=>'required|in:deposit,withdraw,buy,sell,convert','symbol'=>'required|string|max:20','amount'=>'required|numeric|gt:0','to_symbol'=>'nullable|string|max:20']);
-        return DB::transaction(function() use($request,$data) {
-            $user=$request->user(); $symbol=strtoupper($data['symbol']);
-            $wallet=BrokerWallet::where('user_id',$user->id)->where('symbol',$symbol)->lockForUpdate()->first();
-            if (!$wallet) $wallet=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$symbol,'balance'=>0]);
-            $amount=(float)$data['amount'];
-            if(in_array($data['type'],['withdraw','sell','convert']) && (float)$wallet->balance < $amount) throw ValidationException::withMessages(['amount'=>'Insufficient demo balance.']);
-            if($data['type']==='deposit') $wallet->increment('balance',$amount);
-            if($data['type']==='withdraw') $wallet->decrement('balance',$amount);
-            if($data['type']==='buy') {
-                $price=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
-                if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
-                $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
-                if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
-                $cost=$amount*$price;
-                if((float)$usd->balance<$cost) throw ValidationException::withMessages(['amount'=>'Insufficient demo USD balance.']);
-                $usd->decrement('balance',$cost); $wallet->increment('balance',$amount);
+        $data = $request->validate([
+            'type' => 'required|in:deposit,withdraw,buy,sell,convert',
+            'symbol' => ['required', 'string', 'max:20', 'regex:/^[A-Z0-9]{2,20}$/i'],
+            'amount' => ['nullable', 'numeric', 'gt:0', 'lte:1000000000000', 'decimal:0,8'],
+            'quote_amount_usd' => ['nullable', 'numeric', 'gt:0', 'lte:1000000000000', 'decimal:0,8'],
+            'to_symbol' => ['nullable', 'string', 'max:20', 'regex:/^[A-Z0-9]{2,20}$/i'],
+        ]);
+
+        $type = $data['type'];
+        $symbol = strtoupper($data['symbol']);
+        $isCashFlow = in_array($type, ['deposit', 'withdraw'], true);
+
+        if ($isCashFlow && ($symbol !== 'USD' || !isset($data['amount']))) {
+            throw ValidationException::withMessages([
+                'amount' => 'Demo deposits and withdrawals must use a positive USD amount.',
+            ]);
+        }
+        if (!$isCashFlow && !isset($data['quote_amount_usd'])) {
+            throw ValidationException::withMessages([
+                'quote_amount_usd' => 'Enter the USD value for this demo trade.',
+            ]);
+        }
+
+        $toSymbol = strtoupper($data['to_symbol'] ?? '');
+        if ($type === 'convert' && (!$toSymbol || $toSymbol === $symbol)) {
+            throw ValidationException::withMessages([
+                'to_symbol' => 'Choose a different destination asset.',
+            ]);
+        }
+        if (in_array($type, ['buy', 'sell'], true) && $symbol === 'USD') {
+            throw ValidationException::withMessages([
+                'symbol' => 'Choose a non-USD asset to buy or sell.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($request, $data, $type, $symbol, $toSymbol, $isCashFlow) {
+            $assetSymbols = $isCashFlow
+                ? ['USD']
+                : ($type === 'convert' ? [$symbol, $toSymbol] : [$symbol]);
+            sort($assetSymbols, SORT_STRING);
+
+            $assets = BrokerAsset::whereIn('symbol', $assetSymbols)
+                ->where('is_active', true)
+                ->orderBy('symbol')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('symbol');
+
+            foreach ($assetSymbols as $assetSymbol) {
+                if (!$assets->has($assetSymbol)) {
+                    throw ValidationException::withMessages([
+                        'symbol' => 'One of the selected demo assets is unavailable.',
+                    ]);
+                }
             }
-            if($data['type']==='sell') {
-                $price=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
-                if($price<=0 || $symbol==='USD') throw ValidationException::withMessages(['symbol'=>'Asset price is unavailable for this action.']);
-                $wallet->decrement('balance',$amount);
-                $usd=BrokerWallet::where('user_id',$user->id)->where('symbol','USD')->lockForUpdate()->first();
-                if (!$usd) $usd=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>'USD','balance'=>0]);
-                $usd->increment('balance',$amount*$price);
+
+            $walletSymbols = match ($type) {
+                'deposit', 'withdraw' => ['USD'],
+                'buy', 'sell' => ['USD', $symbol],
+                'convert' => [$symbol, $toSymbol],
+            };
+            $wallets = $this->lockWallets((int) $request->user()->id, $walletSymbols);
+
+            $recordAmount = 0.0;
+            $meta = ['mode' => 'demo'];
+            $notificationText = '';
+
+            if ($type === 'deposit' || $type === 'withdraw') {
+                $amount = round((float) $data['amount'], 8);
+                $usd = $wallets->get('USD');
+
+                if ($type === 'withdraw' && (float) $usd->balance + 0.000000001 < $amount) {
+                    throw ValidationException::withMessages(['amount' => 'Insufficient demo USD balance.']);
+                }
+
+                if ($type === 'deposit') {
+                    $usd->increment('balance', $amount);
+                } else {
+                    $usd->decrement('balance', $amount);
+                }
+
+                $recordAmount = $amount;
+                $notificationText = 'Your demo USD ' . $type . ' was recorded.';
+            } elseif ($type === 'buy') {
+                $price = (float) $assets->get($symbol)->price;
+                $quote = round((float) $data['quote_amount_usd'], 8);
+                if ($price <= 0) {
+                    throw ValidationException::withMessages(['symbol' => 'The selected demo asset has no valid price.']);
+                }
+
+                $quantity = round($quote / $price, 8);
+                $executedValue = round($quantity * $price, 8);
+                if ($quantity <= 0 || $executedValue <= 0) {
+                    throw ValidationException::withMessages(['quote_amount_usd' => 'The amount is too small for this demo asset.']);
+                }
+
+                $usd = $wallets->get('USD');
+                if ((float) $usd->balance + 0.000000001 < $executedValue) {
+                    throw ValidationException::withMessages(['quote_amount_usd' => 'Insufficient demo USD balance.']);
+                }
+
+                $usd->decrement('balance', $executedValue);
+                $wallets->get($symbol)->increment('balance', $quantity);
+                $recordAmount = $quantity;
+                $meta += ['quote_amount_usd' => $executedValue, 'execution_price' => $price];
+                $notificationText = 'Your demo buy of ' . $symbol . ' was recorded.';
+            } elseif ($type === 'sell') {
+                $price = (float) $assets->get($symbol)->price;
+                $quote = round((float) $data['quote_amount_usd'], 8);
+                if ($price <= 0) {
+                    throw ValidationException::withMessages(['symbol' => 'The selected demo asset has no valid price.']);
+                }
+
+                $quantity = round($quote / $price, 8);
+                $proceeds = round($quantity * $price, 8);
+                if ($quantity <= 0 || $proceeds <= 0) {
+                    throw ValidationException::withMessages(['quote_amount_usd' => 'The amount is too small for this demo asset.']);
+                }
+
+                $assetWallet = $wallets->get($symbol);
+                if ((float) $assetWallet->balance + 0.000000001 < $quantity) {
+                    throw ValidationException::withMessages(['quote_amount_usd' => 'Insufficient demo ' . $symbol . ' balance.']);
+                }
+
+                $assetWallet->decrement('balance', $quantity);
+                $wallets->get('USD')->increment('balance', $proceeds);
+                $recordAmount = $quantity;
+                $meta += ['quote_amount_usd' => $proceeds, 'execution_price' => $price];
+                $notificationText = 'Your demo sell of ' . $symbol . ' was recorded.';
+            } else {
+                $fromPrice = (float) $assets->get($symbol)->price;
+                $toPrice = (float) $assets->get($toSymbol)->price;
+                $quote = round((float) $data['quote_amount_usd'], 8);
+                if ($fromPrice <= 0 || $toPrice <= 0) {
+                    throw ValidationException::withMessages(['to_symbol' => 'One of the selected demo assets has no valid price.']);
+                }
+
+                $fromQuantity = round($quote / $fromPrice, 8);
+                $executedValue = round($fromQuantity * $fromPrice, 8);
+                $toQuantity = round($executedValue / $toPrice, 8);
+                if ($fromQuantity <= 0 || $toQuantity <= 0) {
+                    throw ValidationException::withMessages(['quote_amount_usd' => 'The amount is too small for this demo conversion.']);
+                }
+
+                $sourceWallet = $wallets->get($symbol);
+                if ((float) $sourceWallet->balance + 0.000000001 < $fromQuantity) {
+                    throw ValidationException::withMessages(['quote_amount_usd' => 'Insufficient demo ' . $symbol . ' balance.']);
+                }
+
+                $sourceWallet->decrement('balance', $fromQuantity);
+                $wallets->get($toSymbol)->increment('balance', $toQuantity);
+                $recordAmount = $fromQuantity;
+                $meta += [
+                    'to_symbol' => $toSymbol,
+                    'to_amount' => $toQuantity,
+                    'quote_amount_usd' => $executedValue,
+                    'from_price' => $fromPrice,
+                    'to_price' => $toPrice,
+                ];
+                $notificationText = 'Your demo conversion from ' . $symbol . ' to ' . $toSymbol . ' was recorded.';
             }
-            if($data['type']==='convert') {
-                $to=strtoupper($data['to_symbol'] ?? '');
-                if(!$to || $to===$symbol) throw ValidationException::withMessages(['to_symbol'=>'Choose a different destination asset.']);
-                $fromPrice=(float)(BrokerAsset::where('symbol',$symbol)->value('price') ?? 0);
-                $toPrice=(float)(BrokerAsset::where('symbol',$to)->value('price') ?? 0);
-                if($fromPrice<=0 || $toPrice<=0) throw ValidationException::withMessages(['to_symbol'=>'One of the selected assets is unavailable.']);
-                $target=BrokerWallet::where('user_id',$user->id)->where('symbol',$to)->lockForUpdate()->first();
-                if (!$target) $target=BrokerWallet::create(['user_id'=>$user->id,'symbol'=>$to,'balance'=>0]);
-                $wallet->decrement('balance',$amount);
-                $target->increment('balance',($amount*$fromPrice)/$toPrice);
-            }
-            $wallet->refresh();
-            $tx=BrokerTransaction::create(['user_id'=>$user->id,'type'=>$data['type'],'symbol'=>$symbol,'amount'=>$amount,'status'=>'completed','meta'=>['mode'=>'demo','to_symbol'=>$data['to_symbol']??null]]);
-            BrokerNotification::create(['user_id'=>$user->id,'title'=>'Demo '.ucfirst($data['type']).' completed','body'=>'Your demo '.$data['type'].' request for '.$symbol.' was recorded.']);
-            return response()->json(['transaction'=>$tx,'wallet'=>$wallet,'mode'=>'demo'],201);
-        });
+
+            $transaction = BrokerTransaction::create([
+                'user_id' => $request->user()->id,
+                'type' => $type,
+                'symbol' => $symbol,
+                'amount' => $recordAmount,
+                'status' => 'completed',
+                'meta' => $meta,
+            ]);
+            BrokerNotification::create([
+                'user_id' => $request->user()->id,
+                'title' => 'Demo ' . ucfirst($type) . ' completed',
+                'body' => $notificationText,
+            ]);
+
+            $responseWallet = $wallets->get($type === 'sell' ? 'USD' : $symbol)->fresh();
+
+            return response()->json([
+                'transaction' => $transaction,
+                'wallet' => $responseWallet,
+                'mode' => 'demo',
+            ], 201);
+        }, 3);
     }
 
     public function openPosition(Request $request)
     {
-        $d=$request->validate(['symbol'=>'required|string|max:20','side'=>'required|in:buy,sell','quantity'=>'required|numeric|gt:0','leverage'=>'required|numeric|min:1|max:100','take_profit'=>'nullable|numeric','stop_loss'=>'nullable|numeric','duration_seconds'=>'nullable|integer|min:0|max:86400']);
-        return DB::transaction(function () use ($request,$d) {
-            $asset=BrokerAsset::where('symbol',strtoupper($d['symbol']))->where('is_active',true)->firstOrFail();
-            $entry=(float)$asset->price;
-            if (!empty($d['take_profit']) && (($d['side']==='buy' && (float)$d['take_profit']<=$entry) || ($d['side']==='sell' && (float)$d['take_profit']>=$entry))) {
-                throw ValidationException::withMessages(['take_profit'=>'Take profit must be above entry for a buy and below entry for a sell.']);
+        $data = $request->validate([
+            'symbol' => ['required', 'string', 'max:20', 'regex:/^[A-Z0-9]{2,20}$/i'],
+            'side' => 'required|in:buy,sell',
+            'margin_usd' => ['required', 'numeric', 'gt:0', 'lte:1000000000000', 'decimal:0,8'],
+            'leverage' => 'required|numeric|min:1|max:100',
+            'take_profit' => ['nullable', 'numeric', 'gt:0', 'lte:1000000000000', 'decimal:0,8'],
+            'stop_loss' => ['nullable', 'numeric', 'gt:0', 'lte:1000000000000', 'decimal:0,8'],
+            'duration_seconds' => 'nullable|integer|min:0|max:86400',
+        ]);
+
+        return DB::transaction(function () use ($request, $data) {
+            $symbol = strtoupper($data['symbol']);
+            $asset = BrokerAsset::where('symbol', $symbol)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $entry = (float) $asset->price;
+
+            if ($entry <= 0) {
+                throw ValidationException::withMessages(['symbol' => 'The selected demo asset has no valid price.']);
             }
-            if (!empty($d['stop_loss']) && (($d['side']==='buy' && (float)$d['stop_loss']>=$entry) || ($d['side']==='sell' && (float)$d['stop_loss']<=$entry))) {
-                throw ValidationException::withMessages(['stop_loss'=>'Stop loss must be below entry for a buy and above entry for a sell.']);
+            if (!empty($data['take_profit']) && (
+                ($data['side'] === 'buy' && (float) $data['take_profit'] <= $entry) ||
+                ($data['side'] === 'sell' && (float) $data['take_profit'] >= $entry)
+            )) {
+                throw ValidationException::withMessages([
+                    'take_profit' => 'Take profit must be above entry for a buy and below entry for a sell.',
+                ]);
             }
-            $margin=((float)$d['quantity']*$entry)/(float)$d['leverage'];
-            $usd=BrokerWallet::where('user_id',$request->user()->id)->where('symbol','USD')->lockForUpdate()->first();
-            if (!$usd) $usd=BrokerWallet::create(['user_id'=>$request->user()->id,'symbol'=>'USD','balance'=>0]);
-            if((float)$usd->balance<$margin) throw ValidationException::withMessages(['quantity'=>'Insufficient demo USD margin.']);
-            $usd->decrement('balance',$margin);
-            $position=BrokerPosition::create(['user_id'=>$request->user()->id,'symbol'=>$asset->symbol,'side'=>$d['side'],'quantity'=>$d['quantity'],'entry_price'=>$entry,'leverage'=>$d['leverage'],'margin'=>$margin,'take_profit'=>$d['take_profit']??null,'stop_loss'=>$d['stop_loss']??null,'expires_at'=>!empty($d['duration_seconds'])?now()->addSeconds((int)$d['duration_seconds']):null]);
-            return response()->json(['position'=>$position,'mode'=>'demo'],201);
-        });
+            if (!empty($data['stop_loss']) && (
+                ($data['side'] === 'buy' && (float) $data['stop_loss'] >= $entry) ||
+                ($data['side'] === 'sell' && (float) $data['stop_loss'] <= $entry)
+            )) {
+                throw ValidationException::withMessages([
+                    'stop_loss' => 'Stop loss must be below entry for a buy and above entry for a sell.',
+                ]);
+            }
+
+            $leverage = (float) $data['leverage'];
+            $budget = round((float) $data['margin_usd'], 8);
+            $quantity = floor((($budget * $leverage / $entry) * 100000000)) / 100000000;
+            $margin = round(($quantity * $entry) / $leverage, 8);
+            if ($quantity <= 0 || $margin <= 0) {
+                throw ValidationException::withMessages(['margin_usd' => 'The margin is too small for this demo asset and leverage.']);
+            }
+
+            $wallets = $this->lockWallets((int) $request->user()->id, ['USD']);
+            $usd = $wallets->get('USD');
+            if ((float) $usd->balance + 0.000000001 < $margin) {
+                throw ValidationException::withMessages(['margin_usd' => 'Insufficient demo USD margin.']);
+            }
+            $usd->decrement('balance', $margin);
+
+            $position = BrokerPosition::create([
+                'user_id' => $request->user()->id,
+                'symbol' => $asset->symbol,
+                'side' => $data['side'],
+                'quantity' => $quantity,
+                'entry_price' => $entry,
+                'leverage' => $leverage,
+                'margin' => $margin,
+                'take_profit' => $data['take_profit'] ?? null,
+                'stop_loss' => $data['stop_loss'] ?? null,
+                'expires_at' => !empty($data['duration_seconds'])
+                    ? now()->addSeconds((int) $data['duration_seconds'])
+                    : null,
+            ]);
+            BrokerNotification::create([
+                'user_id' => $request->user()->id,
+                'title' => $asset->symbol . ' demo position opened',
+                'body' => 'A ' . $data['side'] . ' demo position was opened with ' . $data['leverage'] . 'x leverage.',
+            ]);
+
+            return response()->json(['position' => $position, 'mode' => 'demo'], 201);
+        }, 3);
     }
 
     private function settlePosition(int $positionId, string $reason): ?BrokerPosition
     {
-        return DB::transaction(function () use ($positionId,$reason) {
-            $position=BrokerPosition::whereKey($positionId)->lockForUpdate()->first();
-            if (!$position || $position->status!=='open') return null;
-            $price=(float)(BrokerAsset::where('symbol',$position->symbol)->value('price') ?? $position->entry_price);
-            $direction=$position->side==='buy' ? 1 : -1;
-            $pnl=((float)$position->quantity)*($price-(float)$position->entry_price)*$direction;
-            $release=max(0,(float)$position->margin+$pnl);
-            $usd=BrokerWallet::where('user_id',$position->user_id)->where('symbol','USD')->lockForUpdate()->first();
-            if (!$usd) $usd=BrokerWallet::create(['user_id'=>$position->user_id,'symbol'=>'USD','balance'=>0]);
-            $usd->increment('balance',$release);
-            $position->update(['status'=>'closed','closed_at'=>now(),'pnl'=>$pnl,'close_reason'=>$reason]);
-            BrokerTransaction::create(['user_id'=>$position->user_id,'type'=>'position_close','symbol'=>$position->symbol,'amount'=>$release,'status'=>'completed','meta'=>['mode'=>'demo','pnl'=>$pnl,'reason'=>$reason]]);
-            BrokerNotification::create(['user_id'=>$position->user_id,'title'=>$position->symbol.' position closed','body'=>'Your demo position closed: '.$reason.'.']);
+        return DB::transaction(function () use ($positionId, $reason) {
+            $position = BrokerPosition::whereKey($positionId)->lockForUpdate()->first();
+            if (!$position || $position->status !== 'open') {
+                return null;
+            }
+
+            $price = (float) (BrokerAsset::where('symbol', $position->symbol)->value('price') ?? $position->entry_price);
+            $direction = $position->side === 'buy' ? 1 : -1;
+            $rawPnl = (float) $position->quantity * ($price - (float) $position->entry_price) * $direction;
+            $pnl = round(max(-(float) $position->margin, $rawPnl), 8);
+            $release = round(max(0, (float) $position->margin + $pnl), 8);
+
+            $wallets = $this->lockWallets((int) $position->user_id, ['USD']);
+            $wallets->get('USD')->increment('balance', $release);
+
+            $position->update([
+                'status' => 'closed',
+                'closed_at' => now(),
+                'pnl' => $pnl,
+                'close_reason' => $reason,
+            ]);
+            BrokerTransaction::create([
+                'user_id' => $position->user_id,
+                'type' => 'position_close',
+                'symbol' => $position->symbol,
+                'amount' => $release,
+                'status' => 'completed',
+                'meta' => ['mode' => 'demo', 'pnl' => $pnl, 'reason' => $reason],
+            ]);
+            BrokerNotification::create([
+                'user_id' => $position->user_id,
+                'title' => $position->symbol . ' position closed',
+                'body' => 'Your demo position closed: ' . $reason . '.',
+            ]);
+
             return $position->fresh();
-        });
+        }, 3);
     }
 
     public function closePosition(Request $request, BrokerPosition $position)
     {
-        abort_unless($position->user_id===$request->user()->id,404);
+        abort_unless((int) $position->user_id === (int) $request->user()->id, 404);
         abort_unless($position->status==='open',422);
         $closed=$this->settlePosition($position->id,'manual');
         abort_unless($closed,422);
@@ -146,15 +377,67 @@ class BrokerApiController
 
     public function resetDemo(Request $request)
     {
-        $userId=$request->user()->id;
+        $userId = (int) $request->user()->id;
+
         DB::transaction(function () use ($userId) {
-            BrokerWallet::where('user_id',$userId)->update(['balance'=>0]);
-            BrokerPosition::where('user_id',$userId)->where('status','open')->update([
-                'status'=>'closed','closed_at'=>now(),'close_reason'=>'reset','pnl'=>0
+            // Keep the same lock order as position settlement: positions first,
+            // then wallets, so reset cannot deadlock against a concurrent close.
+            $positions = BrokerPosition::where('user_id', $userId)
+                ->where('status', 'open')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $wallets = BrokerWallet::where('user_id', $userId)
+                ->orderBy('symbol')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($wallets as $wallet) {
+                $wallet->update(['balance' => 0]);
+            }
+            foreach ($positions as $position) {
+                $position->update([
+                    'status' => 'closed',
+                    'closed_at' => now(),
+                    'close_reason' => 'reset',
+                    'pnl' => 0,
+                ]);
+            }
+
+            BrokerNotification::create([
+                'user_id' => $userId,
+                'title' => 'Demo account reset',
+                'body' => 'Your demo wallet balances were cleared and open demo positions were closed.',
             ]);
-            BrokerNotification::create(['user_id'=>$userId,'title'=>'Demo account reset','body'=>'Your demo wallet balances were cleared and open demo positions were closed.']);
-        });
-        return response()->json(['reset'=>true,'mode'=>'demo']);
+        }, 3);
+
+        return response()->json(['reset' => true, 'mode' => 'demo']);
+    }
+
+    private function lockWallets(int $userId, array $symbols)
+    {
+        $symbols = array_values(array_unique(array_map(
+            static fn ($symbol) => strtoupper((string) $symbol),
+            $symbols
+        )));
+        sort($symbols, SORT_STRING);
+
+        $now = now();
+        $rows = array_map(static fn ($symbol) => [
+            'user_id' => $userId,
+            'symbol' => $symbol,
+            'balance' => 0,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], $symbols);
+        DB::table('broker_wallets')->insertOrIgnore($rows);
+
+        return BrokerWallet::where('user_id', $userId)
+            ->whereIn('symbol', $symbols)
+            ->orderBy('symbol')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('symbol');
     }
 
     public function notifications(Request $request)
@@ -177,13 +460,20 @@ class BrokerApiController
 
     public function services(Request $request)
     {
-        return response()->json(BrokerServiceRequest::where('user_id',$request->user()->id)->latest()->get());
+        return response()->json(BrokerServiceRequest::where('user_id', $request->user()->id)->latest()->limit(100)->get());
     }
 
     public function createService(Request $request)
     {
-        $d=$request->validate(['service_key'=>'required|string|max:80','details'=>'nullable|string|max:3000']);
-        $row=BrokerServiceRequest::create($d+['user_id'=>$request->user()->id]);
-        return response()->json($row,201);
+        $data = $request->validate([
+            'service_key' => ['required', Rule::in([
+                'cold_storage', 'cards', 'subscribe', 'signals', 'connect_wallet',
+                'investing', 'copy_trading', 'mining', 'real_estate', 'stake',
+            ])],
+            'details' => 'nullable|string|max:3000',
+        ]);
+
+        $row = BrokerServiceRequest::create($data + ['user_id' => $request->user()->id]);
+        return response()->json($row, 201);
     }
 }

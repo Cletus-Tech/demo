@@ -71,7 +71,7 @@
       orders: transactions.filter(t => ["buy", "sell", "convert"].includes(t.type)).map(t => ({
         kind: t.type === "convert" ? "swap" : "spot",
         side: t.type, symbol: t.type === "convert" ? ((t.meta || {}).to_symbol || t.symbol) : t.symbol,
-        from_symbol: t.symbol, amount_usd: Number(t.amount) * priceOf({ assets }, t.symbol),
+        from_symbol: t.symbol, amount_usd: Number((t.meta || {}).quote_amount_usd ?? (Number(t.amount) * priceOf({ assets }, t.symbol))),
         created_at: t.created_at
       })),
       ledger: transactions.filter(t => ["deposit", "withdraw"].includes(t.type)).map(t => ({
@@ -99,24 +99,18 @@
     refreshPrices: function () { return post("/prices/refresh", {}); },
     deposit: async function (amount) { return post("/transactions", { type: "deposit", symbol: "USD", amount }); },
     withdraw: async function (amount) { return post("/transactions", { type: "withdraw", symbol: "USD", amount }); },
-    spot: async function (symbol, side, amountUsd) {
-      const s = await state(), price = priceOf(s, symbol);
-      if (!(price > 0)) throw new Error("The selected demo asset has no valid price.");
-      const quantity = Number(amountUsd) / price;
-      return post("/transactions", { type: side === "sell" ? "sell" : "buy", symbol, amount: quantity });
+    spot: function (symbol, side, amountUsd) {
+      return post("/transactions", { type: side === "sell" ? "sell" : "buy", symbol, quote_amount_usd: Number(amountUsd) });
     },
-    swap: async function (from, to, amountUsd) {
-      const s = await state(), price = priceOf(s, from);
-      if (!(price > 0)) throw new Error("The selected source asset has no valid price.");
-      return post("/transactions", { type: "convert", symbol: from, to_symbol: to, amount: Number(amountUsd) / price });
+    swap: function (from, to, amountUsd) {
+      return post("/transactions", { type: "convert", symbol: from, to_symbol: to, quote_amount_usd: Number(amountUsd) });
     },
-    openPosition: async function (symbol, side, marginUsd, leverage, tp, sl, durationSec) {
-      const s = await state(), price = priceOf(s, symbol);
-      if (!(price > 0)) throw new Error("The selected demo asset has no valid price.");
+    openPosition: function (symbol, side, marginUsd, leverage, tp, sl, durationSec) {
       return post("/positions", {
         symbol, side: side === "short" ? "sell" : "buy",
-        quantity: Number(marginUsd) * Number(leverage) / price,
-        leverage: Number(leverage), take_profit: Number(tp) || null, stop_loss: Number(sl) || null, duration_seconds: Number(durationSec) || 0
+        margin_usd: Number(marginUsd), leverage: Number(leverage),
+        take_profit: Number(tp) || null, stop_loss: Number(sl) || null,
+        duration_seconds: Number(durationSec) || 0
       });
     },
     closePosition: async function (id) {
