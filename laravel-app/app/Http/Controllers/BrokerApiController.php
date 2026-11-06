@@ -314,7 +314,23 @@ class BrokerApiController
                 return null;
             }
 
-            $price = (float) (BrokerAsset::where('symbol', $position->symbol)->value('price') ?? $position->entry_price);
+            $asset = BrokerAsset::where('symbol', $position->symbol)->lockForUpdate()->first();
+            $price = (float) ($asset?->price ?? $position->entry_price);
+
+            // Recheck automatic exit conditions against the locked server price.
+            if ($reason !== 'manual') {
+                $long = $position->side === 'buy';
+                if ($position->take_profit && ($long ? $price >= (float) $position->take_profit : $price <= (float) $position->take_profit)) {
+                    $reason = 'take_profit';
+                } elseif ($position->stop_loss && ($long ? $price <= (float) $position->stop_loss : $price >= (float) $position->stop_loss)) {
+                    $reason = 'stop_loss';
+                } elseif ($position->expires_at && $position->expires_at->isPast()) {
+                    $reason = 'duration_ended';
+                } else {
+                    return null;
+                }
+            }
+
             $direction = $position->side === 'buy' ? 1 : -1;
             $rawPnl = (float) $position->quantity * ($price - (float) $position->entry_price) * $direction;
             $pnl = round(max(-(float) $position->margin, $rawPnl), 8);
@@ -369,7 +385,7 @@ class BrokerApiController
             elseif ($position->expires_at && $position->expires_at->isPast()) $reason='duration_ended';
             if ($reason) {
                 $row=$this->settlePosition($position->id,$reason);
-                if ($row) $closed[]=['id'=>$row->id,'symbol'=>$row->symbol,'side'=>$row->side==='buy'?'long':'short','reason'=>$reason,'pnl'=>(float)$row->pnl];
+                if ($row) $closed[]=['id'=>$row->id,'symbol'=>$row->symbol,'side'=>$row->side==='buy'?'long':'short','reason'=>$row->close_reason,'pnl'=>(float)$row->pnl];
             }
         }
         return response()->json($closed);
