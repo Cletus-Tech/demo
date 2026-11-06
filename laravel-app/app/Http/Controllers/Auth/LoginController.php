@@ -15,12 +15,12 @@ class LoginController
             'password' => ['required', 'string'],
         ]);
 
-        if (!Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (!Auth::guard('web')->attempt($credentials, $request->boolean('remember'))) {
             throw ValidationException::withMessages(['email' => 'The supplied credentials are incorrect.']);
         }
 
-        if (($request->user()->account_status ?? 'active') !== 'active') {
-            Auth::logout();
+        if ((Auth::guard('web')->user()->account_status ?? 'active') !== 'active') {
+            Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
@@ -33,7 +33,7 @@ class LoginController
 
     public function destroy(Request $request)
     {
-        Auth::logout();
+        Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect()->route('login');
