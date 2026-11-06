@@ -52,6 +52,24 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
    Replace the email with the account you control. Do not grant admin roles to untrusted users.
 10. Copy `tests/Feature/BrokerApiTest.php` into the host application's `tests/Feature/` directory, then run `php artisan view:cache`, `php artisan route:list --except-vendor` and `php artisan test`.
 
+## Demo seed data and optional demo account
+
+The brokerage migration creates the five baseline demo assets. The package also includes an idempotent seeder that restores those clearly labelled simulated market rows:
+
+\`\`\`bash
+php artisan db:seed --class='Database\\Seeders\\BrokerDemoSeeder'
+\`\`\`
+
+To create an optional ordinary demo login during seeding, configure these environment variables on the host (never commit the password to Git):
+
+\`\`\`dotenv
+BROKER_DEMO_USER_NAME="Demo Trader"
+BROKER_DEMO_USER_EMAIL="demo@example.com"
+BROKER_DEMO_USER_PASSWORD="use-a-unique-password-at-least-12-characters"
+\`\`\`
+
+Then run the same seeder command. The seeder creates the account only when the email does not already exist, never resets an existing password or account status, and never grants an administrator role. Without both email and password variables it seeds assets only. The demo account is for simulated operations; it has no real funds or payment capability.
+
 ## API routes
 All browser API endpoints use `auth:sanctum` and same-origin session authentication. The browser adapter initializes the Sanctum CSRF cookie before write requests.
 
@@ -108,7 +126,7 @@ php artisan route:list --except-vendor
 php artisan test
 ```
 
-The tests cover server-authoritative trade quotes, buy/sell/convert accounting, overspending rejection, persisted trade/position history, margin reservation and realized demo P/L release, TP/SL settlement, USD quote stability and shared price-tick throttling, notification and service-request ownership, suspended-account blocking, cross-account position access, and admin role restrictions.
+The tests cover registration/login/logout and dashboard session protection, the Sanctum CSRF-cookie route, suspended-account session denial, server-authoritative trade quotes, buy/sell/convert accounting, overspending rejection, persisted trade/position history, margin reservation and realized long/short demo P/L release, TP/SL validation and settlement, USD quote stability and shared price-tick throttling, notification and service-request ownership, cross-account position access, referral privacy, and admin role restrictions.
 
 GitHub Actions also creates a fresh Laravel 12 host application, installs Sanctum API support, merges this package, compiles the Blade views, lists routes and runs the feature suite. These integration jobs are the verification gate for changes to this package. The local execution environment used to author this package did not include Composer or a Laravel host application, so local Laravel runtime tests could not be run.
 
