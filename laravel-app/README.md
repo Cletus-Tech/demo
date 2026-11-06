@@ -56,7 +56,8 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
 All browser API endpoints use `auth:sanctum` and same-origin session authentication. The browser adapter initializes the Sanctum CSRF cookie before write requests.
 
 - `GET /api/broker/state` — profile, assets, wallet balances, positions and transactions.
-- `POST /api/broker/prices/refresh` — move seeded prices using a small random simulated demo tick.
+- `GET /api/broker/prices` — lightweight quote-only response used by the five-second dashboard refresh; it does not reload wallet/history data.
+- `POST /api/broker/prices/refresh` — move seeded prices using a small random simulated demo tick. A database lock limits the shared market to one tick every five seconds across all browsers.
 - `POST /api/broker/transactions` — demo USD deposit/withdrawal or USD-valued buy/sell/convert. For buy/sell/convert, send `quote_amount_usd`; do not send a client-computed token quantity or price.
 - `POST /api/broker/positions` — open a demo leveraged position using `margin_usd`; the server calculates quantity and locked margin.
 - `POST /api/broker/positions/{id}/close` — manually close an owned position.
@@ -83,7 +84,7 @@ Example leveraged position payload:
 { "symbol": "BTC", "side": "buy", "margin_usd": 100, "leverage": 2, "duration_seconds": 120 }
 ```
 
-For buy/sell/convert and leveraged positions, the server reads the current seeded demo price and calculates asset quantity itself. The browser does not submit an execution price or authoritative quantity. Asset rows and user wallets are locked before demo trades update balances. Position settlement locks the position, then its asset quote, then the user's USD wallet; database transaction retries reduce transient lock conflicts.
+For buy/sell/convert and leveraged positions, the server reads the current seeded demo price and calculates asset quantity itself. The browser does not submit an execution price or authoritative quantity. Asset rows and user wallets are locked before demo trades update balances. Position settlement locks the position, then its asset quote, then the user's USD wallet; database transaction retries reduce transient lock conflicts. A lightweight quote endpoint avoids reloading full account state on every chart tick, and a shared five-second database cooldown prevents multiple open browsers from repeatedly moving the same demo market.
 
 ## Demo-only limitations
 - Market prices are seeded demonstration values and moved with simulated random ticks; USD remains fixed at 1 as the accounting quote currency. No licensed live exchange feed is connected. The chart's older candles are generated illustrations, not historical exchange data.

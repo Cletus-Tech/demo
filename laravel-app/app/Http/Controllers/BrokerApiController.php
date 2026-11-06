@@ -19,6 +19,15 @@ class BrokerApiController
         return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user'],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(100)->get()]);
     }
 
+    public function prices()
+    {
+        return response()->json(
+            BrokerAsset::where('is_active', true)
+                ->orderBy('symbol')
+                ->get(['symbol', 'price', 'updated_at'])
+        );
+    }
+
     public function refreshDemoPrices()
     {
         $updated = DB::transaction(function () {
@@ -27,13 +36,25 @@ class BrokerApiController
                 ->lockForUpdate()
                 ->get();
 
+            // Restore the accounting quote currency even when another browser
+            // has already performed the current market tick.
+            $usd = $assets->firstWhere('symbol', 'USD');
+            if ($usd && (float) $usd->price !== 1.0) {
+                $usd->update(['price' => 1]);
+            }
+
+            // One browser refreshes the shared demo market at most once per
+            // five seconds. The locked anchor prevents every open client from
+            // applying another random move to the same global prices.
+            $anchor = $assets->firstWhere('symbol', 'BTC')
+                ?? $assets->first(static fn ($asset) => $asset->symbol !== 'USD');
+            if ($anchor?->updated_at && $anchor->updated_at->gt(now()->subSeconds(5))) {
+                return 0;
+            }
+
             $updated = 0;
             foreach ($assets as $asset) {
-                // USD is the accounting quote currency for this demo and must remain pegged at 1.
                 if ($asset->symbol === 'USD') {
-                    if ((float) $asset->price !== 1.0) {
-                        $asset->update(['price' => 1]);
-                    }
                     continue;
                 }
 
@@ -50,6 +71,7 @@ class BrokerApiController
             'updated' => $updated,
             'source' => 'simulated_demo',
             'base_currency' => 'USD',
+            'throttled' => $updated === 0,
         ]);
     }
 

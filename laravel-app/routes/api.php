@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', EnsureBrokerAccountActive::class])->prefix('broker')->group(function () {
     Route::get('/state',[BrokerApiController::class,'state']);
+    Route::get('/prices',[BrokerApiController::class,'prices']);
     Route::post('/prices/refresh',[BrokerApiController::class,'refreshDemoPrices']);
     Route::post('/transactions',[BrokerApiController::class,'transact']);
     Route::post('/reset',[BrokerApiController::class,'resetDemo']);

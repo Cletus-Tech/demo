@@ -431,4 +431,32 @@ class BrokerApiTest extends TestCase
     {
         $this->getJson('/api/broker/state')->assertUnauthorized();
     }
+
+    public function test_market_quote_endpoint_returns_lightweight_simulated_prices(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->getJson('/api/broker/prices')
+            ->assertOk()
+            ->assertJsonCount(5)
+            ->assertJsonFragment(['symbol' => 'BTC'])
+            ->assertJsonFragment(['symbol' => 'USD']);
+    }
+
+    public function test_shared_demo_market_refresh_is_limited_to_one_tick_per_five_seconds(): void
+    {
+        $user = User::factory()->create();
+        BrokerAsset::where('symbol', 'BTC')->update(['updated_at' => now()->subSeconds(10)]);
+
+        $first = $this->actingAs($user)->postJson('/api/broker/prices/refresh')
+            ->assertOk()
+            ->assertJsonPath('throttled', false);
+        $this->assertSame(4, $first->json('updated'));
+
+        $this->postJson('/api/broker/prices/refresh')
+            ->assertOk()
+            ->assertJsonPath('updated', 0)
+            ->assertJsonPath('throttled', true);
+    }
+
 }

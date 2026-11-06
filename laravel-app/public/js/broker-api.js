@@ -93,8 +93,13 @@
     },
     loadState: state,
     loadPrices: async function () {
-      const s = await state();
-      return s.prices;
+      const rows = await request("/prices");
+      return rows.map(a => ({
+        symbol: a.symbol,
+        price: Number(a.price),
+        source: "demo",
+        updated_at: a.updated_at
+      }));
     },
     refreshPrices: function () { return post("/prices/refresh", {}); },
     deposit: async function (amount) { return post("/transactions", { type: "deposit", symbol: "USD", amount }); },
