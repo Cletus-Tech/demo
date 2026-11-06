@@ -61,5 +61,5 @@ jobs:
           php artisan key:generate --force
 
       - name: Run Laravel package feature tests
-        working-directory: \${{ runner.temp }}/broker-host
+        working-directory: ${{ runner.temp }}/broker-host
         run: php artisan test
