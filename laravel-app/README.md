@@ -124,15 +124,15 @@ The package includes feature tests in `tests/Feature/BrokerApiTest.php`. Copy th
 php artisan view:cache
 php artisan route:list --except-vendor
 php artisan test
-\`\`\`
+```
 
-The optional browser smoke test is in \`tests/browser/dashboard-smoke.mjs\`. With the Laravel host running on the same origin, install Playwright and Chromium, then run:
+The optional browser smoke test is in `tests/browser/dashboard-smoke.mjs`. With the Laravel host running on the same origin, install Playwright and Chromium, then run:
 
-\`\`\`bash
+```bash
 npm install --no-save playwright@1.56.1
 npx playwright install chromium
 BROKER_BASE_URL=http://127.0.0.1:8000 node tests/browser/dashboard-smoke.mjs
-\`\`\`
+```
 
 The tests cover registration/login/logout and dashboard session protection, the Sanctum CSRF-cookie route, suspended-account session denial, idempotent demo seeding and safe optional demo-user creation, server-authoritative trade quotes, buy/sell/convert accounting, overspending rejection, persisted trade/position history, margin reservation and realized long/short demo P/L release, TP/SL validation and settlement, USD quote stability and shared price-tick throttling, notification and service-request ownership, cross-account position access, referral privacy, and admin role restrictions.
 
