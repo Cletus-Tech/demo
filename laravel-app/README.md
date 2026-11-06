@@ -56,17 +56,17 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
 
 The brokerage migration creates the five baseline demo assets. The package also includes an idempotent seeder that restores those clearly labelled simulated market rows:
 
-\`\`\`bash
-php artisan db:seed --class='Database\\Seeders\\BrokerDemoSeeder'
-\`\`\`
+```bash
+php artisan db:seed --class='Database\Seeders\BrokerDemoSeeder'
+```
 
 To create an optional ordinary demo login during seeding, configure these environment variables on the host (never commit the password to Git):
 
-\`\`\`dotenv
+```dotenv
 BROKER_DEMO_USER_NAME="Demo Trader"
 BROKER_DEMO_USER_EMAIL="demo@example.com"
 BROKER_DEMO_USER_PASSWORD="use-a-unique-password-at-least-12-characters"
-\`\`\`
+```
 
 Then run the same seeder command. The seeder creates the account only when the email does not already exist, never resets an existing password or account status, and never grants an administrator role. Without both email and password variables it seeds assets only. The demo account is for simulated operations; it has no real funds or payment capability.
 
