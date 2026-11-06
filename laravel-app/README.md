@@ -113,7 +113,7 @@ For buy/sell/convert and leveraged positions, the server reads the current seede
 - This is a reusable integration package, not a complete Laravel framework distribution. CI now merges it into a clean Laravel 12 host and runs feature tests; the eventual client host, browser-session cookie settings, production database locking and deployment still need their own smoke test.
 
 ## Verification status
-Two GitHub Actions workflows run on changes to this package. The static workflow checks PHP source syntax and the browser adapter's JavaScript syntax. The integration workflow provisions fresh Laravel 12 host with SQLite, installs Sanctum, merges the package, compiles Blade views, lists routes, runs migrations and executes the feature suite. These checks do not deploy the application or prove production database concurrency, real browser-cookie configuration or client-specific hosting behaviour. Those still require a smoke test in the eventual host environment. Do not use real funds.
+Two GitHub Actions workflows run on changes to this package. The static workflow checks PHP source syntax and the browser adapter's JavaScript syntax. The integration workflow provisions a fresh Laravel 12 host with SQLite, installs Sanctum, merges the package, compiles the Blade views, lists routes, runs migrations and the feature suite, then starts the host and runs a headless Chromium browser smoke test. The browser test registers a user, loads the dashboard and chart, performs a demo deposit and server-priced BTC buy through the CSRF/session adapter, checks 390px and 360px layouts for horizontal overflow, and signs out. The workflow uses Ubuntu 24.04 for Playwright browser compatibility. These checks do not deploy the application or prove production database concurrency, real client-domain cookie settings or hosting behaviour. Those still require a smoke test in the eventual host environment. Do not use real funds.
 
 
 ## Automated integration tests
@@ -128,7 +128,7 @@ php artisan test
 
 The tests cover registration/login/logout and dashboard session protection, the Sanctum CSRF-cookie route, suspended-account session denial, server-authoritative trade quotes, buy/sell/convert accounting, overspending rejection, persisted trade/position history, margin reservation and realized long/short demo P/L release, TP/SL validation and settlement, USD quote stability and shared price-tick throttling, notification and service-request ownership, cross-account position access, referral privacy, and admin role restrictions.
 
-GitHub Actions also creates a fresh Laravel 12 host application, installs Sanctum API support, merges this package, compiles the Blade views, lists routes and runs the feature suite. These integration jobs are the verification gate for changes to this package. The local execution environment used to author this package did not include Composer or a Laravel host application, so local Laravel runtime tests could not be run.
+GitHub Actions also creates a fresh Laravel 12 host application, installs Sanctum API support, merges this package, compiles the Blade views, lists routes, runs migrations, seeds demo data and executes the feature suite. It then runs the Playwright smoke test in Chromium at desktop and mobile widths. These integration jobs are the verification gate for changes to this package. The authoring container has PHP but no Composer or network access to provision Laravel locally, so the Laravel runtime checks run in GitHub Actions.
 
 ## Accounting and quote safeguards
 
