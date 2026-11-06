@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest,BrokerNotification};
+use App\Models\{BrokerAsset,BrokerWallet,BrokerTransaction,BrokerPosition,BrokerServiceRequest,BrokerNotification,User};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -16,7 +16,7 @@ class BrokerApiController
         $wallets=BrokerWallet::where('user_id',$user->id)->get()->keyBy('symbol');
         $assets=BrokerAsset::where('is_active',true)->orderBy('symbol')->get();
         $positions=BrokerPosition::where('user_id',$user->id)->latest()->limit(100)->get();
-        return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user'],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(100)->get()]);
+        return response()->json(['profile'=>['id'=>$user->id,'email'=>$user->email,'full_name'=>$user->name,'phone'=>$user->phone,'country'=>$user->country,'role'=>$user->role ?? 'user','referral_code'=>$user->referral_code],'assets'=>$assets,'wallets'=>$wallets->values(),'positions'=>$positions,'transactions'=>BrokerTransaction::where('user_id',$user->id)->latest()->limit(100)->get()]);
     }
 
     public function prices()
@@ -538,6 +538,22 @@ class BrokerApiController
         $data=$request->validate(['full_name'=>'required|string|max:120','phone'=>'nullable|string|max:40','country'=>'nullable|string|max:100']);
         $request->user()->forceFill(['name'=>$data['full_name'],'phone'=>$data['phone']??null,'country'=>$data['country']??null])->save();
         return response()->json(['id'=>$request->user()->id,'email'=>$request->user()->email,'full_name'=>$request->user()->name,'phone'=>$request->user()->phone,'country'=>$request->user()->country,'role'=>$request->user()->role ?? 'user']);
+    }
+
+    public function referrals(Request $request)
+    {
+        $user = $request->user();
+        $referrals = User::where('referred_by', $user->id)
+            ->latest()
+            ->limit(100)
+            ->get(['id', 'name', 'created_at']);
+
+        return response()->json([
+            'code' => $user->referral_code,
+            'count' => User::where('referred_by', $user->id)->count(),
+            'referrals' => $referrals,
+            'rewards_enabled' => false,
+        ]);
     }
 
     public function services(Request $request)

@@ -386,6 +386,37 @@ class BrokerApiTest extends TestCase
         $this->assertDatabaseHas('broker_service_requests', ['id' => $service->id, 'status' => 'in_review']);
     }
 
+    public function test_referral_signups_are_attributed_and_referral_lists_are_private(): void
+    {
+        $referrer = User::factory()->create();
+        $referrer->forceFill(['referral_code' => 'CLETUS1234'])->save();
+
+        $this->post('/register', [
+            'name' => 'Invited User',
+            'email' => 'invited@example.test',
+            'password' => 'strong-password',
+            'password_confirmation' => 'strong-password',
+            'referral_code' => 'cletus1234',
+        ])->assertRedirect(route('dashboard'));
+
+        $invitee = User::where('email', 'invited@example.test')->firstOrFail();
+        $this->assertSame($referrer->id, $invitee->referred_by);
+        $this->assertMatchesRegularExpression('/^[A-Z0-9]{10}$/', $invitee->referral_code);
+
+        $this->actingAs($referrer)->getJson('/api/broker/referrals')
+            ->assertOk()
+            ->assertJsonPath('code', 'CLETUS1234')
+            ->assertJsonPath('count', 1)
+            ->assertJsonPath('rewards_enabled', false)
+            ->assertJsonPath('referrals.0.id', $invitee->id);
+
+        $other = User::factory()->create();
+        $this->actingAs($other)->getJson('/api/broker/referrals')
+            ->assertOk()
+            ->assertJsonPath('count', 0)
+            ->assertJsonMissing(['id' => $invitee->id]);
+    }
+
     public function test_broker_api_requires_an_authenticated_user(): void
     {
         $this->getJson('/api/broker/state')->assertUnauthorized();

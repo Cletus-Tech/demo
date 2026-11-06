@@ -711,9 +711,11 @@ async function editProfile(){
 }
 async function showReferrals(){
  try{
-  const rows=await API.loadReferrals();
-  const code=currentProfile&&currentProfile.referral_code||"Not available";
-  alert("Your referral code: "+code+"\nReferrals: "+rows.length+"\n\nReferral tracking is not enabled in this demo yet. No referrals or rewards are being recorded.");
+  const data=await API.loadReferrals();
+  const code=data.code||(currentProfile&&currentProfile.referral_code)||"Not available";
+  const link=window.location.origin+"/register?ref="+encodeURIComponent(code);
+  const count=Number(data.count??((data.referrals||[]).length));
+  alert("Your referral code: "+code+"\nReferral link: "+link+"\nSign-ups: "+count+"\n\nReferral sign-ups are tracked. Reward processing is not enabled in this demo.");
  }catch(e){toast(e.message)}
 }
 const SERVICE_META={

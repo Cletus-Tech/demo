@@ -16,6 +16,7 @@ Route::middleware(['auth:sanctum', EnsureBrokerAccountActive::class])->prefix('b
     Route::get('/notifications',[BrokerApiController::class,'notifications']);
     Route::post('/notifications/read',[BrokerApiController::class,'markNotificationsRead']);
     Route::patch('/profile',[BrokerApiController::class,'updateProfile']);
+    Route::get('/referrals',[BrokerApiController::class,'referrals']);
     Route::get('/services',[BrokerApiController::class,'services']);
     Route::post('/services',[BrokerApiController::class,'createService']);
 });

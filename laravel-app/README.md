@@ -12,7 +12,7 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
 - Demo market assets: BTC, ETH, SOL, USD and EUR.
 - Demo USD deposit/withdrawal and USD-valued buy/sell/convert endpoints; the server calculates quantities from locked current demo prices.
 - Open/close leveraged positions using a USD margin budget, timed expiry, TP/SL settlement and demo account reset.
-- Profile editing, notification list/read endpoints, service enquiry submission/history.
+- Profile editing, notification list/read endpoints, referral-code sign-up attribution, and service enquiry submission/history.
 - Admin page for account roles/status and service-enquiry status.
 
 ## Install in a fresh Laravel 12 application
@@ -65,6 +65,7 @@ All browser API endpoints use `auth:sanctum` and same-origin session authenticat
 - `POST /api/broker/reset` — clear demo balances and close open demo positions.
 - `GET /api/broker/notifications`, `POST /api/broker/notifications/read`.
 - `PATCH /api/broker/profile`.
+- `GET /api/broker/referrals` — the signed-in user's referral code and referred sign-ups; no reward payouts are enabled.
 - `GET/POST /api/broker/services`.
 
 Example transaction payload:
@@ -90,7 +91,7 @@ For buy/sell/convert and leveraged positions, the server reads the current seede
 - Market prices are seeded demonstration values and moved with simulated random ticks; USD remains fixed at 1 as the accounting quote currency. No licensed live exchange feed is connected. The chart's older candles are generated illustrations, not historical exchange data.
 - Deposits and withdrawals only alter simulated demo balances. There is no payment gateway, real-money settlement, crypto custody or live trading.
 - Admin access is role-gated; role changes must be performed by a superadmin.
-- Referral tracking/reward processing, real customer support chat, live market data and external financial services are not implemented. Service cards record enquiries only.
+- Referral sign-up attribution is recorded, but reward calculation/payouts, real customer support chat, live market data and external financial services are not implemented. Service cards record enquiries only.
 - This is a reusable integration package, not a complete Laravel framework distribution. CI now merges it into a clean Laravel 12 host and runs feature tests; the eventual client host, browser-session cookie settings, production database locking and deployment still need their own smoke test.
 
 ## Verification status

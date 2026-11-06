@@ -4,6 +4,8 @@ This folder is a reusable Laravel 12 integration package, not a complete generat
 
 The dashboard Blade view loads public/js/broker-api.js. That adapter uses same-origin Laravel endpoints protected by Sanctum session authentication and CSRF cookies. It does not use the Supabase browser client.
 
+Referral codes are generated for accounts and optional referral codes on registration record sign-up attribution. No referral rewards or payouts are enabled.
+
 Demo deposits and withdrawals affect simulated USD only. Buy, sell, convert and leveraged position quantities are calculated on the server from the current seeded demo prices; the browser does not submit an execution price. No live market feed, payments, custody or exchange execution is connected.
 
 See README.md for setup, route contracts, demo limitations and the required host-application smoke tests.
