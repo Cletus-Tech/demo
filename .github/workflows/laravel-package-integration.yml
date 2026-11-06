@@ -48,6 +48,8 @@ jobs:
           cp -R "$GITHUB_WORKSPACE/laravel-app/app/Http/Middleware/." app/Http/Middleware/
           cp -R "$GITHUB_WORKSPACE/laravel-app/app/Models/." app/Models/
           cp -R "$GITHUB_WORKSPACE/laravel-app/database/migrations/." database/migrations/
+          mkdir -p database/seeders
+          cp -R "$GITHUB_WORKSPACE/laravel-app/database/seeders/." database/seeders/
           cp -R "$GITHUB_WORKSPACE/laravel-app/resources/views/." resources/views/
           mkdir -p public/js tests/Feature
           cp -R "$GITHUB_WORKSPACE/laravel-app/public/js/." public/js/
@@ -71,4 +73,5 @@ jobs:
           php artisan view:cache
           php artisan route:list --except-vendor
           php artisan migrate --force
+          php artisan db:seed --class='Database\\Seeders\\BrokerDemoSeeder' --no-interaction
           php artisan test
