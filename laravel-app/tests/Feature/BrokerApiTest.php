@@ -8,7 +8,9 @@ use App\Models\BrokerPosition;
 use App\Models\BrokerServiceRequest;
 use App\Models\BrokerWallet;
 use App\Models\User;
+use Database\Seeders\BrokerDemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -593,6 +595,83 @@ class BrokerApiTest extends TestCase
             ->assertJsonCount(0);
 
         $this->assertDatabaseCount('broker_service_requests', 1);
+    }
+
+
+    public function test_demo_seeder_is_repeatable_and_never_promotes_or_resets_its_optional_user(): void
+    {
+        $keys = [
+            'BROKER_DEMO_USER_NAME',
+            'BROKER_DEMO_USER_EMAIL',
+            'BROKER_DEMO_USER_PASSWORD',
+        ];
+        $original = [];
+
+        foreach ($keys as $key) {
+            $original[$key] = [
+                'process' => getenv($key),
+                'env' => $_ENV[$key] ?? null,
+                'server' => $_SERVER[$key] ?? null,
+            ];
+        }
+
+        $setEnv = static function (string $key, string $value): void {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        };
+
+        try {
+            $setEnv('BROKER_DEMO_USER_NAME', 'Seeded Practice Trader');
+            $setEnv('BROKER_DEMO_USER_EMAIL', 'seeded-practice@example.test');
+            $setEnv('BROKER_DEMO_USER_PASSWORD', 'first-demo-password-2026');
+
+            Artisan::call('db:seed', [
+                '--class' => BrokerDemoSeeder::class,
+                '--no-interaction' => true,
+            ]);
+
+            $user = User::where('email', 'seeded-practice@example.test')->firstOrFail();
+            $firstPasswordHash = $user->password;
+
+            $this->assertSame('Seeded Practice Trader', $user->name);
+            $this->assertSame('user', $user->role);
+            $this->assertSame('active', $user->account_status);
+            $this->assertNotEmpty($user->referral_code);
+            $this->assertDatabaseCount('broker_assets', 5);
+
+            $setEnv('BROKER_DEMO_USER_PASSWORD', 'second-demo-password-2026');
+            Artisan::call('db:seed', [
+                '--class' => BrokerDemoSeeder::class,
+                '--no-interaction' => true,
+            ]);
+
+            $this->assertSame($firstPasswordHash, $user->fresh()->password);
+            $this->assertSame('user', $user->fresh()->role);
+            $this->assertDatabaseCount('users', 1);
+            $this->assertDatabaseCount('broker_assets', 5);
+        } finally {
+            foreach ($keys as $key) {
+                $process = $original[$key]['process'];
+                if ($process === false) {
+                    putenv($key);
+                } else {
+                    putenv($key . '=' . $process);
+                }
+
+                if ($original[$key]['env'] === null) {
+                    unset($_ENV[$key]);
+                } else {
+                    $_ENV[$key] = $original[$key]['env'];
+                }
+
+                if ($original[$key]['server'] === null) {
+                    unset($_SERVER[$key]);
+                } else {
+                    $_SERVER[$key] = $original[$key]['server'];
+                }
+            }
+        }
     }
 
 }
