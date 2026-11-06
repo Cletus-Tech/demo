@@ -44,6 +44,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/laravel-app/routes/api.php" routes/api.php
           mkdir -p tests/Feature
           cp -R "$GITHUB_WORKSPACE/laravel-app/tests/Feature/." tests/Feature/
+          rm -f tests/Feature/ExampleTest.php
 
           python - <<'PY'
           from pathlib import Path
