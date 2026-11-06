@@ -17,6 +17,10 @@ on:
 jobs:
   integration:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        laravel: ["11.0", "12.0"]
     steps:
       - uses: actions/checkout@v4
 
@@ -27,9 +31,11 @@ jobs:
           extensions: mbstring, pdo_sqlite, sqlite3
           coverage: none
 
-      - name: Create a disposable Laravel host and install the package
+      - name: Create a disposable Laravel host
+        run: composer create-project --prefer-dist "laravel/laravel:^${{ matrix.laravel }}" "$RUNNER_TEMP/broker-host" --no-interaction
+
+      - name: Install Sanctum and merge the package
         run: |
-          composer create-project "laravel/laravel:^12.0" "$RUNNER_TEMP/broker-host" --no-interaction --prefer-dist
           cd "$RUNNER_TEMP/broker-host"
           php artisan install:api --no-interaction
 
@@ -38,12 +44,11 @@ jobs:
           cp -R "$GITHUB_WORKSPACE/laravel-app/app/Models/." app/Models/
           cp -R "$GITHUB_WORKSPACE/laravel-app/database/migrations/." database/migrations/
           cp -R "$GITHUB_WORKSPACE/laravel-app/resources/views/." resources/views/
-          mkdir -p public/js
+          mkdir -p public/js tests/Feature
           cp -R "$GITHUB_WORKSPACE/laravel-app/public/js/." public/js/
           cp "$GITHUB_WORKSPACE/laravel-app/routes/web.php" routes/web.php
           cp "$GITHUB_WORKSPACE/laravel-app/routes/api.php" routes/api.php
-          mkdir -p tests/Feature
-          cp -R "$GITHUB_WORKSPACE/laravel-app/tests/Feature/." tests/Feature/
+          cp "$GITHUB_WORKSPACE/laravel-app/tests/Feature/BrokerApiTest.php" tests/Feature/
           rm -f tests/Feature/ExampleTest.php
 
           python - <<'PY'
@@ -59,7 +64,11 @@ jobs:
           PY
 
           php artisan key:generate --force
-
-      - name: Run Laravel package feature tests
-        working-directory: ${{ runner.temp }}/broker-host
-        run: php artisan test
+          export APP_ENV=testing
+          export DB_CONNECTION=sqlite
+          export DB_DATABASE=database/database.sqlite
+          touch database/database.sqlite
+          php artisan view:cache
+          php artisan route:list --except-vendor
+          php artisan migrate --force
+          php artisan test

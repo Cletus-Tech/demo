@@ -50,6 +50,7 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
    App\\Models\\User::where('email', 'owner@example.com')->update(['role' => 'superadmin', 'account_status' => 'active']);
    ```
    Replace the email with the account you control. Do not grant admin roles to untrusted users.
+10. Copy `tests/Feature/BrokerApiTest.php` into the host application's `tests/Feature/` directory, then run `php artisan view:cache`, `php artisan route:list --except-vendor` and `php artisan test`.
 
 ## API routes
 All browser API endpoints use `auth:sanctum` and same-origin session authentication. The browser adapter initializes the Sanctum CSRF cookie before write requests.
@@ -82,17 +83,17 @@ Example leveraged position payload:
 { "symbol": "BTC", "side": "buy", "margin_usd": 100, "leverage": 2, "duration_seconds": 120 }
 ```
 
-For buy/sell/convert and leveraged positions, the server reads the current seeded demo price and calculates asset quantity itself. The browser does not submit an execution price or authoritative quantity. A stable wallet-lock order and database transaction retries reduce concurrent swap/settlement conflicts.
+For buy/sell/convert and leveraged positions, the server reads the current seeded demo price and calculates asset quantity itself. The browser does not submit an execution price or authoritative quantity. Asset rows and user wallets are locked before demo trades update balances. Position settlement locks the position, then its asset quote, then the user's USD wallet; database transaction retries reduce transient lock conflicts.
 
 ## Demo-only limitations
-- Market prices are seeded demonstration values and moved with simulated random ticks; no licensed live exchange feed is connected.
+- Market prices are seeded demonstration values and moved with simulated random ticks; USD remains fixed at 1 as the accounting quote currency. No licensed live exchange feed is connected. The chart's older candles are generated illustrations, not historical exchange data.
 - Deposits and withdrawals only alter simulated demo balances. There is no payment gateway, real-money settlement, crypto custody or live trading.
 - Admin access is role-gated; role changes must be performed by a superadmin.
 - Referral tracking/reward processing, real customer support chat, live market data and external financial services are not implemented. Service cards record enquiries only.
-- This package is an integration foundation. The dashboard adapter covers the main trading and account flows, but a host-app integration and full regression test are still required before client handover.
+- This is a reusable integration package, not a complete Laravel framework distribution. CI now merges it into clean Laravel 11 and 12 hosts and runs feature tests; the eventual client host, browser-session cookie settings, production database locking and deployment still need their own smoke test.
 
 ## Verification status
-GitHub Actions runs PHP/JavaScript syntax checks and creates a disposable Laravel 12 + SQLite host to run package feature tests on pushes to this branch. The repository changes have been committed to `laravel-native-starter`. The CI integration job exercises the package in a disposable Laravel 12 + SQLite host. It does not deploy or include a production host. Browser-session behaviour, production database locking characteristics, deployment configuration and any client-specific integration still require verification in the eventual hosting environment. Do not use real funds.
+Two GitHub Actions workflows run on changes to this package. The static workflow checks PHP source syntax and the browser adapter's JavaScript syntax. The integration workflow provisions fresh Laravel 11 and Laravel 12 hosts with SQLite, installs Sanctum, merges the package, compiles Blade views, lists routes, runs migrations and executes the feature suite. These checks do not deploy the application or prove production database concurrency, real browser-cookie configuration or client-specific hosting behaviour. Those still require a smoke test in the eventual host environment. Do not use real funds.
 
 
 ## Automated integration tests
