@@ -449,4 +449,149 @@ class BrokerApiTest extends TestCase
             ->assertJsonPath('throttled', true);
     }
 
+
+    public function test_registration_login_logout_and_dashboard_session_protection(): void
+    {
+        $this->get('/dashboard')->assertRedirect(route('login'));
+
+        $credentials = [
+            'name' => 'Session Test User',
+            'email' => 'session-user@example.test',
+            'password' => 'a-strong-test-password',
+            'password_confirmation' => 'a-strong-test-password',
+        ];
+
+        $this->post('/register', $credentials)->assertRedirect(route('dashboard'));
+        $user = User::where('email', $credentials['email'])->firstOrFail();
+        $this->assertAuthenticatedAs($user);
+        $this->get('/dashboard')->assertOk();
+
+        // A browser session must also authenticate the same-origin Sanctum API.
+        $this->getJson('/api/broker/state')->assertOk();
+
+        $this->post('/logout')->assertRedirect(route('login'));
+        $this->assertGuest();
+        $this->get('/dashboard')->assertRedirect(route('login'));
+
+        $this->post('/login', [
+            'email' => $credentials['email'],
+            'password' => $credentials['password'],
+        ])->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_suspended_accounts_cannot_login_or_reuse_dashboard_or_api_sessions(): void
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('suspended-account-password'),
+            'account_status' => 'suspended',
+        ]);
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'suspended-account-password',
+        ])->assertSessionHasErrors('email');
+        $this->assertGuest();
+
+        $this->actingAs($user)->get('/dashboard')->assertForbidden();
+        $this->actingAs($user)->getJson('/api/broker/state')->assertForbidden();
+        $this->actingAs($user)->get('/admin')->assertForbidden();
+    }
+
+    public function test_sanctum_csrf_cookie_endpoint_is_available_for_the_browser_adapter(): void
+    {
+        $this->get('/sanctum/csrf-cookie')->assertNoContent();
+    }
+
+    public function test_take_profit_and_stop_loss_must_be_on_the_correct_side_of_entry(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user)->postJson('/api/broker/transactions', [
+            'type' => 'deposit',
+            'symbol' => 'USD',
+            'amount' => 500,
+        ])->assertCreated();
+
+        $invalidOrders = [
+            ['side' => 'buy', 'take_profit' => 67000],
+            ['side' => 'buy', 'stop_loss' => 69000],
+            ['side' => 'sell', 'take_profit' => 69000],
+            ['side' => 'sell', 'stop_loss' => 67000],
+        ];
+
+        foreach ($invalidOrders as $order) {
+            $this->postJson('/api/broker/positions', [
+                'symbol' => 'BTC',
+                'side' => $order['side'],
+                'margin_usd' => 50,
+                'leverage' => 2,
+            ] + $order)->assertUnprocessable();
+        }
+
+        $this->assertDatabaseCount('broker_positions', 0);
+        $this->assertEqualsWithDelta(
+            500.0,
+            (float) BrokerWallet::where('user_id', $user->id)->where('symbol', 'USD')->value('balance'),
+            0.00000001
+        );
+    }
+
+    public function test_short_position_stop_loss_uses_short_pnl_direction_and_releases_remaining_margin(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user)->postJson('/api/broker/transactions', [
+            'type' => 'deposit',
+            'symbol' => 'USD',
+            'amount' => 500,
+        ])->assertCreated();
+
+        $opened = $this->postJson('/api/broker/positions', [
+            'symbol' => 'BTC',
+            'side' => 'sell',
+            'margin_usd' => 100,
+            'leverage' => 2,
+            'stop_loss' => 69000,
+        ])->assertCreated();
+
+        $position = BrokerPosition::findOrFail($opened->json('position.id'));
+        BrokerAsset::where('symbol', 'BTC')->update(['price' => 69000]);
+
+        $this->postJson('/api/broker/positions/settle', [])
+            ->assertOk()
+            ->assertJsonFragment(['reason' => 'stop_loss']);
+
+        $position->refresh();
+        $this->assertSame('closed', $position->status);
+        $this->assertSame('stop_loss', $position->close_reason);
+        $this->assertLessThan(0, (float) $position->pnl);
+        $this->assertGreaterThan(0, (float) BrokerWallet::where('user_id', $user->id)->where('symbol', 'USD')->value('balance'));
+        $this->assertLessThan(
+            500,
+            (float) BrokerWallet::where('user_id', $user->id)->where('symbol', 'USD')->value('balance')
+        );
+    }
+
+    public function test_service_enquiries_are_validated_and_private_to_the_requesting_user(): void
+    {
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+
+        $this->actingAs($owner)->postJson('/api/broker/services', [
+            'service_key' => 'signals',
+            'details' => 'Please share information about the demo signals service.',
+        ])->assertCreated();
+
+        $this->getJson('/api/broker/services')->assertOk()->assertJsonCount(1);
+        $this->postJson('/api/broker/services', [
+            'service_key' => 'unlisted_financial_product',
+            'details' => 'This key must not be accepted.',
+        ])->assertUnprocessable();
+
+        $this->actingAs($other)->getJson('/api/broker/services')
+            ->assertOk()
+            ->assertJsonCount(0);
+
+        $this->assertDatabaseCount('broker_service_requests', 1);
+    }
+
 }
