@@ -324,8 +324,8 @@ class BrokerApiTest extends TestCase
 
         $this->postJson('/api/broker/notifications/read')->assertOk();
 
-        $this->assertNull($mine->fresh()->read_at);
-        $this->assertNotNull($theirs->fresh()->read_at);
+        $this->assertNotNull($mine->fresh()->read_at);
+        $this->assertNull($theirs->fresh()->read_at);
     }
 
     public function test_admin_routes_require_an_admin_and_only_superadmin_can_change_roles(): void
