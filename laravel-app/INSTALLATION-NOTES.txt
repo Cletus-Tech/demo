@@ -10,7 +10,7 @@ Demo deposits and withdrawals affect simulated USD only. Buy, sell, convert and 
 
 See README.md for setup, route contracts, demo limitations and the required host-application smoke tests.
 
-An idempotent Database/Seeders/BrokerDemoSeeder.php restores the baseline demo assets. To optionally create an ordinary demo login, set BROKER_DEMO_USER_EMAIL and BROKER_DEMO_USER_PASSWORD (at least 12 characters) in the host environment before running `php artisan db:seed --class='Database\\Seeders\\BrokerDemoSeeder'`. The seeder never grants an admin role or overwrites an existing password/status.
+An idempotent Database/Seeders/BrokerDemoSeeder.php restores the baseline demo assets. To optionally create an ordinary demo login, set BROKER_DEMO_USER_EMAIL and BROKER_DEMO_USER_PASSWORD (at least 12 characters) in the host environment before running `php artisan db:seed --class='Database\Seeders\BrokerDemoSeeder'`. The seeder never grants an admin role or overwrites an existing password/status.
 
 Feature tests are in tests/Feature/BrokerApiTest.php. Copy them into the host application's tests/Feature directory and run php artisan test. The GitHub Actions integration matrix provisions a fresh Laravel 12 host and runs the Blade compile, route listing and feature tests.
 
