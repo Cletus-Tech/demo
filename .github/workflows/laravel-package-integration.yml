@@ -31,10 +31,6 @@ jobs:
           extensions: mbstring, pdo_sqlite, sqlite3
           coverage: none
 
-      - name: Allow advisory-blocked dependencies for the Laravel 11 compatibility fixture only
-        if: matrix.laravel == '11.0'
-        run: composer config --global audit.block-insecure false
-
       - name: Create a disposable Laravel host
         run: composer create-project --prefer-dist "laravel/laravel:^${{ matrix.laravel }}" "$RUNNER_TEMP/broker-host" --no-interaction
 

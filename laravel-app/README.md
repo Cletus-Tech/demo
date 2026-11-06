@@ -91,7 +91,7 @@ For buy/sell/convert and leveraged positions, the server reads the current seede
 - Deposits and withdrawals only alter simulated demo balances. There is no payment gateway, real-money settlement, crypto custody or live trading.
 - Admin access is role-gated; role changes must be performed by a superadmin.
 - Referral tracking/reward processing, real customer support chat, live market data and external financial services are not implemented. Service cards record enquiries only.
-- This is a reusable integration package, not a complete Laravel framework distribution. CI now merges it into clean Laravel 11 and 12 hosts and runs feature tests; the eventual client host, browser-session cookie settings, production database locking and deployment still need their own smoke test.
+- This is a reusable integration package, not a complete Laravel framework distribution. CI now merges it into a clean Laravel 12 host and runs feature tests; the eventual client host, browser-session cookie settings, production database locking and deployment still need their own smoke test.
 
 ## Verification status
 Two GitHub Actions workflows run on changes to this package. The static workflow checks PHP source syntax and the browser adapter's JavaScript syntax. The integration workflow provisions fresh Laravel 12 host with SQLite, installs Sanctum, merges the package, compiles Blade views, lists routes, runs migrations and executes the feature suite. These checks do not deploy the application or prove production database concurrency, real browser-cookie configuration or client-specific hosting behaviour. Those still require a smoke test in the eventual host environment. Do not use real funds.
