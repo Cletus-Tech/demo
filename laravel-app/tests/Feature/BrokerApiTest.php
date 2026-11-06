@@ -464,14 +464,14 @@ class BrokerApiTest extends TestCase
 
         $this->post('/register', $credentials)->assertRedirect(route('dashboard'));
         $user = User::where('email', $credentials['email'])->firstOrFail();
-        $this->assertAuthenticatedAs($user);
+        $this->assertAuthenticatedAs($user, 'web');
         $this->get('/dashboard')->assertOk();
 
         // A browser session must also authenticate the same-origin Sanctum API.
         $this->getJson('/api/broker/state')->assertOk();
 
         $this->post('/logout')->assertRedirect(route('login'));
-        $this->assertGuest();
+        $this->assertGuest('web');
         $this->get('/dashboard')->assertRedirect(route('login'));
 
         $this->post('/login', [
