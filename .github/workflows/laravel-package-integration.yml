@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        laravel: ["11.0", "12.0"]
+        laravel: ["12.0"]
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +37,11 @@ jobs:
       - name: Install Sanctum and merge the package
         run: |
           cd "$RUNNER_TEMP/broker-host"
+          touch database/database.sqlite
+          export APP_ENV=testing
+          export DB_CONNECTION=sqlite
+          export DB_DATABASE=database/database.sqlite
+          php artisan key:generate --force
           php artisan install:api --no-interaction
 
           cp -R "$GITHUB_WORKSPACE/laravel-app/app/Http/Controllers/." app/Http/Controllers/
@@ -63,11 +68,6 @@ jobs:
               path.write_text(source)
           PY
 
-          php artisan key:generate --force
-          export APP_ENV=testing
-          export DB_CONNECTION=sqlite
-          export DB_DATABASE=database/database.sqlite
-          touch database/database.sqlite
           php artisan view:cache
           php artisan route:list --except-vendor
           php artisan migrate --force

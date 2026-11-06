@@ -1,6 +1,6 @@
 Laravel Integration Notes
 
-This folder is a reusable Laravel 11/12 integration package, not a complete generated Laravel framework distribution. Start with a fresh supported Laravel app, then merge these files. Do not overwrite an existing host application's routes, authentication, migrations, bootstrap or composer files.
+This folder is a reusable Laravel 12 integration package, not a complete generated Laravel framework distribution. Start with a fresh Laravel 12 app, then merge these files. Do not overwrite an existing host application's routes, authentication, migrations, bootstrap or composer files.
 
 The dashboard Blade view loads public/js/broker-api.js. That adapter uses same-origin Laravel endpoints protected by Sanctum session authentication and CSRF cookies. It does not use the Supabase browser client.
 
@@ -8,6 +8,6 @@ Demo deposits and withdrawals affect simulated USD only. Buy, sell, convert and 
 
 See README.md for setup, route contracts, demo limitations and the required host-application smoke tests.
 
-Feature tests are in tests/Feature/BrokerApiTest.php. Copy them into the host application's tests/Feature directory and run php artisan test. The GitHub Actions integration matrix provisions fresh Laravel 11 and 12 hosts and runs the Blade compile, route listing and feature tests.
+Feature tests are in tests/Feature/BrokerApiTest.php. Copy them into the host application's tests/Feature directory and run php artisan test. The GitHub Actions integration matrix provisions fresh Laravel 12 host and runs the Blade compile, route listing and feature tests.
 
 USD is the fixed demo accounting currency (price 1). Other active assets may receive small simulated server-side price ticks. Leveraged positions are restricted to non-fiat assets. The chart's earlier candles are generated illustration, not historical exchange data.

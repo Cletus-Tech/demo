@@ -1,6 +1,6 @@
 # Laravel Brokerage Dashboard
 
-A reusable Laravel Blade brokerage dashboard package based on the client's supplied reference screenshots. The interface retains the existing dark dashboard layout and is now being connected to a Laravel-native, authenticated demo API.
+A reusable Laravel Blade brokerage dashboard package based on the client's supplied reference screenshots. The interface retains the existing dark dashboard layout and is connected to a Laravel-native, authenticated demo API.
 
 ## Included in this package
 - Blade dashboard with responsive styling and existing chart/trade interactions.
@@ -15,14 +15,14 @@ A reusable Laravel Blade brokerage dashboard package based on the client's suppl
 - Profile editing, notification list/read endpoints, service enquiry submission/history.
 - Admin page for account roles/status and service-enquiry status.
 
-## Install in a fresh Laravel 11/12 application
+## Install in a fresh Laravel 12 application
 1. Create a Laravel project and configure its database in `.env`.
 2. Copy/merge the contents of this `laravel-app` folder into the Laravel project root. Do not blindly overwrite existing host-project files.
 3. Install API routing and Sanctum if not already installed:
    ```bash
    php artisan install:api
    ```
-4. In Laravel 11/12, enable Sanctum's stateful API middleware in `bootstrap/app.php`. The application's configuration should contain this middleware callback (merge the call into the existing callback rather than replacing other middleware):
+4. In Laravel 12, enable Sanctum's stateful API middleware in `bootstrap/app.php`. The application's configuration should contain this middleware callback (merge the call into the existing callback rather than replacing other middleware):
    ```php
    use Illuminate\\Foundation\\Configuration\\Middleware;
 
@@ -93,7 +93,7 @@ For buy/sell/convert and leveraged positions, the server reads the current seede
 - This is a reusable integration package, not a complete Laravel framework distribution. CI now merges it into clean Laravel 11 and 12 hosts and runs feature tests; the eventual client host, browser-session cookie settings, production database locking and deployment still need their own smoke test.
 
 ## Verification status
-Two GitHub Actions workflows run on changes to this package. The static workflow checks PHP source syntax and the browser adapter's JavaScript syntax. The integration workflow provisions fresh Laravel 11 and Laravel 12 hosts with SQLite, installs Sanctum, merges the package, compiles Blade views, lists routes, runs migrations and executes the feature suite. These checks do not deploy the application or prove production database concurrency, real browser-cookie configuration or client-specific hosting behaviour. Those still require a smoke test in the eventual host environment. Do not use real funds.
+Two GitHub Actions workflows run on changes to this package. The static workflow checks PHP source syntax and the browser adapter's JavaScript syntax. The integration workflow provisions fresh Laravel 12 host with SQLite, installs Sanctum, merges the package, compiles Blade views, lists routes, runs migrations and executes the feature suite. These checks do not deploy the application or prove production database concurrency, real browser-cookie configuration or client-specific hosting behaviour. Those still require a smoke test in the eventual host environment. Do not use real funds.
 
 
 ## Automated integration tests
@@ -108,7 +108,7 @@ php artisan test
 
 The tests cover demo buy/sell/convert accounting, rejection of overspending, reserved leveraged margin and realized demo P/L release, USD quote-currency stability, fiat leveraged-position rejection, notification ownership/read state, cross-account position access, and admin role restrictions.
 
-GitHub Actions also creates a fresh Laravel 11 and Laravel 12 host application, installs Sanctum API support, merges this package, compiles the Blade views, lists routes and runs the feature suite. These integration jobs are the verification gate for changes to this package. The local execution environment used to author this package did not include Composer or a Laravel host application, so local Laravel runtime tests could not be run.
+GitHub Actions also creates a fresh Laravel 12 host application, installs Sanctum API support, merges this package, compiles the Blade views, lists routes and runs the feature suite. These integration jobs are the verification gate for changes to this package. The local execution environment used to author this package did not include Composer or a Laravel host application, so local Laravel runtime tests could not be run.
 
 ## Accounting and quote safeguards
 

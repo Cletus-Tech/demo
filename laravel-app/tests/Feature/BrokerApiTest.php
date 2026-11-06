@@ -162,6 +162,8 @@ class BrokerApiTest extends TestCase
             'type' => 'buy',
             'symbol' => 'BTC',
             'quote_amount_usd' => 340,
+            'quantity' => 999999,
+            'price' => 0.01,
         ])->assertCreated();
 
         $this->postJson('/api/broker/transactions', [
@@ -196,6 +198,12 @@ class BrokerApiTest extends TestCase
         $user = User::factory()->create();
 
         $this->actingAs($user)->postJson('/api/broker/transactions', [
+            'type' => 'deposit',
+            'symbol' => 'BTC',
+            'amount' => 5,
+        ])->assertUnprocessable();
+
+        $this->postJson('/api/broker/transactions', [
             'type' => 'deposit',
             'symbol' => 'USD',
             'amount' => 10,
@@ -326,6 +334,60 @@ class BrokerApiTest extends TestCase
 
         $this->assertNotNull($mine->fresh()->read_at);
         $this->assertNull($theirs->fresh()->read_at);
+    }
+
+    public function test_automatic_take_profit_is_rechecked_and_settled_at_the_locked_server_price(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->postJson('/api/broker/transactions', [
+            'type' => 'deposit',
+            'symbol' => 'USD',
+            'amount' => 500,
+        ])->assertCreated();
+
+        $opened = $this->postJson('/api/broker/positions', [
+            'symbol' => 'BTC',
+            'side' => 'buy',
+            'margin_usd' => 100,
+            'leverage' => 1,
+            'take_profit' => 68100,
+        ])->assertCreated();
+
+        $positionId = $opened->json('position.id');
+        BrokerAsset::where('symbol', 'BTC')->update(['price' => 68200]);
+
+        $this->postJson('/api/broker/positions/settle', [])
+            ->assertOk()
+            ->assertJsonFragment(['reason' => 'take_profit']);
+
+        $position = BrokerPosition::findOrFail($positionId);
+        $this->assertSame('closed', $position->status);
+        $this->assertSame('take_profit', $position->close_reason);
+    }
+
+    public function test_service_enquiries_are_private_to_their_owner(): void
+    {
+        $owner = User::factory()->create();
+
+        $this->actingAs($owner)->postJson('/api/broker/services', [
+            'service_key' => 'cold_storage',
+            'details' => 'Please send information.',
+        ])->assertCreated();
+
+        $this->assertSame(1, BrokerServiceRequest::where('user_id', $owner->id)->count());
+
+        $other = User::factory()->create();
+        $this->actingAs($other)->getJson('/api/broker/services')
+            ->assertOk()
+            ->assertExactJson([]);
+    }
+
+    public function test_suspended_accounts_are_blocked_from_broker_api(): void
+    {
+        $user = User::factory()->create(['account_status' => 'suspended']);
+
+        $this->actingAs($user)->getJson('/api/broker/state')->assertForbidden();
     }
 
     public function test_admin_routes_require_an_admin_and_only_superadmin_can_change_roles(): void
