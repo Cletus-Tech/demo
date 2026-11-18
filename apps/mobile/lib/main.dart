@@ -1370,6 +1370,10 @@ class _HomeTab extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (owner) ...[
+                  const SizedBox(height: 20),
+                  const _CentreOverview(),
+                ],
                 if (admin) ...[
                   const SizedBox(height: 20),
                   Card(
@@ -1422,6 +1426,125 @@ class _HomeTab extends StatelessWidget {
         ),
       );
     },
+  );
+}
+
+class _CentreOverview extends StatefulWidget {
+  const _CentreOverview();
+
+  @override
+  State<_CentreOverview> createState() => _CentreOverviewState();
+}
+
+class _CentreOverviewState extends State<_CentreOverview> {
+  late Future<Map<String, int>> _overview;
+
+  @override
+  void initState() {
+    super.initState();
+    _overview = _loadOverview();
+  }
+
+  Future<Map<String, int>> _loadOverview() async {
+    final client = Supabase.instance.client;
+    final results = await Future.wait([
+      client.from('students').select('id'),
+      client.from('classes').select('id'),
+      client.from('subjects').select('id'),
+      client.from('tutors').select('id'),
+      client.from('lessons').select('id'),
+    ]);
+    return {
+      'students': results[0].length,
+      'classes': results[1].length,
+      'subjects': results[2].length,
+      'tutors': results[3].length,
+      'lessons': results[4].length,
+    };
+  }
+
+  Future<void> _refresh() async {
+    final next = _loadOverview();
+    setState(() => _overview = next);
+    await next;
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(17),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('CENTRE OVERVIEW',
+            style: TextStyle(fontSize: 11, letterSpacing: 1.1,
+              fontWeight: FontWeight.w800, color: AppColors.muted)),
+          const SizedBox(height: 6),
+          const Text('Live records from your centre',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
+              color: AppColors.ink)),
+          const SizedBox(height: 14),
+          FutureBuilder<Map<String, int>>(
+            future: _overview,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Padding(
+                  padding: EdgeInsets.all(18),
+                  child: Center(child: CircularProgressIndicator(
+                    color: AppColors.brown)),
+                );
+              }
+              if (snapshot.hasError) {
+                return const _InfoNotice(
+                  message: 'Centre figures could not be loaded with the current account permissions. Refresh or check the owner access settings.',
+                );
+              }
+              final data = snapshot.data!;
+              final entries = <MapEntry<String, String>>[
+                MapEntry('Students', data['students'].toString()),
+                MapEntry('Classes', data['classes'].toString()),
+                MapEntry('Subjects', data['subjects'].toString()),
+                MapEntry('Tutors', data['tutors'].toString()),
+                MapEntry('Lessons', data['lessons'].toString()),
+              ];
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: entries.map((entry) => Container(
+                  width: 112,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                  decoration: BoxDecoration(
+                    color: AppColors.paleGold,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(entry.value,
+                        style: const TextStyle(fontSize: 22,
+                          fontWeight: FontWeight.w800, color: AppColors.brown)),
+                      const SizedBox(height: 3),
+                      Text(entry.key,
+                        style: const TextStyle(fontSize: 12,
+                          color: AppColors.ink)),
+                    ],
+                  ),
+                )).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh_rounded, size: 17),
+              label: const Text('Refresh figures'),
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
