@@ -417,6 +417,67 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
     };
   }
 
+  Future<void> _enrolStudent() async {
+    final db = Supabase.instance.client;
+    try {
+      final session = await db.from('academic_sessions')
+        .select('id,name').eq('is_current', true).maybeSingle();
+      if (session == null) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Set a current academic session in Academic management first.')));
+        return;
+      }
+      final classes = await db.from('classes')
+        .select('id,name,level').eq('status', 'active').order('name');
+      if (classes.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Create an active class before enrolling students.')));
+        return;
+      }
+      String? classId = classes.first['id'].toString();
+      final selected = await showDialog<String>(context: context,
+        builder: (ctx) => StatefulBuilder(builder: (ctx, refreshDialog) => AlertDialog(
+          title: Text('Enrol in ' + session['name'].toString()),
+          content: DropdownButtonFormField<String>(
+            value: classId,
+            decoration: const InputDecoration(labelText: 'Choose class'),
+            items: classes.map<DropdownMenuItem<String>>((row) =>
+              DropdownMenuItem<String>(value: row['id'].toString(),
+                child: Text(row['name'].toString() +
+                  (row['level'] == null ? '' : ' • ' + row['level'].toString())))).toList(),
+            onChanged: (value) => refreshDialog(() => classId = value),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, classId), child: const Text('Enrol student')),
+          ],
+        )));
+      if (selected == null) return;
+      final existing = await db.from('enrolments').select('id')
+        .eq('student_id', widget.student['id'])
+        .eq('session_id', session['id']).eq('status', 'active');
+      if ((existing as List).isNotEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This student already has an active enrolment for the current session.')));
+        return;
+      }
+      await db.from('enrolments').insert({
+        'student_id': widget.student['id'],
+        'class_id': selected,
+        'session_id': session['id'],
+        'status': 'active',
+      });
+      if (mounted) {
+        setState(() => _records = _load());
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Student enrolled successfully. Their published class lessons will now appear in Learning.')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not enrol student: ' + e.toString())));
+    }
+  }
+
   Widget _section(String title, List<Map<String, dynamic>> rows,
       String empty, String Function(Map<String, dynamic>) primary,
       String Function(Map<String, dynamic>) secondary) {
@@ -457,7 +518,10 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
     final profile = student['profiles'] as Map<String, dynamic>?;
     final name = profile?['full_name'] as String? ?? 'Unlinked student record';
     return Scaffold(
-      appBar: AppBar(title: const Text('Student profile')),
+      appBar: AppBar(title: const Text('Student profile'), actions: [
+        IconButton(tooltip: 'Enrol student', onPressed: _enrolStudent,
+          icon: const Icon(Icons.person_add_alt_1_rounded)),
+      ]),
       body: RefreshIndicator(
         onRefresh: () async { final next = _load(); setState(() => _records = next); await next; },
         child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
