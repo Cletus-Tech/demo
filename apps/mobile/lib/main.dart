@@ -535,7 +535,7 @@ class _LearningTabState extends State<_LearningTab> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.menu_book_rounded, color: AppColors.brown)),
             title: Text(lesson['title'] ?? 'Lesson', style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
-            subtitle: Padding(padding: const EdgeInsets.only(top: 5), child: Text([if (meta.isNotEmpty) meta, if (lesson['duration_minutes'] != null) '\${lesson['duration_minutes']} min'].join('  •  '), style: const TextStyle(color: AppColors.muted))),
+            subtitle: Padding(padding: const EdgeInsets.only(top: 5), child: Text([if (meta.isNotEmpty) meta, if (lesson['duration_minutes'] != null) '${lesson["duration_minutes"]} min'].join('  •  '), style: const TextStyle(color: AppColors.muted))),
             trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
             onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LessonDetailPage(lesson: lesson))),
           )));
