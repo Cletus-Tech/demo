@@ -4048,8 +4048,35 @@ class _ClassroomPageState extends State<ClassroomPage> {
         Text(_postLabel(post['post_type']?.toString()??''),style:const TextStyle(fontSize:10,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.brown))]),
       const SizedBox(height:8),Text(post['title']?.toString()??'Class post',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800,color:AppColors.ink)),
       if((post['body']??'').toString().isNotEmpty)...[const SizedBox(height:6),Text(post['body'].toString(),style:const TextStyle(color:AppColors.muted,height:1.5))],
-      if(hasMedia)...[const SizedBox(height:10),OutlinedButton.icon(onPressed:()=>_openMedia(post),icon:const Icon(Icons.open_in_new_rounded),label:const Text('Open attached resource'))],
+      if(hasMedia)...[
+        const SizedBox(height:10),
+        _mediaPreview(post),
+        const SizedBox(height:5),
+        OutlinedButton.icon(onPressed:()=>_openMedia(post),
+          icon:Icon((path??url??'').toLowerCase().contains('.mp4')||(path??url??'').toLowerCase().contains('.webm')?Icons.play_circle_outline:Icons.open_in_new_rounded),
+          label:const Text('Open attached resource')),
+      ],
     ])));
+  }
+  Widget _mediaPreview(Map<String,dynamic> post){
+    final path=post['media_path']?.toString();
+    final external=post['media_url']?.toString();
+    final source=(path??external??'').split('?').first.toLowerCase();
+    final isImage=['.jpg','.jpeg','.png','.webp','.gif'].any(source.endsWith);
+    if(!isImage)return Container(width:double.infinity,padding:const EdgeInsets.all(14),
+      decoration:BoxDecoration(color:AppColors.cream,borderRadius:BorderRadius.circular(12)),
+      child:Row(children:[Icon(source.endsWith('.pdf')?Icons.picture_as_pdf_outlined:Icons.play_circle_outline_rounded,
+        color:AppColors.brown,size:30),const SizedBox(width:10),
+        Expanded(child:Text(source.endsWith('.pdf')?'PDF learning material':'Video learning resource',
+          style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)))]));
+    final future=path!=null
+      ?Supabase.instance.client.storage.from('classroom-resources').createSignedUrl(path,3600)
+      :Future<String>.value(external??'');
+    return FutureBuilder<String>(future:future,builder:(context,s){
+      if(s.connectionState!=ConnectionState.done||!s.hasData)return const SizedBox(height:80,child:Center(child:CircularProgressIndicator(strokeWidth:2)));
+      return ClipRRect(borderRadius:BorderRadius.circular(12),child:Image.network(s.data!,height:170,width:double.infinity,fit:BoxFit.cover,
+        errorBuilder:(_,__,___)=>const SizedBox(height:70,child:Center(child:Text('Image preview unavailable')))));
+    });
   }
   @override
   Widget build(BuildContext context)=>Scaffold(
