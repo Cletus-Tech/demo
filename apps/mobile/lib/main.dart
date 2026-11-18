@@ -910,7 +910,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   });
   @override
   Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('Academic management'),bottom:TabBar(controller:_tabs,tabs:const[
+    appBar:AppBar(title:const Text('Academic management'),bottom:TabBar(isScrollable:true,controller:_tabs,tabs:const[
       Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Sessions'),Tab(text:'Assessments'),
     ])),
     body:RefreshIndicator(onRefresh:_refresh,child:TabBarView(controller:_tabs,children:[
