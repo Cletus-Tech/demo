@@ -1055,25 +1055,19 @@ class _AdminAttendancePageState extends State<AdminAttendancePage> {
   Future<Map<String, dynamic>> _loadOptions() async {
     final db = Supabase.instance.client;
     final classData = await db.rpc('attendance_available_classes');
-    final sessionData = await db.from('academic_sessions')
-      .select('id,name,starts_on,ends_on,is_current')
-      .order('starts_on', ascending: false);
     final classes = List<Map<String, dynamic>>.from(classData as List);
-    final sessions = List<Map<String, dynamic>>.from(sessionData);
     if (mounted) {
       setState(() {
         _classId = classes.isEmpty ? null : classes.first['id'].toString();
-        final current = sessions.where((r) => r['is_current'] == true).toList();
-        _sessionId = current.isNotEmpty ? current.first['id'].toString()
-            : (sessions.isEmpty ? null : sessions.first['id'].toString());
-        if (_classId != null && _sessionId != null) _roster = _loadRoster();
+        _sessionId = null;
+        if (_classId != null) _roster = _loadRoster();
       });
     }
-    return {'classes': classes, 'sessions': sessions};
+    return {'classes': classes};
   }
 
   Future<List<Map<String, dynamic>>> _loadRoster() async {
-    if (_classId == null || _sessionId == null) return [];
+    if (_classId == null) return [];
     final result = await Supabase.instance.client.rpc('class_attendance_roster', params: {
       'p_class_id': _classId, 'p_session_id': _sessionId, 'p_attendance_date': _dateKey,
     });
@@ -1147,30 +1141,23 @@ class _AdminAttendancePageState extends State<AdminAttendancePage> {
       if (options.hasError) return Center(child: Padding(padding: const EdgeInsets.all(20),
         child: _InfoNotice(message: 'Attendance setup could not be loaded: ' + options.error.toString())));
       final classes = List<Map<String, dynamic>>.from(options.data?['classes'] ?? []);
-      final sessions = List<Map<String, dynamic>>.from(options.data?['sessions'] ?? []);
-      if (classes.isEmpty || sessions.isEmpty) return ListView(padding: const EdgeInsets.all(20), children: [
+      if (classes.isEmpty) return ListView(padding: const EdgeInsets.all(20), children: [
         const Text('Class attendance', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
         const SizedBox(height: 12),
-        _InfoNotice(message: classes.isEmpty
-          ? 'No active classes are available to this account. If you are a tutor, ask the centre to assign you to a class. Otherwise, create an active class.'
-          : 'Create an academic session before taking attendance.'),
+        const _InfoNotice(message: 'No active classes are available to this account. If you are a tutor, ask the centre to assign you to a class. Otherwise, create an active class.'),
       ]);
       return Column(children: [
         Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Class attendance register', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.ink)),
             const SizedBox(height: 5),
-            const Text('Select the class, session and date. Mark each learner, then save the register.',
+            const Text('Select the class and date. Mark each approved learner, then save the register.',
               style: TextStyle(color: AppColors.muted, height: 1.4)),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(value: _classId, decoration: const InputDecoration(labelText: 'Class'),
               items: classes.map((r) => DropdownMenuItem<String>(value: r['id'].toString(),
                 child: Text(r['name'].toString() + (r['level'] == null ? '' : ' • ' + r['level'].toString())))).toList(),
               onChanged: (v) { _classId = v; _reloadRoster(); }),
-            const SizedBox(height: 9),
-            DropdownButtonFormField<String>(value: _sessionId, decoration: const InputDecoration(labelText: 'Academic session'),
-              items: sessions.map((r) => DropdownMenuItem<String>(value: r['id'].toString(), child: Text(r['name'].toString()))).toList(),
-              onChanged: (v) { _sessionId = v; _reloadRoster(); }),
             const SizedBox(height: 9),
             Row(children: [
               Expanded(child: OutlinedButton.icon(onPressed: _chooseDate,
@@ -1181,14 +1168,14 @@ class _AdminAttendancePageState extends State<AdminAttendancePage> {
             ]),
           ])),
         const Divider(height: 1, color: AppColors.line),
-        Expanded(child: _roster == null ? const Center(child: Text('Choose a class and session.'))
+        Expanded(child: _roster == null ? const Center(child: Text('Choose a class.'))
           : FutureBuilder<List<Map<String, dynamic>>>(future: _roster, builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: AppColors.brown));
             if (snapshot.hasError) return ListView(padding: const EdgeInsets.all(18), children: [
               _InfoNotice(message: 'The register could not be loaded. ' + snapshot.error.toString())]);
             final rows = snapshot.data ?? [];
             if (rows.isEmpty) return ListView(padding: const EdgeInsets.all(18), children: const [
-              _InfoNotice(message: 'No active learners are enrolled in this class for the selected session. Enrol learners first.')]);
+              _InfoNotice(message: 'No learners with approved learning access are assigned to this class yet.')]);
             final marked = rows.where((r) => (_statuses[r['student_id'].toString()] ?? 'unmarked') != 'unmarked').length;
             return ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 24), children: [
               Row(children: [
