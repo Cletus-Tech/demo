@@ -2420,7 +2420,7 @@ class _HomeTab extends StatelessWidget {
                   padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(color: AppColors.brown,
                     borderRadius: BorderRadius.circular(16)),
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(parent ? 'Stay connected to your child’s learning' : 'Your learning journey starts here',
