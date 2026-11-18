@@ -2294,7 +2294,7 @@ class ExamPreparationPage extends StatelessWidget {
       'full': 'National Business and Technical Examinations Board',
       'exam': 'NBC • NTC • ANBC • ANTC',
       'url': 'https://nabteb.gov.ng/',
-      'logo': 'https://nabteb.gov.ng/wp-content/uploads/2025/09/logo-150x150.png',
+      'logo': 'https://nabteb.gov.ng/favicon.ico',
       'domain': 'nabteb.gov.ng',
       'note': 'Business, technical and vocational examination pathways.',
     },
