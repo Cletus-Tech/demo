@@ -2491,20 +2491,26 @@ class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
     return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
   Future<void> _refresh() async { final next = _load(); setState(() => _items = next); await next; }
+  Future<void> _openHistory() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const StudentAssessmentHistoryPage()));
+  }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Practice and mock tests')),
+    appBar: AppBar(title: const Text('Practice and mock tests'),
+      actions: [IconButton(tooltip: 'My results', onPressed: _openHistory, icon: const Icon(Icons.history_rounded))]),
     body: RefreshIndicator(color: AppColors.brown, onRefresh: _refresh,
       child: FutureBuilder<List<Map<String, dynamic>>>(future: _items, builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: AppColors.brown));
         if (snap.hasError) return ListView(padding: const EdgeInsets.all(22), children: const [_InfoNotice(message: 'Practice tests could not be loaded. Check your connection and try again.')]);
         final items = snap.data ?? [];
-        if (items.isEmpty) return ListView(padding: const EdgeInsets.all(22), children: const [_InfoNotice(message: 'There are no published practice tests for your current class yet. Your tutor will publish eligible tests here when they are ready.')]);
         return ListView(padding: const EdgeInsets.all(20), children: [
           const Text('Available for your class', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
           const SizedBox(height: 6),
           const Text('Only tests published for your active class enrolment appear here.', style: TextStyle(color: AppColors.muted)),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(onPressed: _openHistory, icon: const Icon(Icons.history_rounded), label: const Text('View my previous results')),
+          const SizedBox(height: 14),
+          if (items.isEmpty) const _InfoNotice(message: 'There are no published practice tests for your current class yet. Your tutor will publish eligible tests here when they are ready.'),
           ...items.map((item) {
             final count = (item['question_count'] as num?)?.toInt() ?? 0;
             final duration = (item['duration_minutes'] as num?)?.toInt();
@@ -2520,6 +2526,78 @@ class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
               trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 17, color: AppColors.brown),
               onTap: count == 0 ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(
                 builder: (_) => StudentAssessmentRunnerPage(assessment: item))),
+            )));
+          }),
+        ]);
+      })),
+  );
+}
+
+class StudentAssessmentHistoryPage extends StatefulWidget {
+  const StudentAssessmentHistoryPage({super.key});
+  @override
+  State<StudentAssessmentHistoryPage> createState() => _StudentAssessmentHistoryPageState();
+}
+class _StudentAssessmentHistoryPageState extends State<StudentAssessmentHistoryPage> {
+  late Future<List<Map<String,dynamic>>> _history;
+  @override
+  void initState() { super.initState(); _history = _load(); }
+  Future<List<Map<String,dynamic>>> _load() async {
+    final raw = await Supabase.instance.client.rpc('student_assessment_history');
+    if (raw is! List) return [];
+    return raw.map((e) => Map<String,dynamic>.from(e as Map)).toList();
+  }
+  Future<void> _refresh() async { final next = _load(); setState(() => _history = next); await next; }
+  String _date(dynamic raw) {
+    final parsed = DateTime.tryParse(raw?.toString() ?? '');
+    if (parsed == null) return 'Date unavailable';
+    final d = parsed.toLocal();
+    return d.day.toString().padLeft(2,'0') + '/' + d.month.toString().padLeft(2,'0') + '/' + d.year.toString();
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('My assessment results')),
+    body: RefreshIndicator(color: AppColors.brown,onRefresh:_refresh,
+      child: FutureBuilder<List<Map<String,dynamic>>>(future:_history,builder:(context,snap){
+        if(snap.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+        if(snap.hasError)return ListView(padding:const EdgeInsets.all(22),children:[_InfoNotice(message:'Your result history could not be loaded. '+snap.error.toString())]);
+        final rows=snap.data??[];
+        if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(22),children:const [
+          _InfoNotice(message:'You have not submitted any assessments yet. Completed tests will appear here with their scores and dates.')
+        ]);
+        return ListView(padding:const EdgeInsets.all(18),children:[
+          const Text('Your completed tests',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
+          const SizedBox(height:6),
+          const Text('Scores are saved against your learner account.',style:TextStyle(color:AppColors.muted)),
+          const SizedBox(height:14),
+          ...rows.map((r){
+            final pct=(r['percentage'] as num?)?.toDouble();
+            final score=(r['score'] as num?)??0;
+            final total=(r['total_marks'] as num?)??0;
+            final passed=pct!=null&&pct>=50;
+            return Padding(padding:const EdgeInsets.only(bottom:10),child:Card(child:Padding(
+              padding:const EdgeInsets.all(15),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Container(width:48,height:48,decoration:BoxDecoration(color:AppColors.paleGold,borderRadius:BorderRadius.circular(12)),
+                  child:Icon(Icons.assignment_turned_in_outlined,color:AppColors.brown)),
+                const SizedBox(width:13),
+                Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  Text(r['assessment_title']?.toString()??'Assessment',style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink)),
+                  const SizedBox(height:4),
+                  Text((r['subject_name']??'Subject').toString()+' • '+(r['class_name']??'Class').toString()+' • '+(r['assessment_type']??'Test').toString(),
+                    style:const TextStyle(color:AppColors.muted,fontSize:12)),
+                  const SizedBox(height:7),
+                  Text(_date(r['submitted_at']),style:const TextStyle(color:AppColors.muted,fontSize:12)),
+                  const SizedBox(height:6),
+                  Text(score.toString()+' / '+total.toString()+' marks',
+                    style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+                ])),
+                const SizedBox(width:8),
+                Column(crossAxisAlignment:CrossAxisAlignment.end,children:[
+                  Text(pct==null?'—':pct.toStringAsFixed(1)+'%',
+                    style:TextStyle(fontWeight:FontWeight.w800,fontSize:18,color:passed?Colors.green.shade700:AppColors.brown)),
+                  Text(passed?'Good progress':'Keep practising',style:const TextStyle(fontSize:10,color:AppColors.muted)),
+                ]),
+              ]),
             )));
           }),
         ]);
@@ -2669,6 +2747,9 @@ class StudentAssessmentResultPage extends StatelessWidget {
     final score = (result['score'] as num?) ?? 0;
     final total = (result['total_marks'] as num?) ?? 0;
     final percent = (result['percentage'] as num?) ?? 0;
+    final review = result['review'] is List
+      ? (result['review'] as List).map((e) => Map<String,dynamic>.from(e as Map)).toList()
+      : <Map<String,dynamic>>[];
     return Scaffold(appBar: AppBar(title: const Text('Assessment result'), automaticallyImplyLeading: false),
       body: ListView(padding: const EdgeInsets.all(22), children: [
         const SizedBox(height: 24),
@@ -2688,6 +2769,44 @@ class StudentAssessmentResultPage extends StatelessWidget {
         ]))),
         const SizedBox(height: 18),
         const _InfoNotice(message: 'Your score has been saved to your assessment history. Your tutor or school may review and publish formal results separately.'),
+        if (review.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          const Text('Answer review',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:AppColors.ink)),
+          const SizedBox(height:10),
+          ...review.asMap().entries.map((entry) {
+            final index=entry.key;
+            final q=entry.value;
+            final opts=q['options'] is Map ? Map<String,dynamic>.from(q['options'] as Map) : <String,dynamic>{};
+            final selected=q['selected_answer']?.toString()??'Not answered';
+            final correct=q['correct_answer']?.toString()??'Not set';
+            final selectedLabel=opts[selected]?.toString()??selected;
+            final correctLabel=opts[correct]?.toString()??correct;
+            final isCorrect=q['is_correct']==true;
+            final explanation=q['explanation']?.toString()??'';
+            return Padding(padding:const EdgeInsets.only(bottom:10),child:Card(child:Padding(
+              padding:const EdgeInsets.all(15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Row(children:[
+                  Icon(isCorrect?Icons.check_circle_outline:Icons.highlight_off,
+                    color:isCorrect?Colors.green.shade700:Colors.red.shade700,size:20),
+                  const SizedBox(width:8),
+                  Text('Question '+(index+1).toString(),
+                    style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink)),
+                  const Spacer(),
+                  Text((q['marks']??0).toString()+' mark(s)',style:const TextStyle(fontSize:12,color:AppColors.muted)),
+                ]),
+                const SizedBox(height:9),
+                Text(q['question_text']?.toString()??'',style:const TextStyle(fontWeight:FontWeight.w600,color:AppColors.ink)),
+                const SizedBox(height:9),
+                Text('Your answer: '+selectedLabel,style:TextStyle(color:isCorrect?Colors.green.shade700:Colors.red.shade700)),
+                Text('Correct answer: '+correctLabel,style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+                if(explanation.trim().isNotEmpty)...[
+                  const SizedBox(height:8),
+                  Text('Explanation: '+explanation,style:const TextStyle(color:AppColors.muted,height:1.4)),
+                ],
+              ]),
+            )));
+          }),
+        ],
         const SizedBox(height: 22),
         FilledButton(style: FilledButton.styleFrom(backgroundColor: AppColors.brown, padding: const EdgeInsets.symmetric(vertical: 15)),
           onPressed: () => Navigator.of(context).pop(), child: const Text('Back to practice tests')),
