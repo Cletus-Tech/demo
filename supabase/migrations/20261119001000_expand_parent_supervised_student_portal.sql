@@ -16,6 +16,7 @@ declare
   v_upcoming_lessons jsonb;
   v_materials jsonb;
   v_assessments jsonb;
+  v_classroom_board jsonb;
   v_completed integer;
   v_available integer;
 begin
@@ -107,11 +108,23 @@ begin
     and exists (select 1 from public.learning_access_requests r join public.learning_programmes p on p.id = r.programme_id
       where r.user_id = st.user_id and r.status = 'approved' and p.class_id = a.class_id);
 
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'title', cp.title, 'post_type', cp.post_type, 'body', cp.body,
+    'media_path', cp.media_path, 'media_url', cp.media_url, 'created_at', cp.created_at
+  ) order by cp.created_at desc), '[]'::jsonb)
+  into v_classroom_board
+  from public.classroom_posts cp
+  join public.students st on st.id = p_student_id
+  join public.learning_access_requests r on r.user_id = st.user_id and r.status = 'approved'
+  join public.learning_programmes p on p.id = r.programme_id and p.class_id = cp.class_id
+  where cp.is_published = true;
+
   return jsonb_build_object('child', coalesce(v_child, '{}'::jsonb),
     'assignments', v_assignments, 'results', v_results, 'attendance', v_attendance,
     'lesson_progress', jsonb_build_object('completed', v_completed, 'available', v_available,
       'items', coalesce(v_lessons, '[]'::jsonb)),
-    'upcoming_lessons', v_upcoming_lessons, 'materials', v_materials, 'assessments', v_assessments);
+    'upcoming_lessons', v_upcoming_lessons, 'materials', v_materials, 'assessments', v_assessments,
+    'classroom_board', v_classroom_board);
 end;
 $function$;
 
