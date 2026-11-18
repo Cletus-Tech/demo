@@ -704,40 +704,118 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
     ]));
   }
 }
-class _AnalyticsTab extends StatelessWidget {
+class _AnalyticsTab extends StatefulWidget {
   const _AnalyticsTab();
+  @override
+  State<_AnalyticsTab> createState() => _AnalyticsTabState();
+}
+
+class _AnalyticsTabState extends State<_AnalyticsTab> {
+  late Future<Map<String, dynamic>> _stats;
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(20),
-    children: [
-      const Text('Your learning at a glance',
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
-          color: AppColors.ink)),
-      const SizedBox(height: 7),
-      const Text('A clear view of learning activity and academic progress.',
-        style: TextStyle(color: AppColors.muted, height: 1.45)),
-      const SizedBox(height: 22),
-      const _FeatureRow(icon: Icons.menu_book_outlined,
-        title: 'Lessons completed',
-        detail: 'Completed lesson totals will appear here.'),
-      const SizedBox(height: 10),
-      const _FeatureRow(icon: Icons.assignment_turned_in_outlined,
-        title: 'Assignments',
-        detail: 'Submitted and outstanding assignments.'),
-      const SizedBox(height: 10),
-      const _FeatureRow(icon: Icons.assessment_outlined,
-        title: 'Assessment performance',
-        detail: 'Scores and published assessment results.'),
-      const SizedBox(height: 10),
-      const _FeatureRow(icon: Icons.trending_up_rounded,
-        title: 'Progress over time',
-        detail: 'Your academic progress across learning periods.'),
-      const SizedBox(height: 18),
-      const _InfoNotice(
-        message: 'Analytics will populate from your actual lessons, submissions and published results. No progress figures are shown until the centre records that activity.',
-      ),
-    ],
+  void initState() {
+    super.initState();
+    _stats = _loadStats();
+  }
+
+  Future<Map<String, dynamic>> _loadStats() async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser!.id;
+    final student = await client.from('students')
+        .select('id').eq('user_id', userId).maybeSingle();
+    if (student == null) return {'linked': false};
+    final studentId = student['id'];
+    final values = await Future.wait([
+      client.from('enrolments').select('id').eq('student_id', studentId),
+      client.from('assignment_submissions').select('id').eq('student_id', studentId),
+      client.from('assessment_attempts').select('id').eq('student_id', studentId),
+      client.from('results').select('id').eq('student_id', studentId).not('published_at', 'is', null),
+    ]);
+    return {
+      'linked': true,
+      'enrolments': values[0].length,
+      'submissions': values[1].length,
+      'attempts': values[2].length,
+      'results': values[3].length,
+    };
+  }
+
+  Future<void> _refresh() async {
+    final next = _loadStats();
+    setState(() => _stats = next);
+    await next;
+  }
+
+  @override
+  Widget build(BuildContext context) => RefreshIndicator(
+    color: AppColors.brown,
+    onRefresh: _refresh,
+    child: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        const Text('Your learning at a glance',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+            color: AppColors.ink)),
+        const SizedBox(height: 7),
+        const Text('A clear view of your recorded learning activity and academic progress.',
+          style: TextStyle(color: AppColors.muted, height: 1.45)),
+        const SizedBox(height: 20),
+        FutureBuilder<Map<String, dynamic>>(
+          future: _stats,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator(color: AppColors.brown)),
+              );
+            }
+            if (snapshot.hasError) {
+              return const _InfoNotice(
+                message: 'Your learning statistics could not be loaded. Pull down to try again.',
+              );
+            }
+            final stats = snapshot.data!;
+            if (stats['linked'] != true) {
+              return const _InfoNotice(
+                message: 'Your learner profile has not yet been linked to a student record by the centre. Your analytics will appear after the centre completes your enrolment.',
+              );
+            }
+            return Column(
+              children: [
+                _FeatureRow(
+                  icon: Icons.class_outlined,
+                  title: 'Active enrolments',
+                  detail: '\${stats['enrolments']} recorded class enrolments',
+                ),
+                const SizedBox(height: 10),
+                _FeatureRow(
+                  icon: Icons.assignment_turned_in_outlined,
+                  title: 'Assignments submitted',
+                  detail: '\${stats['submissions']} submissions recorded',
+                ),
+                const SizedBox(height: 10),
+                _FeatureRow(
+                  icon: Icons.assessment_outlined,
+                  title: 'Assessment attempts',
+                  detail: '\${stats['attempts']} attempts recorded',
+                ),
+                const SizedBox(height: 10),
+                _FeatureRow(
+                  icon: Icons.trending_up_rounded,
+                  title: 'Published results',
+                  detail: '\${stats['results']} results available to you',
+                ),
+                const SizedBox(height: 18),
+                const _InfoNotice(
+                  message: 'These figures come from your actual learner records. Lesson completion is not yet tracked separately, so it is not included as a completed-lesson figure.',
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    ),
   );
 }
 
