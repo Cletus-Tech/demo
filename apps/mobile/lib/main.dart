@@ -1,13 +1,27 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() => runApp(const YoungLearnersApp());
+const supabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'https://lvpetmhhspuagbjojlks.supabase.co',
+);
+const supabasePublishableKey = String.fromEnvironment(
+  'SUPABASE_PUBLISHABLE_KEY',
+  defaultValue: 'sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB',
+);
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
+  runApp(const YoungLearnersApp());
+}
 
 abstract final class AppColors {
   static const ink = Color(0xFF29231F);
   static const brown = Color(0xFF4A3022);
   static const gold = Color(0xFFC99A3D);
   static const cream = Color(0xFFF7F5F1);
-  static const surface = Colors.white;
   static const muted = Color(0xFF746D66);
   static const line = Color(0xFFE9E4DC);
   static const paleGold = Color(0xFFF5EBD7);
@@ -22,7 +36,7 @@ class YoungLearnersApp extends StatelessWidget {
       seedColor: AppColors.brown,
       primary: AppColors.brown,
       secondary: AppColors.gold,
-      surface: AppColors.surface,
+      surface: Colors.white,
     );
     return MaterialApp(
       title: 'Young Learners Tutorial',
@@ -31,15 +45,13 @@ class YoungLearnersApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: scheme,
         scaffoldBackgroundColor: AppColors.cream,
-        fontFamily: 'Roboto',
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.cream,
           foregroundColor: AppColors.ink,
           elevation: 0,
-          centerTitle: false,
         ),
         cardTheme: CardThemeData(
-          color: AppColors.surface,
+          color: Colors.white,
           elevation: 0,
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
@@ -49,7 +61,7 @@ class YoungLearnersApp extends StatelessWidget {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: AppColors.surface,
+          fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
@@ -65,322 +77,342 @@ class YoungLearnersApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const LearnerHomePage(),
+      home: const AuthGate(),
+    );
+  }
+}
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late Session? _session;
+  StreamSubscription<AuthState>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _session = Supabase.instance.client.auth.currentSession;
+    _subscription = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+      if (mounted) setState(() => _session = event.session);
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _session == null ? const SignInPage() : const LearnerHomePage();
+}
+
+class SignInPage extends StatefulWidget {
+  const SignInPage({super.key});
+  @override
+  State<SignInPage> createState() => _SignInPageState();
+}
+
+class _SignInPageState extends State<SignInPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _creating = false;
+  bool _busy = false;
+  bool _obscure = true;
+  String? _message;
+  bool _error = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() { _busy = true; _message = null; });
+    try {
+      final auth = Supabase.instance.client.auth;
+      if (_creating) {
+        final response = await auth.signUp(
+          email: _email.text.trim(),
+          password: _password.text,
+          data: {'full_name': _name.text.trim()},
+        );
+        if (response.session == null) {
+          _error = false;
+          _message = 'Account created. Check your email to confirm your address, then sign in.';
+        } else {
+          _error = false;
+          _message = 'Your learner account has been created.';
+        }
+      } else {
+        await auth.signInWithPassword(
+          email: _email.text.trim(),
+          password: _password.text,
+        );
+      }
+    } on AuthException catch (e) {
+      _error = true;
+      _message = e.message;
+    } catch (_) {
+      _error = true;
+      _message = 'Unable to complete the request. Please check your connection and try again.';
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(26),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 52, height: 52,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.brown,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.school_outlined, color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(height: 22),
+                      const Text('YOUNG LEARNERS',
+                        style: TextStyle(fontSize: 12, letterSpacing: 1.4,
+                          fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      const SizedBox(height: 5),
+                      const Text('Every Child Can Learn.',
+                        style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700,
+                          color: AppColors.ink)),
+                      const SizedBox(height: 8),
+                      Text(_creating ? 'Create your learner account.' : 'Sign in to continue learning.',
+                        style: const TextStyle(color: AppColors.muted)),
+                      const SizedBox(height: 24),
+                      if (_creating) ...[
+                        TextFormField(
+                          controller: _name,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: const InputDecoration(labelText: 'Full name'),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your full name' : null,
+                        ),
+                        const SizedBox(height: 13),
+                      ],
+                      TextFormField(
+                        controller: _email,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'Email address'),
+                        validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email address' : null,
+                      ),
+                      const SizedBox(height: 13),
+                      TextFormField(
+                        controller: _password,
+                        obscureText: _obscure,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          suffixIcon: IconButton(
+                            onPressed: () => setState(() => _obscure = !_obscure),
+                            icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                          ),
+                        ),
+                        validator: (v) => (v == null || v.length < 8) ? 'Use at least 8 characters' : null,
+                      ),
+                      if (_message != null) ...[
+                        const SizedBox(height: 15),
+                        Text(_message!, style: TextStyle(
+                          color: _error ? Colors.red.shade700 : Colors.green.shade800,
+                          height: 1.4,
+                        )),
+                      ],
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: _busy ? null : _submit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.brown,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                        ),
+                        child: Text(_busy ? 'Please wait...' : (_creating ? 'Create account' : 'Sign in')),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _busy ? null : () => setState(() {
+                          _creating = !_creating; _message = null; _error = false;
+                        }),
+                        child: Text(_creating ? 'Already have an account? Sign in' : 'New here? Create an account'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 class LearnerHomePage extends StatefulWidget {
   const LearnerHomePage({super.key});
-
   @override
   State<LearnerHomePage> createState() => _LearnerHomePageState();
 }
 
 class _LearnerHomePageState extends State<LearnerHomePage> {
-  int selected = 0;
+  late Future<Map<String, dynamic>> _account;
+
+  @override
+  void initState() {
+    super.initState();
+    _account = _loadAccount();
+  }
+
+  Future<Map<String, dynamic>> _loadAccount() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser!;
+    final profile = await client.from('profiles').select('full_name,email').eq('id', user.id).single();
+    final roles = await client.from('user_roles').select('role').eq('user_id', user.id);
+    final role = roles.isEmpty ? 'learner' : (roles.first['role'] as String).replaceAll('_', ' ');
+    return {'name': profile['full_name'] ?? 'Learner', 'role': role};
+  }
+
+  Future<void> _signOut() async => Supabase.instance.client.auth.signOut();
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 760;
-    final destinations = const [
-      _Destination('Overview', Icons.space_dashboard_outlined),
-      _Destination('My learning', Icons.menu_book_outlined),
-      _Destination('Classes', Icons.calendar_today_outlined),
-      _Destination('Progress', Icons.query_stats_outlined),
-      _Destination('Profile', Icons.account_circle_outlined),
-    ];
-
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 72,
-        title: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppColors.brown,
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Icon(Icons.school_outlined, color: Colors.white, size: 21),
-            ),
-            const SizedBox(width: 11),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('YOUNG LEARNERS',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
-                        letterSpacing: 1.05, color: AppColors.ink)),
-                SizedBox(height: 2),
-                Text('TUTORIAL CENTRE',
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600,
-                        letterSpacing: 1.6, color: AppColors.muted)),
-              ],
-            ),
-          ],
-        ),
+        title: const Text('Young Learners Tutorial',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
         actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_outlined),
-          ),
-          const SizedBox(width: 8),
+          IconButton(tooltip: 'Sign out', onPressed: _signOut,
+            icon: const Icon(Icons.logout_outlined)),
         ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, color: AppColors.line),
         ),
       ),
-      body: Row(
-        children: [
-          if (wide)
-            NavigationRail(
-              selectedIndex: selected,
-              onDestinationSelected: (value) => setState(() => selected = value),
-              labelType: NavigationRailLabelType.all,
-              backgroundColor: AppColors.surface,
-              indicatorColor: AppColors.paleGold,
-              destinations: destinations.map((d) => NavigationRailDestination(
-                icon: Icon(d.icon), label: Text(d.label),
-              )).toList(),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _account,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+          }
+          if (snapshot.hasError) {
+            return Center(child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('Your account is signed in, but its profile could not be loaded.',
+                  textAlign: TextAlign.center, style: TextStyle(color: AppColors.ink)),
+                const SizedBox(height: 12),
+                OutlinedButton(onPressed: () => setState(() => _account = _loadAccount()),
+                  child: const Text('Try again')),
+                TextButton(onPressed: _signOut, child: const Text('Sign out')),
+              ]),
+            ));
+          }
+          final account = snapshot.data!;
+          return Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 900),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('LEARNER PORTAL',
+                    style: TextStyle(fontSize: 10, letterSpacing: 1.4,
+                      fontWeight: FontWeight.w800, color: AppColors.muted)),
+                  const SizedBox(height: 8),
+                  Text('Welcome, ${account['name']}',
+                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700,
+                      color: AppColors.ink)),
+                  const SizedBox(height: 6),
+                  const Text('Every Child Can Learn.',
+                    style: TextStyle(color: AppColors.muted)),
+                  const SizedBox(height: 22),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(color: AppColors.brown,
+                      borderRadius: BorderRadius.circular(14)),
+                    child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Your learning journey starts here',
+                        style: TextStyle(color: Colors.white, fontSize: 21,
+                          fontWeight: FontWeight.w700)),
+                      SizedBox(height: 8),
+                      Text('Your classes, subjects, learning materials and progress will appear in this space as the centre activates them.',
+                        style: TextStyle(color: Color(0xFFE7DED6), height: 1.5)),
+                    ]),
+                  ),
+                  const SizedBox(height: 20),
+                  Card(child: ListTile(
+                    leading: const Icon(Icons.verified_user_outlined, color: AppColors.brown),
+                    title: const Text('Account type', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(account['role'] as String),
+                  )),
+                  const SizedBox(height: 16),
+                  const Text('LEARNING AREAS',
+                    style: TextStyle(fontSize: 11, letterSpacing: 1.1,
+                      fontWeight: FontWeight.w800, color: AppColors.muted)),
+                  const SizedBox(height: 10),
+                  const _FeatureRow(icon: Icons.menu_book_outlined, title: 'Subjects and lessons',
+                    detail: 'Your enrolled subjects and lesson materials.'),
+                  const SizedBox(height: 9),
+                  const _FeatureRow(icon: Icons.assignment_outlined, title: 'Assignments and assessments',
+                    detail: 'Tasks, practice and assessments from your tutors.'),
+                  const SizedBox(height: 9),
+                  const _FeatureRow(icon: Icons.query_stats_outlined, title: 'Learning progress',
+                    detail: 'Track learning activity and published results.'),
+                  const SizedBox(height: 28),
+                  const Center(child: Text('YOUNG LEARNERS TUTORIAL CENTRE',
+                    style: TextStyle(fontSize: 10, letterSpacing: 1.1,
+                      color: AppColors.muted, fontWeight: FontWeight.w600))),
+                ]),
+              ),
             ),
-          Expanded(
-            child: IndexedStack(
-              index: selected,
-              children: const [
-                _OverviewPage(),
-                _SectionPage(title: 'My learning', subtitle: 'Your subjects, lessons and learning materials will be organised here.', icon: Icons.menu_book_outlined),
-                _SectionPage(title: 'Classes', subtitle: 'View your class timetable and upcoming learning sessions here.', icon: Icons.calendar_today_outlined),
-                _SectionPage(title: 'Progress', subtitle: 'Your assessment results and learning progress will appear here.', icon: Icons.query_stats_outlined),
-                _SectionPage(title: 'Profile', subtitle: 'Your personal and learning account details will appear here.', icon: Icons.account_circle_outlined),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: wide ? null : NavigationBar(
-        selectedIndex: selected,
-        onDestinationSelected: (value) => setState(() => selected = value),
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.paleGold,
-        destinations: destinations.map((d) => NavigationDestination(
-          icon: Icon(d.icon), label: d.label,
-        )).toList(),
+          );
+        },
       ),
     );
   }
 }
 
-class _Destination {
-  final String label;
-  final IconData icon;
-  const _Destination(this.label, this.icon);
-}
-
-class _OverviewPage extends StatelessWidget {
-  const _OverviewPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final contentWidth = constraints.maxWidth > 1100 ? 1040.0 : 760.0;
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: SizedBox(
-            width: contentWidth,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('STUDENT PORTAL',
-                    style: TextStyle(fontSize: 10, letterSpacing: 1.4,
-                        fontWeight: FontWeight.w800, color: AppColors.muted)),
-                const SizedBox(height: 7),
-                Text('Welcome to your learning space',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: AppColors.ink, fontWeight: FontWeight.w700,
-                    )),
-                const SizedBox(height: 7),
-                const Text('Every Child Can Learn.',
-                    style: TextStyle(fontSize: 14, color: AppColors.muted)),
-                const SizedBox(height: 22),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    color: AppColors.brown,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: LayoutBuilder(builder: (context, box) {
-                    final compact = box.maxWidth < 500;
-                    return Flex(
-                      direction: compact ? Axis.vertical : Axis.horizontal,
-                      crossAxisAlignment: compact ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-                      children: [
-                        ExpandedIfWide(
-                          enabled: !compact,
-                          child: const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('A better way to learn',
-                                  style: TextStyle(color: Colors.white,
-                                    fontSize: 22, fontWeight: FontWeight.w700)),
-                              SizedBox(height: 8),
-                              Text('Access lessons, classes and academic resources in one organised place.',
-                                  style: TextStyle(color: Color(0xFFE7DED6),
-                                    fontSize: 13, height: 1.5)),
-                            ],
-                          ),
-                        ),
-                        if (compact) const SizedBox(height: 16) else const SizedBox(width: 20),
-                        OutlinedButton.icon(
-                          onPressed: () {},
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Color(0xFFBDA98E)),
-                            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-                          ),
-                          icon: const Icon(Icons.arrow_forward, size: 17),
-                          label: const Text('Explore learning'),
-                        ),
-                      ],
-                    );
-                  }),
-                ),
-                const SizedBox(height: 26),
-                const Text('LEARNING SHORTCUTS',
-                    style: TextStyle(fontSize: 11, letterSpacing: 1.1,
-                        fontWeight: FontWeight.w800, color: AppColors.muted)),
-                const SizedBox(height: 12),
-                LayoutBuilder(builder: (context, box) {
-                  final columns = box.maxWidth > 650 ? 3 : (box.maxWidth > 390 ? 3 : 1);
-                  return GridView.count(
-                    crossAxisCount: columns,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: columns == 1 ? 4.2 : 1.65,
-                    children: const [
-                      _Shortcut(icon: Icons.library_books_outlined, title: 'Subjects', detail: 'Browse your subjects'),
-                      _Shortcut(icon: Icons.play_circle_outline, title: 'Lessons', detail: 'Continue learning'),
-                      _Shortcut(icon: Icons.assignment_outlined, title: 'Assignments', detail: 'Review your tasks'),
-                    ],
-                  );
-                }),
-                const SizedBox(height: 25),
-                const Text('YOUR ACCOUNT',
-                    style: TextStyle(fontSize: 11, letterSpacing: 1.1,
-                        fontWeight: FontWeight.w800, color: AppColors.muted)),
-                const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline, color: AppColors.brown, size: 22),
-                        const SizedBox(width: 13),
-                        const Expanded(child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Your learning account is ready to be connected',
-                                style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
-                            SizedBox(height: 5),
-                            Text('Once secure sign-in is enabled, your enrolled subjects, timetable and activity will appear here.',
-                                style: TextStyle(fontSize: 12, height: 1.45, color: AppColors.muted)),
-                          ],
-                        )),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                const Center(child: Text('YOUNG LEARNERS TUTORIAL CENTRE',
-                    style: TextStyle(fontSize: 10, letterSpacing: 1.1,
-                        fontWeight: FontWeight.w600, color: AppColors.muted))),
-              ],
-            ),
-          ),
-        ),
-      );
-    });
-  }
-}
-
-class ExpandedIfWide extends StatelessWidget {
-  final bool enabled;
-  final Widget child;
-  const ExpandedIfWide({super.key, required this.enabled, required this.child});
-
-  @override
-  Widget build(BuildContext context) => enabled ? Expanded(child: child) : child;
-}
-
-class _Shortcut extends StatelessWidget {
+class _FeatureRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String detail;
-  const _Shortcut({required this.icon, required this.title, required this.detail});
+  const _FeatureRow({required this.icon, required this.title, required this.detail});
 
   @override
   Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-      child: Row(
-        children: [
-          Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(color: AppColors.paleGold,
-              borderRadius: BorderRadius.circular(9)),
-            child: Icon(icon, color: AppColors.brown, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 13,
-                fontWeight: FontWeight.w700, color: AppColors.ink)),
-              const SizedBox(height: 3),
-              Text(detail, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-            ],
-          )),
-          const Icon(Icons.chevron_right, size: 19, color: AppColors.muted),
-        ],
-      ),
-    ),
-  );
-}
-
-class _SectionPage extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  const _SectionPage({required this.title, required this.subtitle, required this.icon});
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 440),
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 36, color: AppColors.brown),
-            const SizedBox(height: 16),
-            Text(title, style: const TextStyle(fontSize: 22,
-              fontWeight: FontWeight.w700, color: AppColors.ink)),
-            const SizedBox(height: 8),
-            Text(subtitle, textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.muted, height: 1.5)),
-          ],
-        ),
-      ),
+    child: ListTile(
+      leading: Container(width: 40, height: 40,
+        decoration: BoxDecoration(color: AppColors.paleGold,
+          borderRadius: BorderRadius.circular(9)),
+        child: Icon(icon, color: AppColors.brown)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700,
+        color: AppColors.ink)),
+      subtitle: Text(detail, style: const TextStyle(color: AppColors.muted)),
     ),
   );
 }
