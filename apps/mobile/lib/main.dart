@@ -2967,7 +2967,7 @@ class _LearningTabState extends State<_LearningTab> {
       .select('id,title,description,content,live_class_url,scheduled_at,duration_minutes,subjects(name),classes(name)')
       .eq('is_published', true);
     // Owners and authorised administrators can inspect the centre's published
-    // catalogue. Learners only receive lessons for their active enrolments.
+    // catalogue. Learners only receive lessons for approved learning programmes.
     if (!widget.owner && !widget.admin) {
       final approvedRequests = await db.from('learning_access_requests')
         .select('learning_programmes(class_id)').eq('status', 'approved');
