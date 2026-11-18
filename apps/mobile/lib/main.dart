@@ -2110,7 +2110,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final titles = ['Home', 'My learning', 'Analytics', 'Profile'];
+    final titles = widget.parent ? ['Home', 'Parent learning', 'Child progress', 'Profile'] : ['Home', 'My learning', 'Analytics', 'Profile'];
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -2145,7 +2145,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
             onOpenCentre: () => _openCentrePortal(),
           ),
           _LearningTab(owner: widget.owner, admin: widget.admin, tutor: widget.tutor, parent: widget.parent),
-          _AnalyticsTab(owner: widget.owner, admin: widget.admin),
+          _AnalyticsTab(owner: widget.owner, admin: widget.admin, parent: widget.parent),
           _ProfileTab(account: _account, onRetry: () => setState(() => _account = _loadAccount()), onSignOut: _signOut),
         ],
       ),
@@ -3161,7 +3161,8 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
 class _AnalyticsTab extends StatefulWidget {
   final bool owner;
   final bool admin;
-  const _AnalyticsTab({this.owner = false, this.admin = false});
+  final bool parent;
+  const _AnalyticsTab({this.owner = false, this.admin = false, this.parent = false});
   @override
   State<_AnalyticsTab> createState() => _AnalyticsTabState();
 }
@@ -3224,6 +3225,23 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.parent) {
+      return ListView(padding: const EdgeInsets.all(20), children: [
+        const Text('Your child’s progress', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        const SizedBox(height: 7),
+        const Text('View linked children, assignments, published results and attendance from your parent dashboard.',
+          style: TextStyle(color: AppColors.muted, height: 1.45)),
+        const SizedBox(height: 18),
+        Card(child: ListTile(
+          leading: const Icon(Icons.family_restroom_outlined, color: AppColors.brown),
+          title: const Text('Open parent dashboard', style: TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: const Text('Review your linked children and learning progress'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => const GuardianPortalPage())),
+        )),
+      ]);
+    }
     if (widget.owner) {
       return ListView(
         padding: const EdgeInsets.all(20),
