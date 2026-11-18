@@ -299,8 +299,8 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
               if (permissions.contains('academics.manage')) ...[
                 Card(child: ListTile(
                   leading: const Icon(Icons.menu_book_outlined, color: AppColors.brown),
-                  title: const Text('Academic management'),
-                  subtitle: const Text('Create and manage classes, subjects and lessons'),
+                  title: const Text('Learning setup'),
+                  subtitle: const Text('Manage learning levels, subjects, lessons and assessments'),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => _open(const AdminAcademicPage()),
                 )),
