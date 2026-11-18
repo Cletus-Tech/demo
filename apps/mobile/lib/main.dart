@@ -786,25 +786,25 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
                 _FeatureRow(
                   icon: Icons.class_outlined,
                   title: 'Active enrolments',
-                  detail: '\${stats['enrolments']} recorded class enrolments',
+                  detail: stats['enrolments'].toString() + ' recorded class enrolments',
                 ),
                 const SizedBox(height: 10),
                 _FeatureRow(
                   icon: Icons.assignment_turned_in_outlined,
                   title: 'Assignments submitted',
-                  detail: '\${stats['submissions']} submissions recorded',
+                  detail: stats['submissions'].toString() + ' submissions recorded',
                 ),
                 const SizedBox(height: 10),
                 _FeatureRow(
                   icon: Icons.assessment_outlined,
                   title: 'Assessment attempts',
-                  detail: '\${stats['attempts']} attempts recorded',
+                  detail: stats['attempts'].toString() + ' attempts recorded',
                 ),
                 const SizedBox(height: 10),
                 _FeatureRow(
                   icon: Icons.trending_up_rounded,
                   title: 'Published results',
-                  detail: '\${stats['results']} results available to you',
+                  detail: stats['results'].toString() + ' results available to you',
                 ),
                 const SizedBox(height: 18),
                 const _InfoNotice(
