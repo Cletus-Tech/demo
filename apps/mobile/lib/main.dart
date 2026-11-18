@@ -2573,6 +2573,7 @@ class _LearningTabState extends State<_LearningTab> {
   @override
   void initState() { super.initState(); _lessons = _loadLessons(); }
   Future<List<Map<String, dynamic>>> _loadLessons() async {
+    if (widget.tutor) return [];
     final db = Supabase.instance.client;
     var query = db.from('lessons')
       .select('id,title,description,content,scheduled_at,duration_minutes,subjects(name),classes(name)')
@@ -2594,9 +2595,9 @@ class _LearningTabState extends State<_LearningTab> {
   Widget build(BuildContext context) => RefreshIndicator(
     color: AppColors.brown, onRefresh: _refresh,
     child: ListView(padding: const EdgeInsets.all(20), children: [
-      const Text('My learning', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      Text(widget.tutor ? 'Tutor workspace' : 'My learning', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700, color: AppColors.ink)),
       const SizedBox(height: 7),
-      const Text('Open a lesson to read its notes and learning materials.', style: TextStyle(color: AppColors.muted, height: 1.45)),
+      Text(widget.tutor ? 'Take attendance for the classes assigned to you.' : 'Open a lesson to read its notes and learning materials.', style: const TextStyle(color: AppColors.muted, height: 1.45)),
       const SizedBox(height: 20),
       if (widget.tutor) Card(
         child: ListTile(
@@ -2632,8 +2633,8 @@ class _LearningTabState extends State<_LearningTab> {
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const StudentAssignmentsPage())),
         ),
       ),
-      if (!widget.owner && !widget.admin) const SizedBox(height: 10),
-      Card(
+      if (!widget.owner && !widget.admin && !widget.tutor) const SizedBox(height: 10),
+      if (!widget.tutor) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Container(
