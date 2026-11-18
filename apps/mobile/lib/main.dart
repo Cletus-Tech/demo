@@ -407,7 +407,6 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
                     title: Text(p?['full_name'] as String? ?? 'Account not linked'),
                     subtitle: Text([
                       p?['email'] ?? 'No email',
-                      'Admission: ' + (r['admission_number'] ?? 'Not assigned').toString(),
                       'Level: ' + (r['level'] ?? 'Not set').toString(),
                       'Status: ' + (r['status'] ?? '').toString(),
                     ].join(' • ')),
@@ -582,7 +581,6 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
                   Text(profile?['email'] as String? ?? 'No learner account linked',
                     style: const TextStyle(color: AppColors.muted)),
                   const Divider(height: 22),
-                  Text('Admission: ${student['admission_number'] ?? 'Not assigned'}'),
                   Text('Level: ${student['level'] ?? 'Not set'}'),
                   Text('Status: ${student['status'] ?? 'Unknown'}'),
                   Text('Account: ${student['user_id'] == null ? 'Not linked' : 'Linked'}'),
@@ -1342,7 +1340,7 @@ class _AdminAssignmentSubmissionsPageState extends State<AdminAssignmentSubmissi
   void initState(){super.initState();_items=_load();}
   Future<List<Map<String,dynamic>>> _load()async{
     final rows=await Supabase.instance.client.from('assignment_submissions')
-      .select('id,status,answer_text,score,tutor_feedback,submitted_at,graded_at,students(admission_number)')
+      .select('id,status,answer_text,score,tutor_feedback,submitted_at,graded_at,students(profiles(full_name))')
       .eq('assignment_id',widget.assignment['id']).order('submitted_at',ascending:false);
     return List<Map<String,dynamic>>.from(rows);
   }
@@ -1399,8 +1397,9 @@ class _AdminAssignmentSubmissionsPageState extends State<AdminAssignmentSubmissi
         const SizedBox(height:12),
         ...rows.map((r){
           final student=r['students'] is Map?Map<String,dynamic>.from(r['students'] as Map):<String,dynamic>{};
+          final profile=student['profiles'] is Map?Map<String,dynamic>.from(student['profiles'] as Map):<String,dynamic>{};
           return Card(margin:const EdgeInsets.only(bottom:10),child:ExpansionTile(
-            title:Text(student['admission_number']?.toString()??'Learner submission',style:const TextStyle(fontWeight:FontWeight.w700)),
+            title:Text(profile['full_name']?.toString()??'Learner submission',style:const TextStyle(fontWeight:FontWeight.w700)),
             subtitle:Text((r['status']??'submitted').toString()+' • '+(r['submitted_at']?.toString()??'Date unavailable')),
             children:[
               Padding(padding:const EdgeInsets.fromLTRB(16,0,16,16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
