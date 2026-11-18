@@ -911,15 +911,208 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   @override
   Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Academic management'),bottom:TabBar(isScrollable:true,controller:_tabs,tabs:const[
-      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Sessions'),Tab(text:'Assessments'),
+      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Sessions'),Tab(text:'Assessments'),Tab(text:'Assignments'),
     ])),
     body:RefreshIndicator(onRefresh:_refresh,child:TabBarView(controller:_tabs,children:[
-      _classesTab(),_subjectsTab(),_lessonsTab(),_sessionsTab(),_assessmentsTab(),
+      _classesTab(),_subjectsTab(),_lessonsTab(),_sessionsTab(),_assessmentsTab(),const AdminAssignmentsPanel(),
     ])),
   );
 }
 
 
+
+class AdminAssignmentsPanel extends StatefulWidget {
+  const AdminAssignmentsPanel({super.key});
+  @override
+  State<AdminAssignmentsPanel> createState()=>_AdminAssignmentsPanelState();
+}
+class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
+  late Future<List<Map<String,dynamic>>> _items;
+  bool _busy=false;
+  @override
+  void initState(){super.initState();_items=_load();}
+  Future<List<Map<String,dynamic>>> _load() async{
+    final rows=await Supabase.instance.client.from('assignments')
+      .select('id,title,instructions,due_at,max_score,published_at,classes(name),subjects(name),assignment_submissions(id)')
+      .order('created_at',ascending:false);
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  Future<void> _refresh() async{final next=_load();setState(()=>_items=next);await next;}
+  Future<void> _create() async{
+    final title=TextEditingController();final instructions=TextEditingController();
+    final due=TextEditingController();final max=TextEditingController(text:'10');
+    try{
+      final db=Supabase.instance.client;
+      final classes=await db.from('classes').select('id,name').eq('status','active').order('name');
+      final subjects=await db.from('subjects').select('id,name').eq('status','active').order('name');
+      if(classes.isEmpty||subjects.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Create an active class and subject first.')));return;}
+      String? classId=classes.first['id'].toString();String? subjectId=subjects.first['id'].toString();
+      final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refreshDialog)=>AlertDialog(
+        title:const Text('Create assignment'),
+        content:SizedBox(width:460,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          TextField(controller:title,decoration:const InputDecoration(labelText:'Assignment title')),
+          DropdownButtonFormField<String>(value:classId,decoration:const InputDecoration(labelText:'Class'),
+            items:classes.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(()=>classId=v)),
+          DropdownButtonFormField<String>(value:subjectId,decoration:const InputDecoration(labelText:'Subject'),
+            items:subjects.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(()=>subjectId=v)),
+          TextField(controller:instructions,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'Instructions')),
+          TextField(controller:due,decoration:const InputDecoration(labelText:'Due date/time (optional, e.g. 2026-12-01 16:00)')),
+          TextField(controller:max,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Maximum marks (optional)')),
+        ]))),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Create draft'))],
+      )));
+      if(ok!=true)return;
+      final dueText=due.text.trim();
+      DateTime? dueDate;
+      if(dueText.isNotEmpty)dueDate=DateTime.tryParse(dueText);
+      final maxScore=max.text.trim().isEmpty?null:num.tryParse(max.text.trim());
+      if(title.text.trim().isEmpty||classId==null||subjectId==null||
+        (dueText.isNotEmpty&&dueDate==null)||(max.text.trim().isNotEmpty&&(maxScore==null||maxScore<=0))){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Check the title, due date and maximum marks.')));return;
+      }
+      await db.from('assignments').insert({
+        'title':title.text.trim(),'class_id':classId,'subject_id':subjectId,
+        'instructions':instructions.text.trim().isEmpty?null:instructions.text.trim(),
+        'due_at':dueDate?.toUtc().toIso8601String(),'max_score':maxScore,
+      });
+      await _refresh();
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Assignment could not be created: '+e.toString())));}
+    finally{title.dispose();instructions.dispose();due.dispose();max.dispose();}
+  }
+  Future<void> _togglePublish(Map<String,dynamic> row) async{
+    setState(()=>_busy=true);
+    try{
+      final published=row['published_at']!=null;
+      await Supabase.instance.client.from('assignments').update({
+        'published_at':published?null:DateTime.now().toUtc().toIso8601String(),
+      }).eq('id',row['id']);
+      await _refresh();
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not update assignment: '+e.toString())));}
+    finally{if(mounted)setState(()=>_busy=false);}
+  }
+  @override
+  Widget build(BuildContext context)=>RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,
+    child:FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,s){
+      if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+      if(s.hasError)return ListView(padding:const EdgeInsets.all(18),children:[_InfoNotice(message:'Assignments could not be loaded: '+s.error.toString())]);
+      final rows=s.data??[];
+      return ListView(padding:const EdgeInsets.all(16),children:[
+        Row(children:[const Expanded(child:Text('Homework and marking',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:AppColors.ink))),
+          FilledButton.icon(onPressed:_busy?null:_create,icon:const Icon(Icons.add),label:const Text('Create'))]),
+        const Padding(padding:EdgeInsets.only(top:8,bottom:12),child:Text('Create a class assignment, publish it to enrolled learners, then review and mark their submissions.',style:TextStyle(color:AppColors.muted,height:1.4))),
+        if(rows.isEmpty)const _InfoNotice(message:'No assignments created yet. Create the first homework task for a class.'),
+        ...rows.map((r){
+          final sub=r['assignment_submissions'];final count=sub is List?sub.length:0;
+          final published=r['published_at']!=null;
+          return Card(margin:const EdgeInsets.only(bottom:10),child:ListTile(
+            title:Text(r['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+            subtitle:Text((r['classes']?['name']??'Class').toString()+' • '+(r['subjects']?['name']??'Subject').toString()+' • '+count.toString()+' submissions • '+(published?'Published':'Draft')),
+            trailing:PopupMenuButton<String>(onSelected:(v)async{
+              if(v=='submissions')await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>AdminAssignmentSubmissionsPage(assignment:r)));
+              if(v=='publish'||v=='draft')await _togglePublish(r);
+              if(mounted)await _refresh();
+            },itemBuilder:(_)=>[
+              const PopupMenuItem(value:'submissions',child:Text('View submissions / mark')),
+              PopupMenuItem(value:published?'draft':'publish',child:Text(published?'Unpublish':'Publish to class')),
+            ]),
+          ));
+        }),
+      ]);
+    }));
+}
+
+class AdminAssignmentSubmissionsPage extends StatefulWidget{
+  final Map<String,dynamic> assignment;
+  const AdminAssignmentSubmissionsPage({super.key,required this.assignment});
+  @override
+  State<AdminAssignmentSubmissionsPage> createState()=>_AdminAssignmentSubmissionsPageState();
+}
+class _AdminAssignmentSubmissionsPageState extends State<AdminAssignmentSubmissionsPage>{
+  late Future<List<Map<String,dynamic>>> _items;
+  bool _busy=false;
+  @override
+  void initState(){super.initState();_items=_load();}
+  Future<List<Map<String,dynamic>>> _load()async{
+    final rows=await Supabase.instance.client.from('assignment_submissions')
+      .select('id,status,answer_text,score,tutor_feedback,submitted_at,graded_at,students(admission_number)')
+      .eq('assignment_id',widget.assignment['id']).order('submitted_at',ascending:false);
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  Future<void> _refresh()async{final next=_load();setState(()=>_items=next);await next;}
+  Future<void> _mark(Map<String,dynamic> row)async{
+    final score=TextEditingController(text:row['score']?.toString()??'');
+    final feedback=TextEditingController(text:row['tutor_feedback']?.toString()??'');
+    final max=(widget.assignment['max_score'] as num?);
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('Mark assignment'),
+      content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        TextField(controller:score,keyboardType:const TextInputType.numberWithOptions(decimal:true),
+          decoration:InputDecoration(labelText:max==null?'Score':'Score (maximum '+max.toString()+' marks)')),
+        TextField(controller:feedback,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'Tutor feedback')),
+      ]))),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save mark'))],
+    ));
+    final value=num.tryParse(score.text.trim());
+    if(ok==true){
+      if(value==null||value<0||(max!=null&&value>max)){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid score within the maximum marks.')));
+      }else{
+        setState(()=>_busy=true);
+        try{
+          await Supabase.instance.client.from('assignment_submissions').update({
+            'score':value,'tutor_feedback':feedback.text.trim().isEmpty?null:feedback.text.trim(),
+            'status':'graded','graded_at':DateTime.now().toUtc().toIso8601String(),
+          }).eq('id',row['id']);
+          await _refresh();
+        }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not save mark: '+e.toString())));}
+        finally{if(mounted)setState(()=>_busy=false);}
+      }
+    }
+    score.dispose();feedback.dispose();
+  }
+  Future<void> _return(Map<String,dynamic> row)async{
+    try{
+      await Supabase.instance.client.from('assignment_submissions').update({
+        'status':'returned','score':null,'graded_at':null,
+        'tutor_feedback':'Please review the feedback and resubmit your work.',
+      }).eq('id',row['id']);
+      await _refresh();
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not return submission: '+e.toString())));}
+  }
+  @override
+  Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Assignment submissions')),
+    body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,child:FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,s){
+      if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+      if(s.hasError)return ListView(padding:const EdgeInsets.all(18),children:[_InfoNotice(message:'Submissions could not be loaded: '+s.error.toString())]);
+      final rows=s.data??[];
+      if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(18),children:const [_InfoNotice(message:'No learners have submitted this assignment yet.')]);
+      return ListView(padding:const EdgeInsets.all(16),children:[
+        Text(widget.assignment['title']?.toString()??'Assignment',style:const TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink)),
+        const SizedBox(height:12),
+        ...rows.map((r){
+          final student=r['students'] is Map?Map<String,dynamic>.from(r['students'] as Map):<String,dynamic>{};
+          return Card(margin:const EdgeInsets.only(bottom:10),child:ExpansionTile(
+            title:Text(student['admission_number']?.toString()??'Learner submission',style:const TextStyle(fontWeight:FontWeight.w700)),
+            subtitle:Text((r['status']??'submitted').toString()+' • '+(r['submitted_at']?.toString()??'Date unavailable')),
+            children:[
+              Padding(padding:const EdgeInsets.fromLTRB(16,0,16,16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                const Align(alignment:Alignment.centerLeft,child:Text('LEARNER ANSWER',style:TextStyle(fontSize:11,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.muted))),
+                const SizedBox(height:7),
+                SelectableText(r['answer_text']?.toString()??'No answer text supplied.',style:const TextStyle(height:1.5,color:AppColors.ink)),
+                if(r['score']!=null)Padding(padding:const EdgeInsets.only(top:9),child:Text('Current score: '+r['score'].toString(),style:const TextStyle(fontWeight:FontWeight.w700))),
+                if(r['tutor_feedback']!=null)Padding(padding:const EdgeInsets.only(top:6),child:Text('Feedback: '+r['tutor_feedback'].toString())),
+                const SizedBox(height:12),
+                Wrap(spacing:8,children:[
+                  FilledButton.icon(onPressed:_busy?null:()=>_mark(r),icon:const Icon(Icons.grading_outlined),label:const Text('Mark')),
+                  OutlinedButton.icon(onPressed:_busy?null:()=>_return(r),icon:const Icon(Icons.assignment_return_outlined),label:const Text('Return for correction')),
+                ]),
+              ])),
+            ],
+          ));
+        }),
+      ]);
+    })));
+}
 
 class AdminAssessmentQuestionsPage extends StatefulWidget {
   final Map<String,dynamic> assessment;
@@ -2121,6 +2314,19 @@ class _LearningTabState extends State<_LearningTab> {
       const SizedBox(height: 7),
       const Text('Open a lesson to read its notes and learning materials.', style: TextStyle(color: AppColors.muted, height: 1.45)),
       const SizedBox(height: 20),
+      if (!widget.owner && !widget.admin) Card(
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(width: 44, height: 44,
+            decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)),
+            child: const Icon(Icons.assignment_outlined, color: AppColors.brown)),
+          title: const Text('My assignments', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+          subtitle: const Text('View homework, submit your answers and read tutor feedback'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const StudentAssignmentsPage())),
+        ),
+      ),
+      if (!widget.owner && !widget.admin) const SizedBox(height: 10),
       Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -2475,6 +2681,143 @@ class _FeatureRow extends StatelessWidget {
 }
 
 
+
+class StudentAssignmentsPage extends StatefulWidget {
+  const StudentAssignmentsPage({super.key});
+  @override
+  State<StudentAssignmentsPage> createState() => _StudentAssignmentsPageState();
+}
+class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
+  late Future<List<Map<String,dynamic>>> _items;
+  @override
+  void initState(){super.initState();_items=_load();}
+  Future<List<Map<String,dynamic>>> _load() async {
+    final raw=await Supabase.instance.client.rpc('student_assignments');
+    if(raw is! List)return [];
+    return raw.map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+  }
+  Future<void> _refresh() async {final next=_load();setState(()=>_items=next);await next;}
+  String _date(dynamic raw){
+    final d=DateTime.tryParse(raw?.toString()??'');
+    if(d==null)return 'No due date';
+    final local=d.toLocal();
+    return 'Due '+local.day.toString().padLeft(2,'0')+'/'+local.month.toString().padLeft(2,'0')+'/'+local.year.toString();
+  }
+  @override
+  Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('My assignments')),
+    body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,
+      child:FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,s){
+        if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+        if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[_InfoNotice(message:'Assignments could not be loaded. '+s.error.toString())]);
+        final rows=s.data??[];
+        if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(20),children:const [
+          _InfoNotice(message:'No assignments have been published for your active class yet. New homework will appear here when your tutor publishes it.')
+        ]);
+        return ListView(padding:const EdgeInsets.all(18),children:[
+          const Text('Homework and class tasks',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
+          const SizedBox(height:6),
+          const Text('Open an assignment to read the instructions and submit your work.',style:TextStyle(color:AppColors.muted)),
+          const SizedBox(height:14),
+          ...rows.map((r){
+            final status=(r['submission_status']??'not submitted').toString();
+            final done=status=='graded';
+            final late=r['due_at']!=null&&DateTime.tryParse(r['due_at'].toString())?.isBefore(DateTime.now().toUtc())==true&&status!='submitted'&&status!='graded';
+            return Card(margin:const EdgeInsets.only(bottom:10),child:ListTile(
+              contentPadding:const EdgeInsets.symmetric(horizontal:15,vertical:9),
+              leading:Container(width:43,height:43,decoration:BoxDecoration(color:AppColors.paleGold,borderRadius:BorderRadius.circular(11)),
+                child:const Icon(Icons.assignment_outlined,color:AppColors.brown)),
+              title:Text(r['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+              subtitle:Padding(padding:const EdgeInsets.only(top:5),child:Text(
+                (r['subject_name']??'Subject').toString()+' • '+_date(r['due_at'])+'\n'+
+                (done?'Graded • '+(r['score']??'—').toString()+' marks':status=='submitted'?'Submitted • Awaiting marking':status=='returned'?'Returned for correction':late?'Overdue • Not submitted':'Not submitted'),
+                style:const TextStyle(color:AppColors.muted,height:1.45))),
+              trailing:const Icon(Icons.chevron_right_rounded,color:AppColors.brown),
+              onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentAssignmentDetailPage(assignment:r))).then((_)=>_refresh()),
+            ));
+          }),
+        ]);
+      })),
+  );
+}
+
+class StudentAssignmentDetailPage extends StatefulWidget {
+  final Map<String,dynamic> assignment;
+  const StudentAssignmentDetailPage({super.key,required this.assignment});
+  @override
+  State<StudentAssignmentDetailPage> createState()=>_StudentAssignmentDetailPageState();
+}
+class _StudentAssignmentDetailPageState extends State<StudentAssignmentDetailPage>{
+  late final TextEditingController _answer;
+  bool _busy=false;
+  @override
+  void initState(){super.initState();_answer=TextEditingController(text:widget.assignment['answer_text']?.toString()??'');}
+  @override
+  void dispose(){_answer.dispose();super.dispose();}
+  Future<void> _submit() async{
+    if(_answer.text.trim().length<2){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Write your answer before submitting.')));return;
+    }
+    setState(()=>_busy=true);
+    try{
+      await Supabase.instance.client.rpc('submit_student_assignment',params:{
+        'p_assignment_id':widget.assignment['id'],'p_answer_text':_answer.text.trim(),
+      });
+      if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your assignment has been submitted.')));Navigator.of(context).pop();}
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Submission failed: '+e.toString())));
+    }finally{if(mounted)setState(()=>_busy=false);}
+  }
+  String _due(){
+    final d=DateTime.tryParse(widget.assignment['due_at']?.toString()??'');
+    if(d==null)return 'No due date';
+    final x=d.toLocal();return x.day.toString().padLeft(2,'0')+'/'+x.month.toString().padLeft(2,'0')+'/'+x.year.toString();
+  }
+  @override
+  Widget build(BuildContext context){
+    final a=widget.assignment;
+    final status=(a['submission_status']??'').toString();
+    final canSubmit=status.isEmpty||status=='draft'||status=='returned';
+    return Scaffold(appBar:AppBar(title:const Text('Assignment details')),
+      body:ListView(padding:const EdgeInsets.all(20),children:[
+        Text(a['title']?.toString()??'Assignment',style:const TextStyle(fontSize:24,fontWeight:FontWeight.w800,color:AppColors.ink)),
+        const SizedBox(height:8),
+        Text((a['subject_name']??'Subject').toString()+' • '+(a['class_name']??'Class').toString(),style:const TextStyle(color:AppColors.muted)),
+        const SizedBox(height:10),
+        Wrap(spacing:8,runSpacing:8,children:[
+          Chip(label:Text(_due())),
+          if(a['max_score']!=null)Chip(label:Text('Maximum '+a['max_score'].toString()+' marks')),
+          if(status.isNotEmpty)Chip(label:Text(status.toUpperCase())),
+        ]),
+        const SizedBox(height:18),
+        const Text('INSTRUCTIONS',style:TextStyle(fontSize:11,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+        const SizedBox(height:8),
+        Card(child:Padding(padding:const EdgeInsets.all(16),child:Text(a['instructions']?.toString().trim().isNotEmpty==true?a['instructions'].toString():'Your tutor has not added extra instructions.',style:const TextStyle(height:1.55,color:AppColors.ink)))),
+        const SizedBox(height:20),
+        if(canSubmit)...[
+          const Text('YOUR ANSWER',style:TextStyle(fontSize:11,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+          const SizedBox(height:8),
+          TextField(controller:_answer,minLines:7,maxLines:14,maxLength:30000,
+            decoration:const InputDecoration(hintText:'Type your assignment answer here...',alignLabelWithHint:true,border:OutlineInputBorder())),
+          const SizedBox(height:10),
+          FilledButton.icon(onPressed:_busy?null:_submit,icon:const Icon(Icons.send_rounded),
+            style:FilledButton.styleFrom(backgroundColor:AppColors.brown,padding:const EdgeInsets.symmetric(vertical:14)),
+            label:Text(_busy?'Submitting...':'Submit assignment')),
+          if(status=='returned')const Padding(padding:EdgeInsets.only(top:10),child:_InfoNotice(message:'Your tutor returned this work for correction. Update your answer and submit it again.')),
+        ]else...[
+          const _InfoNotice(message:'Your work has been submitted and is awaiting tutor marking, or has already been graded. You cannot change it unless your tutor returns it for correction.'),
+          if(a['answer_text']!=null)Card(child:Padding(padding:const EdgeInsets.all(15),child:SelectableText(a['answer_text'].toString(),style:const TextStyle(height:1.5,color:AppColors.ink)))),
+          if(a['score']!=null)Card(child:Padding(padding:const EdgeInsets.all(15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('Score: '+a['score'].toString()+(a['max_score']==null?'':' / '+a['max_score'].toString()),style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink)),
+            if(a['tutor_feedback']!=null&&a['tutor_feedback'].toString().isNotEmpty)...[
+              const SizedBox(height:8),const Text('Tutor feedback',style:TextStyle(fontWeight:FontWeight.w700,color:AppColors.brown)),
+              const SizedBox(height:5),Text(a['tutor_feedback'].toString(),style:const TextStyle(height:1.5)),
+            ],
+          ]))),
+        ],
+      ]));
+  }
+}
 
 class StudentAssessmentsPage extends StatefulWidget {
   const StudentAssessmentsPage({super.key});
