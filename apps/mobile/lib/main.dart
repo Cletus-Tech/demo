@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'learning_access.dart';
@@ -3748,6 +3749,30 @@ class _LearningTabState extends State<_LearningTab> {
       ),
       if (widget.parent) const SizedBox(height: 10),
 
+      Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => ClassroomDirectoryPage(owner: widget.owner, admin: widget.admin, tutor: widget.tutor),
+          )),
+          child: Padding(
+            padding: const EdgeInsets.all(15),
+            child: Row(children: [
+              Container(width: 48, height: 48, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(13)),
+                child: const Icon(Icons.meeting_room_outlined, color: AppColors.brown, size: 27)),
+              const SizedBox(width: 13),
+              const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Classrooms', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink, fontSize: 16)),
+                SizedBox(height: 3),
+                Text('Your class space for lessons, videos, explanations, assignments and notices.',
+                  style: TextStyle(color: AppColors.muted, height: 1.35, fontSize: 12)),
+              ])),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.brown),
+            ]),
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
       if (!widget.owner && !widget.admin && !widget.tutor && !widget.parent) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -3828,6 +3853,260 @@ class _LearningTabState extends State<_LearningTab> {
   );
   }
 }
+
+class ClassroomDirectoryPage extends StatefulWidget {
+  final bool owner, admin, tutor;
+  const ClassroomDirectoryPage({super.key, this.owner=false, this.admin=false, this.tutor=false});
+  @override
+  State<ClassroomDirectoryPage> createState()=>_ClassroomDirectoryPageState();
+}
+
+class _ClassroomDirectoryPageState extends State<ClassroomDirectoryPage> {
+  late Future<List<Map<String,dynamic>>> _classes;
+  @override
+  void initState(){super.initState();_classes=_load();}
+  Future<List<Map<String,dynamic>>> _load() async {
+    final db=Supabase.instance.client;
+    final userId=db.auth.currentUser?.id;
+    if(userId==null)return [];
+    if(widget.owner||widget.admin){
+      final rows=await db.from('classes').select('id,name,level,status').eq('status','active');
+      return _sortSchoolClasses(List<Map<String,dynamic>>.from(rows));
+    }
+    if(widget.tutor){
+      final rows=await db.from('class_tutors').select('class_id,classes(id,name,level,status)').eq('tutor_id',userId);
+      final unique=<String,Map<String,dynamic>>{};
+      for(final row in rows){
+        final c=row['classes'];
+        if(c is Map && c['id']!=null && c['status']=='active') unique[c['id'].toString()]=Map<String,dynamic>.from(c);
+      }
+      return _sortSchoolClasses(unique.values.toList());
+    }
+    final requests=await db.from('learning_access_requests').select('learning_programmes(class_id)')
+      .eq('user_id',userId).eq('status','approved');
+    final ids=requests.map((r){
+      final p=r['learning_programmes'];
+      return p is Map ? p['class_id']?.toString() : null;
+    }).whereType<String>().toSet().toList();
+    if(ids.isEmpty)return [];
+    final rows=await db.from('classes').select('id,name,level,status').inFilter('id',ids).eq('status','active');
+    return _sortSchoolClasses(List<Map<String,dynamic>>.from(rows));
+  }
+  Future<void> _refresh() async {final f=_load();setState(()=>_classes=f);await f;}
+  @override
+  Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Classrooms')),
+    body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,
+      child:FutureBuilder<List<Map<String,dynamic>>>(future:_classes,builder:(context,s){
+        if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+        if(s.hasError)return ListView(children:[_InfoNotice(message:'Classrooms could not be loaded. '+s.error.toString())]);
+        final classes=s.data??[];
+        return ListView(padding:const EdgeInsets.all(18),children:[
+          ClipRRect(borderRadius:BorderRadius.circular(20),child:SvgPicture.asset('assets/classroom_hero.svg',height:150,width:double.infinity,fit:BoxFit.cover)),
+          const SizedBox(height:17),
+          const Text('Choose your classroom',style:TextStyle(fontSize:23,fontWeight:FontWeight.w900,color:AppColors.ink)),
+          const SizedBox(height:5),
+          Text(widget.owner||widget.admin?'All active classrooms, arranged from Primary 1 through SS 3. Open a class to manage its board and learning resources.':widget.tutor?'Your assigned classrooms. Open a class to share learning materials and class notices.':'Your approved classroom. Lessons and resources are kept separate by class level.',
+            style:const TextStyle(color:AppColors.muted,height:1.45)),
+          const SizedBox(height:15),
+          if(classes.isEmpty) _InfoNotice(message:widget.tutor?'No active classrooms have been assigned to your tutor account yet.':'No classroom access is active yet. Submit a learning programme request and wait for payment verification and approval.'),
+          for(var i=0;i<classes.length;i++)
+            Padding(padding:const EdgeInsets.only(bottom:10),child:_ClassroomTile(
+              classroom:classes[i], index:i+1, onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+                builder:(_)=>ClassroomPage(classroom:classes[i],canManage:widget.owner||widget.admin||widget.tutor),
+              )),
+            )),
+        ]);
+      })),
+  );
+}
+
+class _ClassroomTile extends StatelessWidget {
+  final Map<String,dynamic> classroom; final int index; final VoidCallback onTap;
+  const _ClassroomTile({required this.classroom,required this.index,required this.onTap});
+  @override
+  Widget build(BuildContext context){
+    final name=(classroom['name']??classroom['level']??'Classroom').toString();
+    final isPrimary=name.toLowerCase().contains('primary');
+    final isJunior=name.toUpperCase().contains('JSS')||name.toUpperCase().contains('JS');
+    final icon=isPrimary?Icons.auto_stories_rounded:isJunior?Icons.science_outlined:Icons.school_rounded;
+    return Card(clipBehavior:Clip.antiAlias,child:InkWell(onTap:onTap,child:Padding(
+      padding:const EdgeInsets.all(14),child:Row(children:[
+        Container(width:48,height:48,decoration:BoxDecoration(color:AppColors.paleGold,borderRadius:BorderRadius.circular(14)),
+          child:Icon(icon,color:AppColors.brown,size:26)),
+        const SizedBox(width:13),
+        Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(name,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:16,color:AppColors.ink)),
+          const SizedBox(height:3),
+          Text(isPrimary?'Primary classroom':isJunior?'Junior secondary classroom':'Senior secondary classroom',
+            style:const TextStyle(color:AppColors.muted,fontSize:12)),
+        ])),
+        Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:6),decoration:BoxDecoration(color:AppColors.cream,borderRadius:BorderRadius.circular(20)),
+          child:Text('OPEN',style:TextStyle(fontSize:10,fontWeight:FontWeight.w800,letterSpacing:.8,color:AppColors.brown))),
+        const SizedBox(width:7),const Icon(Icons.chevron_right_rounded,color:AppColors.muted),
+      ]),
+    )));
+  }
+}
+
+class ClassroomPage extends StatefulWidget {
+  final Map<String,dynamic> classroom; final bool canManage;
+  const ClassroomPage({super.key,required this.classroom,this.canManage=false});
+  @override
+  State<ClassroomPage> createState()=>_ClassroomPageState();
+}
+class _ClassroomPageState extends State<ClassroomPage> {
+  late Future<Map<String,dynamic>> _data;
+  bool _busy=false;
+  String get _classId=>widget.classroom['id'].toString();
+  @override
+  void initState(){super.initState();_data=_load();}
+  Future<Map<String,dynamic>> _load() async {
+    final db=Supabase.instance.client;
+    final results=await Future.wait<dynamic>([
+      db.from('lessons').select('id,title,description,content,live_class_url,scheduled_at,duration_minutes,subjects(name)')
+        .eq('class_id',_classId).eq('is_published',true).order('scheduled_at'),
+      db.from('classroom_posts').select('id,post_type,title,body,media_path,media_url,created_at')
+        .eq('class_id',_classId).eq('is_published',true).order('created_at',ascending:false),
+      db.rpc('student_assignments'),
+    ]);
+    final lessons=List<Map<String,dynamic>>.from(results[0] as List);
+    final posts=List<Map<String,dynamic>>.from(results[1] as List);
+    final allAssignments=(results[2] as List).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+    final assignments=allAssignments.where((a)=>(a['class_name']??'').toString()==(widget.classroom['name']??'').toString()).toList();
+    return {'lessons':lessons,'posts':posts,'assignments':assignments};
+  }
+  Future<void> _refresh() async {final f=_load();setState(()=>_data=f);await f;}
+  Future<void> _createPost() async {
+    final title=TextEditingController(),body=TextEditingController(),url=TextEditingController();
+    String type='notice'; PlatformFile? file;
+    final result=await showDialog<bool>(context:context,builder:(dialogContext)=>StatefulBuilder(builder:(context,setDialogState)=>AlertDialog(
+      title:const Text('Add to classroom board'),
+      content:SizedBox(width:420,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        DropdownButtonFormField<String>(value:type,decoration:const InputDecoration(labelText:'Post type'),
+          items:const [DropdownMenuItem(value:'notice',child:Text('Class notice')),DropdownMenuItem(value:'explanation',child:Text('Lesson explanation')),DropdownMenuItem(value:'resource',child:Text('Learning resource')),DropdownMenuItem(value:'whiteboard',child:Text('Signboard / whiteboard'))],
+          onChanged:(v)=>setDialogState(()=>type=v??'notice')),
+        const SizedBox(height:10),TextField(controller:title,decoration:const InputDecoration(labelText:'Title')),
+        const SizedBox(height:10),TextField(controller:body,minLines:3,maxLines:7,decoration:const InputDecoration(labelText:'Explanation or notice')),
+        const SizedBox(height:10),TextField(controller:url,decoration:const InputDecoration(labelText:'Optional video or image URL',hintText:'https://...')),
+        const SizedBox(height:10),OutlinedButton.icon(onPressed:()async{
+          final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:const ['jpg','jpeg','png','webp','gif','mp4','webm','mov','pdf'],withData:true);
+          if(picked!=null&&picked.files.isNotEmpty)setDialogState(()=>file=picked.files.first);
+        },icon:const Icon(Icons.attach_file),label:Text(file==null?'Choose image, video or PDF':'Selected: ${file!.name}')),
+        const Text('Maximum file size: 100 MB. Files are stored privately for this classroom.',style:TextStyle(fontSize:11,color:AppColors.muted)),
+      ]))),
+      actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext,false),child:const Text('Cancel')),
+        FilledButton(onPressed:()=>Navigator.pop(dialogContext,true),child:const Text('Publish'))],
+    )));
+    if(result!=true){title.dispose();body.dispose();url.dispose();return;}
+    if(title.text.trim().length<3){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a title of at least 3 characters.')));title.dispose();body.dispose();url.dispose();return;}
+    if(file==null&&url.text.trim().isNotEmpty&&!url.text.trim().startsWith('https://')){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Resource links must begin with https://')));title.dispose();body.dispose();url.dispose();return;}
+    setState(()=>_busy=true);
+    try{
+      String? mediaPath;
+      if(file!=null){
+        final bytes=file!.bytes;
+        if(bytes==null)throw Exception('This device could not read the selected file. Please choose it again.');
+        if(bytes.length>104857600)throw Exception('The selected file is larger than 100 MB.');
+        final ext=file!.extension?.toLowerCase()??'bin';
+        final mime=const {'jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp','gif':'image/gif','mp4':'video/mp4','webm':'video/webm','mov':'video/quicktime','pdf':'application/pdf'}[ext]??'application/octet-stream';
+        final safeName=file!.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'),'_');
+        mediaPath='$_classId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+        await Supabase.instance.client.storage.from('classroom-resources').uploadBinary(mediaPath!,bytes,fileOptions:FileOptions(contentType:mime,upsert:false));
+      }
+      await Supabase.instance.client.from('classroom_posts').insert({
+        'class_id':_classId,'author_id':Supabase.instance.client.auth.currentUser!.id,
+        'post_type':type,'title':title.text.trim(),'body':body.text.trim().isEmpty?null:body.text.trim(),
+        'media_path':mediaPath,'media_url':url.text.trim().isEmpty?null:url.text.trim(),'is_published':true,
+      });
+      if(mounted){Navigator.of(context).pop();await _refresh();ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Classroom post published.')));}
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not publish: $e')));
+    }finally{title.dispose();body.dispose();url.dispose();if(mounted)setState(()=>_busy=false);}
+  }
+  Future<void> _openMedia(Map<String,dynamic> post) async {
+    try{
+      final path=post['media_path']?.toString();
+      final url=path!=null?await Supabase.instance.client.storage.from('classroom-resources').createSignedUrl(path,3600):post['media_url']?.toString();
+      if(url==null||!url.startsWith('https://'))throw Exception('Resource link is unavailable.');
+      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open resource: $e')));}
+  }
+  IconData _postIcon(String type)=>type=='notice'?Icons.campaign_outlined:type=='explanation'?Icons.lightbulb_outline_rounded:type=='whiteboard'?Icons.edit_note_rounded:Icons.perm_media_outlined;
+  String _postLabel(String type)=>type=='notice'?'CLASS NOTICE':type=='explanation'?'EXPLANATION':type=='whiteboard'?'SIGNBOARD':'RESOURCE';
+  Widget _postCard(Map<String,dynamic> post){
+    final path=post['media_path']?.toString();final url=post['media_url']?.toString();
+    final hasMedia=(path!=null&&path.isNotEmpty)||(url!=null&&url.isNotEmpty);
+    return Card(margin:const EdgeInsets.only(bottom:10),child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Row(children:[Icon(_postIcon(post['post_type']?.toString()??''),color:AppColors.brown),const SizedBox(width:8),
+        Text(_postLabel(post['post_type']?.toString()??''),style:const TextStyle(fontSize:10,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.brown))]),
+      const SizedBox(height:8),Text(post['title']?.toString()??'Class post',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800,color:AppColors.ink)),
+      if((post['body']??'').toString().isNotEmpty)...[const SizedBox(height:6),Text(post['body'].toString(),style:const TextStyle(color:AppColors.muted,height:1.5))],
+      if(hasMedia)...[const SizedBox(height:10),OutlinedButton.icon(onPressed:()=>_openMedia(post),icon:const Icon(Icons.open_in_new_rounded),label:const Text('Open attached resource'))],
+    ])));
+  }
+  @override
+  Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:Text((widget.classroom['name']??'Classroom').toString()),
+      actions:[if(widget.canManage)IconButton(onPressed:_busy?null:_createPost,icon:const Icon(Icons.add_circle_outline),tooltip:'Add classroom content')]),
+    floatingActionButton:widget.canManage?FloatingActionButton.extended(onPressed:_busy?null:_createPost,backgroundColor:AppColors.brown,icon:const Icon(Icons.add,color:Colors.white),label:const Text('Add to board',style:TextStyle(color:Colors.white))):null,
+    body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,child:FutureBuilder<Map<String,dynamic>>(future:_data,builder:(context,s){
+      if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+      if(s.hasError)return ListView(children:[_InfoNotice(message:'This classroom could not be loaded. '+s.error.toString())]);
+      final d=s.data??{};final lessons=List<Map<String,dynamic>>.from(d['lessons']??[]);final posts=List<Map<String,dynamic>>.from(d['posts']??[]);final assignments=List<Map<String,dynamic>>.from(d['assignments']??[]);
+      return ListView(padding:const EdgeInsets.fromLTRB(16,14,16,90),children:[
+        ClipRRect(borderRadius:BorderRadius.circular(18),child:SvgPicture.asset('assets/classroom_hero.svg',height:145,width:double.infinity,fit:BoxFit.cover)),
+        const SizedBox(height:14),
+        Text((widget.classroom['name']??'Classroom').toString()+' learning space',style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900,color:AppColors.ink)),
+        const SizedBox(height:5),const Text('Everything for this class, organised in one place.',style:TextStyle(color:AppColors.muted)),
+        const SizedBox(height:13),
+        Row(children:[
+          Expanded(child:_classroomStat(Icons.menu_book_outlined,'Lessons',lessons.length)),
+          const SizedBox(width:8),Expanded(child:_classroomStat(Icons.assignment_outlined,'Assignments',assignments.length)),
+          const SizedBox(width:8),Expanded(child:_classroomStat(Icons.dashboard_outlined,'Board posts',posts.length)),
+        ]),
+        const SizedBox(height:19),
+        _classroomHeading('Class signboard','Notices, explanations and shared resources'),
+        if(posts.isEmpty)const _InfoNotice(message:'The classroom board is empty. Your tutor will post explanations, learning resources and notices here.'),
+        ...posts.map(_postCard),
+        const SizedBox(height:8),_classroomHeading('Lessons and teaching','Published lessons for this class'),
+        if(lessons.isEmpty)const _InfoNotice(message:'No lessons have been published for this classroom yet.'),
+        ...lessons.map((lesson)=>Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
+          leading:const CircleAvatar(backgroundColor:AppColors.paleGold,child:Icon(Icons.play_lesson_outlined,color:AppColors.brown)),
+          title:Text(lesson['title']?.toString()??'Lesson',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+          subtitle:Text((lesson['subjects'] is Map?lesson['subjects']['name']:'Learning')?.toString()??'Learning'),
+          trailing:const Icon(Icons.chevron_right_rounded),
+          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>LessonDetailPage(lesson:lesson))),
+        ))),
+        const SizedBox(height:8),_classroomHeading('Assignments','Homework published for this class'),
+        if(assignments.isEmpty)const _InfoNotice(message:'No assignments have been published for this classroom yet.'),
+        ...assignments.map((a)=>Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
+          leading:const CircleAvatar(backgroundColor:AppColors.paleGold,child:Icon(Icons.assignment_outlined,color:AppColors.brown)),
+          title:Text(a['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+          subtitle:Text('${a['subject_name']??'Subject'} • ${a['submission_status']??'To do'}'),
+          trailing:const Icon(Icons.chevron_right_rounded),
+          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentAssignmentDetailPage(assignment:a))),
+        ))),
+      ]);
+    })),
+  );
+}
+
+Widget _classroomStat(IconData icon,String label,int value)=>Container(
+  padding:const EdgeInsets.symmetric(vertical:12,horizontal:7),
+  decoration:BoxDecoration(color:AppColors.cream,borderRadius:BorderRadius.circular(13)),
+  child:Column(children:[Icon(icon,color:AppColors.brown,size:19),const SizedBox(height:5),
+    Text(value.toString(),style:const TextStyle(fontSize:19,fontWeight:FontWeight.w900,color:AppColors.ink)),
+    Text(label,style:const TextStyle(fontSize:10,color:AppColors.muted))]),
+);
+Widget _classroomHeading(String title,String subtitle)=>Padding(
+  padding:const EdgeInsets.only(bottom:10,top:8),
+  child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Text(title,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w900,color:AppColors.ink)),
+    const SizedBox(height:3),Text(subtitle,style:const TextStyle(fontSize:12,color:AppColors.muted)),
+  ]),
+);
+
 class LessonDetailPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
   final bool allowCompletion;
