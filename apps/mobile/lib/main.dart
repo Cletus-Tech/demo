@@ -4250,12 +4250,17 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
         final all=s.data??[];
         final rows=all.where((r)=>_filter=='All'||_status(r)==_filter).toList();
         final pending=all.where((r)=>_status(r)=='To do'||_status(r)=='Overdue'||_status(r)=='Returned').length;
-        final grouped=<String,List<Map<String,dynamic>>>{};
+        final grouped=<String,Map<String,List<Map<String,dynamic>>>>{};
         for(final row in rows){
+          final className=(row['class_name']??'Class not specified').toString();
           final subject=(row['subject_name']??'Other subjects').toString();
-          grouped.putIfAbsent(subject,()=>[]).add(row);
+          grouped.putIfAbsent(className,()=>{});
+          grouped[className]!.putIfAbsent(subject,()=>[]).add(row);
         }
-        final subjects=grouped.keys.toList()..sort();
+        final classNames=grouped.keys.toList()..sort((a,b){
+          final rank=_schoolLevelRank(a).compareTo(_schoolLevelRank(b));
+          return rank!=0?rank:a.compareTo(b);
+        });
         return ListView(padding:const EdgeInsets.all(18),children:[
           const Text('Class assignments',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
           const SizedBox(height:5),
@@ -4269,10 +4274,13 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
           const SizedBox(height:13),
           if(all.isEmpty) const _InfoNotice(message:'No assignments have been published for your approved class yet. When your tutor publishes homework, it will appear here under its subject.'),
           if(all.isNotEmpty&&rows.isEmpty) _InfoNotice(message:'There are no assignments in the '+_filter.toLowerCase()+' category.'),
-          for(final subject in subjects)...[
-            Padding(padding:const EdgeInsets.only(top:8,bottom:7),child:Text(subject.toUpperCase(),
-              style:const TextStyle(fontSize:12,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.brown))),
-            ...grouped[subject]!.map((r){
+          for(final className in classNames)...[
+            Padding(padding:const EdgeInsets.only(top:12,bottom:5),child:Text(className.toUpperCase(),
+              style:const TextStyle(fontSize:14,letterSpacing:.6,fontWeight:FontWeight.w900,color:AppColors.ink))),
+            for(final subject in (grouped[className]!.keys.toList()..sort()))...[
+              Padding(padding:const EdgeInsets.only(top:6,bottom:7,left:5),child:Text(subject.toUpperCase(),
+                style:const TextStyle(fontSize:11,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.brown))),
+            ...grouped[className]![subject]!.map((r){
               final status=_status(r);
               final isOverdue=status=='Overdue';
               final done=status=='Graded';
@@ -4288,6 +4296,7 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
                 onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentAssignmentDetailPage(assignment:r))).then((_)=>_refresh()),
               ));
             }),
+            ],
           ],
         ]);
       })),
