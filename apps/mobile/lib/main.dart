@@ -153,6 +153,7 @@ class _RoleRouterState extends State<RoleRouter> {
       return LearnerHomePage(
         owner: roles.contains('super_admin'),
         admin: roles.contains('admin') || roles.contains('super_admin'),
+        tutor: roles.contains('tutor'),
       );
     },
   );
@@ -599,7 +600,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   late Future<List<Map<String, dynamic>>> _classes, _subjects, _lessons, _sessions, _assessments;
   bool _busy = false;
   @override
-  void initState() { super.initState(); _tabs = TabController(length: 6, vsync: this); _reload(); }
+  void initState() { super.initState(); _tabs = TabController(length: 7, vsync: this); _reload(); }
   @override
   void dispose() { _tabs.dispose(); super.dispose(); }
   void _reload() {
@@ -911,15 +912,212 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   @override
   Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Academic management'),bottom:TabBar(isScrollable:true,controller:_tabs,tabs:const[
-      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Sessions'),Tab(text:'Assessments'),Tab(text:'Assignments'),
+      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Sessions'),Tab(text:'Assessments'),Tab(text:'Assignments'),Tab(text:'Attendance'),
     ])),
     body:RefreshIndicator(onRefresh:_refresh,child:TabBarView(controller:_tabs,children:[
-      _classesTab(),_subjectsTab(),_lessonsTab(),_sessionsTab(),_assessmentsTab(),const AdminAssignmentsPanel(),
+      _classesTab(),_subjectsTab(),_lessonsTab(),_sessionsTab(),_assessmentsTab(),const AdminAssignmentsPanel(),const AdminAttendancePage(),
     ])),
   );
 }
 
 
+
+
+class AdminAttendancePage extends StatefulWidget {
+  const AdminAttendancePage({super.key});
+  @override
+  State<AdminAttendancePage> createState() => _AdminAttendancePageState();
+}
+
+class _AdminAttendancePageState extends State<AdminAttendancePage> {
+  late Future<Map<String, dynamic>> _options;
+  Future<List<Map<String, dynamic>>>? _roster;
+  String? _classId;
+  String? _sessionId;
+  DateTime _date = DateTime.now();
+  final Map<String, String> _statuses = {};
+  final Map<String, TextEditingController> _notes = {};
+  bool _saving = false;
+
+  String get _dateKey => _date.year.toString().padLeft(4, '0') + '-' +
+      _date.month.toString().padLeft(2, '0') + '-' +
+      _date.day.toString().padLeft(2, '0');
+
+  @override
+  void initState() { super.initState(); _options = _loadOptions(); }
+
+  Future<Map<String, dynamic>> _loadOptions() async {
+    final db = Supabase.instance.client;
+    final values = await Future.wait([
+      db.from('classes').select('id,name,level').eq('status', 'active').order('name'),
+      db.from('academic_sessions').select('id,name,starts_on,ends_on,is_current').order('starts_on', ascending: false),
+    ]);
+    final classes = List<Map<String, dynamic>>.from(values[0]);
+    final sessions = List<Map<String, dynamic>>.from(values[1]);
+    if (mounted) {
+      setState(() {
+        _classId = classes.isEmpty ? null : classes.first['id'].toString();
+        final current = sessions.where((r) => r['is_current'] == true).toList();
+        _sessionId = current.isNotEmpty ? current.first['id'].toString()
+            : (sessions.isEmpty ? null : sessions.first['id'].toString());
+        if (_classId != null && _sessionId != null) _roster = _loadRoster();
+      });
+    }
+    return {'classes': classes, 'sessions': sessions};
+  }
+
+  Future<List<Map<String, dynamic>>> _loadRoster() async {
+    if (_classId == null || _sessionId == null) return [];
+    final result = await Supabase.instance.client.rpc('class_attendance_roster', params: {
+      'p_class_id': _classId, 'p_session_id': _sessionId, 'p_attendance_date': _dateKey,
+    });
+    final rows = List<Map<String, dynamic>>.from(result as List);
+    for (final row in rows) {
+      final id = row['student_id'].toString();
+      _statuses[id] = row['status']?.toString() ?? 'unmarked';
+      _notes.putIfAbsent(id, () => TextEditingController(text: row['note']?.toString() ?? ''));
+    }
+    return rows;
+  }
+
+  void _reloadRoster() {
+    _statuses.clear();
+    for (final controller in _notes.values) { controller.dispose(); }
+    _notes.clear();
+    setState(() => _roster = _loadRoster());
+  }
+
+  Future<void> _chooseDate() async {
+    final chosen = await showDatePicker(context: context, initialDate: _date,
+      firstDate: DateTime(2020), lastDate: DateTime(2035), helpText: 'Choose attendance date');
+    if (chosen != null) { setState(() => _date = chosen); _reloadRoster(); }
+  }
+
+  Future<void> _save() async {
+    final rows = await (_roster ?? Future.value(<Map<String, dynamic>>[]));
+    final marks = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      final id = row['student_id'].toString();
+      final status = _statuses[id] ?? 'unmarked';
+      if (status != 'unmarked') {
+        marks.add({'student_id': id, 'status': status, 'note': _notes[id]?.text.trim()});
+      }
+    }
+    if (marks.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mark at least one learner before saving.')));
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final result = await Supabase.instance.client.rpc('save_class_attendance', params: {
+        'p_class_id': _classId, 'p_session_id': _sessionId,
+        'p_attendance_date': _dateKey, 'p_marks': marks,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Attendance saved for ' + result['saved'].toString() + ' learner(s).')));
+        _reloadRoster();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Attendance could not be saved: ' + e.toString())));
+    } finally { if (mounted) setState(() => _saving = false); }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _notes.values) { controller.dispose(); }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+    future: _options,
+    builder: (context, options) {
+      if (options.connectionState != ConnectionState.done) {
+        return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+      }
+      if (options.hasError) return Center(child: Padding(padding: const EdgeInsets.all(20),
+        child: _InfoNotice(message: 'Attendance setup could not be loaded: ' + options.error.toString())));
+      final classes = List<Map<String, dynamic>>.from(options.data?['classes'] ?? []);
+      final sessions = List<Map<String, dynamic>>.from(options.data?['sessions'] ?? []);
+      if (classes.isEmpty || sessions.isEmpty) return ListView(padding: const EdgeInsets.all(20), children: [
+        const Text('Class attendance', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        const SizedBox(height: 12),
+        _InfoNotice(message: classes.isEmpty ? 'Create an active class before taking attendance.'
+          : 'Create an academic session before taking attendance.'),
+      ]);
+      return Column(children: [
+        Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Class attendance register', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 5),
+            const Text('Select the class, session and date. Mark each learner, then save the register.',
+              style: TextStyle(color: AppColors.muted, height: 1.4)),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(value: _classId, decoration: const InputDecoration(labelText: 'Class'),
+              items: classes.map((r) => DropdownMenuItem<String>(value: r['id'].toString(),
+                child: Text(r['name'].toString() + (r['level'] == null ? '' : ' • ' + r['level'].toString())))).toList(),
+              onChanged: (v) { _classId = v; _reloadRoster(); }),
+            const SizedBox(height: 9),
+            DropdownButtonFormField<String>(value: _sessionId, decoration: const InputDecoration(labelText: 'Academic session'),
+              items: sessions.map((r) => DropdownMenuItem<String>(value: r['id'].toString(), child: Text(r['name'].toString()))).toList(),
+              onChanged: (v) { _sessionId = v; _reloadRoster(); }),
+            const SizedBox(height: 9),
+            Row(children: [
+              Expanded(child: OutlinedButton.icon(onPressed: _chooseDate,
+                icon: const Icon(Icons.calendar_today_outlined), label: Text(_dateKey))),
+              const SizedBox(width: 9),
+              FilledButton.icon(onPressed: _saving ? null : _save,
+                icon: const Icon(Icons.save_outlined), label: Text(_saving ? 'Saving' : 'Save register')),
+            ]),
+          ])),
+        const Divider(height: 1, color: AppColors.line),
+        Expanded(child: _roster == null ? const Center(child: Text('Choose a class and session.'))
+          : FutureBuilder<List<Map<String, dynamic>>>(future: _roster, builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+            if (snapshot.hasError) return ListView(padding: const EdgeInsets.all(18), children: [
+              _InfoNotice(message: 'The register could not be loaded. ' + snapshot.error.toString())]);
+            final rows = snapshot.data ?? [];
+            if (rows.isEmpty) return ListView(padding: const EdgeInsets.all(18), children: const [
+              _InfoNotice(message: 'No active learners are enrolled in this class for the selected session. Enrol learners first.')]);
+            final marked = rows.where((r) => (_statuses[r['student_id'].toString()] ?? 'unmarked') != 'unmarked').length;
+            return ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 24), children: [
+              Row(children: [
+                Expanded(child: Text(rows.length.toString() + ' enrolled learner(s)', style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink))),
+                Text(marked.toString() + ' marked', style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600)),
+              ]),
+              const SizedBox(height: 10),
+              ...rows.map((row) {
+                final id = row['student_id'].toString();
+                return Card(margin: const EdgeInsets.only(bottom: 9),
+                  child: Padding(padding: const EdgeInsets.all(13), child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text((row['full_name'] ?? 'Learner').toString(), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      const SizedBox(height: 3),
+                      Text((row['admission_number'] ?? 'No admission number').toString(), style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(value: _statuses[id] ?? 'unmarked',
+                        decoration: const InputDecoration(labelText: 'Attendance status'),
+                        items: const [
+                          DropdownMenuItem(value: 'unmarked', child: Text('Not marked')),
+                          DropdownMenuItem(value: 'present', child: Text('Present')),
+                          DropdownMenuItem(value: 'absent', child: Text('Absent')),
+                          DropdownMenuItem(value: 'late', child: Text('Late')),
+                          DropdownMenuItem(value: 'excused', child: Text('Excused')),
+                        ],
+                        onChanged: (v) => setState(() => _statuses[id] = v ?? 'unmarked')),
+                      const SizedBox(height: 7),
+                      TextField(controller: _notes[id], decoration: const InputDecoration(labelText: 'Note (optional)')),
+                    ])));
+              }),
+            ]);
+          })),
+      ]);
+    },
+  );
+}
 
 class AdminAssignmentsPanel extends StatefulWidget {
   const AdminAssignmentsPanel({super.key});
@@ -1780,7 +1978,8 @@ class _SignInPageState extends State<SignInPage> {
 class LearnerHomePage extends StatefulWidget {
   final bool owner;
   final bool admin;
-  const LearnerHomePage({super.key, this.owner = false, this.admin = false});
+  final bool tutor;
+  const LearnerHomePage({super.key, this.owner = false, this.admin = false, this.tutor = false});
   @override
   State<LearnerHomePage> createState() => _LearnerHomePageState();
 }
@@ -1865,9 +2064,10 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
             onOpenLearning: () => setState(() => _selectedIndex = 1),
             owner: widget.owner,
             admin: widget.admin,
+            tutor: widget.tutor,
             onOpenCentre: () => _openCentrePortal(),
           ),
-          _LearningTab(owner: widget.owner, admin: widget.admin),
+          _LearningTab(owner: widget.owner, admin: widget.admin, tutor: widget.tutor),
           _AnalyticsTab(owner: widget.owner, admin: widget.admin),
           _ProfileTab(account: _account, onRetry: () => setState(() => _account = _loadAccount()), onSignOut: _signOut),
         ],
@@ -2049,12 +2249,14 @@ class _HomeTab extends StatelessWidget {
   final VoidCallback onOpenLearning;
   final bool owner;
   final bool admin;
+  final bool tutor;
   final VoidCallback onOpenCentre;
   const _HomeTab({
     required this.account,
     required this.onOpenLearning,
     required this.owner,
     required this.admin,
+    required this.tutor,
     required this.onOpenCentre,
   });
 
@@ -2071,7 +2273,7 @@ class _HomeTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(owner ? 'OWNER DASHBOARD' : admin ? 'CENTRE DASHBOARD' : 'LEARNER PORTAL',
+                Text(owner ? 'OWNER DASHBOARD' : admin ? 'CENTRE DASHBOARD' : tutor ? 'TUTOR PORTAL' : 'LEARNER PORTAL',
                   style: TextStyle(fontSize: 10, letterSpacing: 1.4,
                     fontWeight: FontWeight.w800, color: AppColors.muted)),
                 const SizedBox(height: 8),
@@ -2280,7 +2482,8 @@ class _CentreOverviewState extends State<_CentreOverview> {
 class _LearningTab extends StatefulWidget {
   final bool owner;
   final bool admin;
-  const _LearningTab({this.owner = false, this.admin = false});
+  final bool tutor;
+  const _LearningTab({this.owner = false, this.admin = false, this.tutor = false});
   @override
   State<_LearningTab> createState() => _LearningTabState();
 }
@@ -2314,7 +2517,18 @@ class _LearningTabState extends State<_LearningTab> {
       const SizedBox(height: 7),
       const Text('Open a lesson to read its notes and learning materials.', style: TextStyle(color: AppColors.muted, height: 1.45)),
       const SizedBox(height: 20),
-      if (!widget.owner && !widget.admin) Card(
+      if (widget.tutor) Card(
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.fact_check_outlined, color: AppColors.brown)),
+          title: const Text('Class attendance', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+          subtitle: const Text('Take and update the register for your assigned classes'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const AdminAttendancePage())),
+        ),
+      ),
+      if (widget.tutor) const SizedBox(height: 10),
+      if (!widget.owner && !widget.admin && !widget.tutor) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Container(width: 44, height: 44,
