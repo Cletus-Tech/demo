@@ -34,7 +34,7 @@ jobs:
           content = manifest.read_text()
           permission = '    <uses-permission android:name="android.permission.INTERNET" />'
           if permission not in content:
-              content = content.replace('<application', permission + '\\n    <application', 1)
+              content = content.replace('<application', permission + '\n    <application', 1)
           manifest.write_text(content)
           assert 'android.permission.INTERNET' in manifest.read_text()
           print("Verified INTERNET permission in main (release) manifest")
