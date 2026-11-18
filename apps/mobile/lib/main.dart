@@ -155,6 +155,7 @@ class _RoleRouterState extends State<RoleRouter> {
         owner: roles.contains('super_admin'),
         admin: roles.contains('admin') || roles.contains('super_admin'),
         tutor: roles.contains('tutor'),
+        parent: user.userMetadata?['account_type'] == 'parent',
       );
     },
   );
@@ -1930,6 +1931,7 @@ class _SignInPageState extends State<SignInPage> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _creating = false;
+  String _accountType = 'student';
   bool _busy = false;
   bool _obscure = true;
   String? _message;
@@ -1952,14 +1954,16 @@ class _SignInPageState extends State<SignInPage> {
         final response = await auth.signUp(
           email: _email.text.trim(),
           password: _password.text,
-          data: {'full_name': _name.text.trim()},
+          data: {'full_name': _name.text.trim(), 'account_type': _accountType},
         );
         if (response.session == null) {
           _error = false;
           _message = 'Account created. Check your email to confirm your address, then sign in.';
         } else {
           _error = false;
-          _message = 'Your learner account has been created.';
+          _message = _accountType == 'parent'
+              ? 'Your parent account has been created.'
+              : 'Your learner account has been created.';
         }
       } else {
         await auth.signInWithPassword(
@@ -2012,7 +2016,7 @@ class _SignInPageState extends State<SignInPage> {
                         style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700,
                           color: AppColors.ink)),
                       const SizedBox(height: 8),
-                      Text(_creating ? 'Create your learner account.' : 'Sign in to continue learning.',
+                      Text(_creating ? 'Create your account.' : 'Sign in to continue learning.',
                         style: const TextStyle(color: AppColors.muted)),
                       const SizedBox(height: 24),
                       if (_creating) ...[
@@ -2021,6 +2025,16 @@ class _SignInPageState extends State<SignInPage> {
                           textCapitalization: TextCapitalization.words,
                           decoration: const InputDecoration(labelText: 'Full name'),
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your full name' : null,
+                        ),
+                        const SizedBox(height: 13),
+                        DropdownButtonFormField<String>(
+                          value: _accountType,
+                          decoration: const InputDecoration(labelText: 'I am registering as'),
+                          items: const [
+                            DropdownMenuItem(value: 'student', child: Text('Student')),
+                            DropdownMenuItem(value: 'parent', child: Text('Parent / guardian')),
+                          ],
+                          onChanged: _busy ? null : (v) => setState(() => _accountType = v ?? 'student'),
                         ),
                         const SizedBox(height: 13),
                       ],
@@ -2082,7 +2096,8 @@ class LearnerHomePage extends StatefulWidget {
   final bool owner;
   final bool admin;
   final bool tutor;
-  const LearnerHomePage({super.key, this.owner = false, this.admin = false, this.tutor = false});
+  final bool parent;
+  const LearnerHomePage({super.key, this.owner = false, this.admin = false, this.tutor = false, this.parent = false});
   @override
   State<LearnerHomePage> createState() => _LearnerHomePageState();
 }
@@ -2168,6 +2183,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
             owner: widget.owner,
             admin: widget.admin,
             tutor: widget.tutor,
+            parent: widget.parent,
             onOpenCentre: () => _openCentrePortal(),
           ),
           _LearningTab(owner: widget.owner, admin: widget.admin, tutor: widget.tutor),
@@ -2353,6 +2369,7 @@ class _HomeTab extends StatelessWidget {
   final bool owner;
   final bool admin;
   final bool tutor;
+  final bool parent;
   final VoidCallback onOpenCentre;
   const _HomeTab({
     required this.account,
@@ -2360,6 +2377,7 @@ class _HomeTab extends StatelessWidget {
     required this.owner,
     required this.admin,
     required this.tutor,
+    required this.parent,
     required this.onOpenCentre,
   });
 
@@ -2376,7 +2394,7 @@ class _HomeTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(owner ? 'OWNER DASHBOARD' : admin ? 'CENTRE DASHBOARD' : tutor ? 'TUTOR PORTAL' : 'LEARNER PORTAL',
+                Text(owner ? 'OWNER DASHBOARD' : admin ? 'CENTRE DASHBOARD' : tutor ? 'TUTOR PORTAL' : parent ? 'PARENT PORTAL' : 'LEARNER PORTAL',
                   style: TextStyle(fontSize: 10, letterSpacing: 1.4,
                     fontWeight: FontWeight.w800, color: AppColors.muted)),
                 const SizedBox(height: 8),
