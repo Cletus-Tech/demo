@@ -1,50 +1,35 @@
-# Demo Broker — Brokerage Platform Foundation
+# Young Learners Tutorial
 
-This repository contains the existing client-approved brokerage-style dashboard, connected to Supabase for authentication, account data, demo wallets, ledger entries, orders, positions, referrals, notifications, and administration.
+**Every Child Can Learn.**
 
-## Important operating mode
+A cross-platform tutorial-centre and learning platform for students, parents/guardians, tutors, centre administrators and external learners.
 
-The current platform is a **demo/practice environment**:
-- Balances and deposits/withdrawals are simulated practice funds.
-- Market prices are marked as demo/simulated; they are not exchange feeds.
-- Spot orders, swaps, and leveraged positions are processed by database functions against demo wallets.
-- Service products (cards, custody, signals, copy trading, staking, etc.) are enquiry workflows, not activated financial products.
-- No real money, crypto custody, or live exchange orders are processed.
+## Current build
+The first Flutter foundation is in `apps/mobile`. The first review target is Android APK; iOS, Windows and Web follow from the same Flutter app, with a separate web administration portal planned as the platform grows.
 
-A production launch requires separately integrating and testing licensed payment, custody, KYC/AML, market-data, and brokerage/exchange providers, plus legal/compliance approval. Provider credentials must never be committed to this public repository.
+## Product areas
+- Student learning: subjects, lessons, materials, classes, assignments, CBT, results and progress.
+- Parent portal: linked children, attendance, academic reports, fee/payment status and announcements.
+- Tutor workspace: classes, teaching materials, attendance, assignments, grading and feedback.
+- Centre administration: enrolment, users, classes, academic sessions, timetable, assessments, finance and reporting.
+- External learners: public course discovery and enrolment.
+- Hybrid delivery: physical classes, virtual classes and self-paced learning.
 
-## Main files
+## Brand
+Deep brown, golden yellow and warm cream. Tagline: **Every Child Can Learn.**
 
-- `index.html` — entry / route page
-- `login.html` — registration, sign-in and password recovery
-- `reset-password.html` — password reset callback
-- `dashboard.html` — existing responsive dashboard and trading interface
-- `admin.html` — protected staff console
-- `setup-check.html` — connection and security self-check
-- `config.js` — public Supabase project URL and publishable key only
-- `supabase-client.js` — Supabase client/session setup
-- `api.js` — browser-to-database API calls
-- `setup_all.sql` — consolidated initial database setup
-- `migrations/` — incremental database migrations
+## Development
+Install Flutter stable, then:
+```sh
+cd apps/mobile
+flutter pub get
+flutter run
+flutter test
+flutter build apk --debug
+```
 
-## Deployment
+## Backend and security
+The intended backend is the existing Supabase project in the **demo** organisation. No production database migration is applied by this starter. Before connecting real users, the schema will be reviewed and built with explicit Data API grants, Row Level Security on exposed tables, role-based access, parent/guardian relationships, auditability and child-safety controls. Never put a Supabase service-role key in a mobile or web client.
 
-The site is deployed from the repository's `main` branch through GitHub Pages.
-
-Live site: https://cletus-tech.github.io/demo/
-
-After changing authentication redirect URLs or the hosting domain, update Supabase Authentication > URL Configuration to include the deployed site and the login/reset-password callback pages.
-
-## Database changes
-
-The connected Supabase project is the **Demo Broker** project. Do not run `setup_all.sql` again on an already initialized database. Apply only migrations that have not already been applied, then run the setup check and database security advisors.
-
-## Validation
-
-1. Open `setup-check.html` while signed in.
-2. Confirm the authenticated trading-function validation rejects the intentionally invalid test order.
-3. Confirm the profile, service request access, demo wallets, and demo market prices checks.
-4. Use a dedicated authorized admin/superadmin account to test `admin.html`.
-5. Test demo transactions with practice funds only and verify resulting ledger/order/position records.
-
-Never place a Supabase `service_role` or secret key in browser code.
+## Build status
+This repository branch is a foundation, not a finished production platform. Authentication, role provisioning, database migrations, payment integrations, virtual classrooms and offline sync are subsequent implementation milestones.
