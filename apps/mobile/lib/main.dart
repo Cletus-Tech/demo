@@ -1203,7 +1203,6 @@ class _AdminAttendancePageState extends State<AdminAttendancePage> {
                     crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text((row['full_name'] ?? 'Learner').toString(), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
                       const SizedBox(height: 3),
-                      Text((row['admission_number'] ?? 'No admission number').toString(), style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(value: _statuses[id] ?? 'unmarked',
                         decoration: const InputDecoration(labelText: 'Attendance status'),
