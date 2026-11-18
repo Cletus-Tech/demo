@@ -3665,7 +3665,8 @@ class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
   Future<List<Map<String, dynamic>>> _load() async {
     final raw = await Supabase.instance.client.rpc('student_available_assessments');
     if (raw is! List) return [];
-    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return raw.map((e) => Map<String, dynamic>.from(e as Map))
+      .where((e) => e['is_past_question'] != true).toList();
   }
   Future<void> _refresh() async { final next = _load(); setState(() => _items = next); await next; }
   Future<void> _openHistory() async {
