@@ -215,14 +215,15 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
     final results = await Future.wait([
       db.from('learning_access_requests').select('id,user_id,learner_name,level,programme_title,amount_due,status,payment_amount,payment_reference,payment_note,admin_note,created_at,profiles(full_name,email)').order('created_at', ascending: false),
       db.from('learning_payment_settings').select('bank_name,account_name,account_number,payment_instructions').eq('id', 1).maybeSingle(),
-      db.from('learning_programmes').select('id,title,stage,level,duration_label,fee,is_active,class_id').order('created_at', ascending: false),
+      widget.owner ? db.from('learning_programmes').select('id,title,stage,level,duration_label,fee,is_active,class_id').order('created_at', ascending: false) : Future.value([]),
+      widget.owner ? db.from('classes').select('id,name,level').eq('status', 'active').order('name') : Future.value([]),
     ]);
     final settings = results[1] as Map<String, dynamic>?;
     _bank.text = settings?['bank_name']?.toString() ?? '';
     _accountName.text = settings?['account_name']?.toString() ?? '';
     _accountNumber.text = settings?['account_number']?.toString() ?? '';
     _instructions.text = settings?['payment_instructions']?.toString() ?? '';
-    return {'requests': List<Map<String, dynamic>>.from(results[0]), 'programmes': List<Map<String, dynamic>>.from(results[2])};
+    return {'requests': List<Map<String, dynamic>>.from(results[0]), 'programmes': List<Map<String, dynamic>>.from(results[2]), 'classes': List<Map<String, dynamic>>.from(results[3])};
   }
 
   Future<void> _refresh() async { final next = _load(); setState(() => _data = next); await next; }
@@ -243,13 +244,14 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
     finally { if (mounted) setState(() => _busy = false); }
   }
 
-  Future<void> _saveProgramme() async {
+  Future<void> _saveProgramme(List<Map<String, dynamic>> classes) async {
     final title = TextEditingController();
     final level = TextEditingController();
     final description = TextEditingController();
     final fee = TextEditingController();
     final duration = TextEditingController(text: 'Monthly');
     String stage = 'Primary';
+    String? selectedClassId = classes.isEmpty ? null : classes.first['id'].toString();
     final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, refresh) => AlertDialog(
       title: const Text('Add learning programme'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -260,12 +262,15 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
         const SizedBox(height: 8), TextField(controller: fee, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Fee in Naira')),
         const SizedBox(height: 8), TextField(controller: duration, decoration: const InputDecoration(labelText: 'Duration / billing period')),
         const SizedBox(height: 8), TextField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'What is included?')),
+        const SizedBox(height: 8),
+        if (classes.isEmpty) const Text('Create an active class in Academic Management before adding a programme.')
+        else DropdownButtonFormField<String>(value: selectedClassId, isExpanded: true, decoration: const InputDecoration(labelText: 'Connect to classroom'), items: classes.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text('${c['name']}'))).toList(), onChanged: (v) => refresh(() => selectedClassId = v)),
       ])),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save programme'))],
     )));
     if (ok == true) {
       final amount = double.tryParse(fee.text.trim());
-      if (title.text.trim().isEmpty || level.text.trim().isEmpty || amount == null || amount <= 0) {
+      if (title.text.trim().isEmpty || level.text.trim().isEmpty || amount == null || amount <= 0 || selectedClassId == null) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a name, class level and valid fee.')));
       } else {
         setState(() => _busy = true);
@@ -273,7 +278,7 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
           await Supabase.instance.client.from('learning_programmes').insert({
             'title': title.text.trim(), 'stage': stage, 'level': level.text.trim(),
             'fee': amount, 'duration_label': duration.text.trim().isEmpty ? 'Monthly' : duration.text.trim(),
-            'description': description.text.trim(), 'is_active': true,
+            'description': description.text.trim(), 'class_id': selectedClassId, 'is_active': true,
           });
           await _refresh();
         } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create programme: $e'))); }
@@ -316,6 +321,7 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
       if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Could not load payment administration: ${snapshot.error}')));
       final requests = List<Map<String, dynamic>>.from(snapshot.data!['requests']);
       final programmes = List<Map<String, dynamic>>.from(snapshot.data!['programmes']);
+      final classes = List<Map<String, dynamic>>.from(snapshot.data!['classes']);
       final pending = requests.where((r) => r['status'] == 'payment_submitted').length;
       return RefreshIndicator(onRefresh: _refresh, child: ListView(padding: const EdgeInsets.all(16), children: [
         const Text('Payment verification', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: _laBrown)),
@@ -332,7 +338,7 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
         ]))),
         if (widget.owner) ...[
           const SizedBox(height: 12),
-          Card(child: ListTile(leading: const Icon(Icons.add_circle_outline, color: _laBrown), title: const Text('Create a learning programme'), subtitle: const Text('Set the class level, price and duration.'), onTap: _busy ? null : _saveProgramme)),
+          Card(child: ListTile(leading: const Icon(Icons.add_circle_outline, color: _laBrown), title: const Text('Create a learning programme'), subtitle: const Text('Set the class level, price and duration.'), onTap: _busy ? null : () => _saveProgramme(classes))),
           const SizedBox(height: 8),
           ...programmes.map((p) => Card(child: SwitchListTile(
             value: p['is_active'] == true,
