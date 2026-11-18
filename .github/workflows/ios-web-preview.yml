@@ -1,6 +1,5 @@
-name: iPhone Web Preview
+name: Young Learners Web Preview
 
-# Re-run after allowing the young-learners-foundation deployment branch.
 on:
   workflow_dispatch:
   push:
@@ -28,10 +27,8 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
@@ -42,7 +39,7 @@ jobs:
       - name: Run widget tests
         run: flutter test
       - name: Build responsive web preview
-        run: flutter build web --release --base-href /demo/
+        run: flutter build web --release --base-href /demo/ --dart-define=SUPABASE_URL=https://lvpetmhhspuagbjojlks.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload web preview
