@@ -37,46 +37,66 @@ class YoungLearnersLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final markWidth = compact ? 44.0 : 76.0;
-    final markHeight = compact ? 29.0 : 68.0;
-    final mainSize = compact ? 12.0 : 21.0;
-    final subSize = compact ? 8.0 : 12.0;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('YL', style: TextStyle(
-          fontFamily: 'Georgia', fontSize: compact ? 25 : 43,
-          height: .88, fontWeight: FontWeight.w900,
-          letterSpacing: -2, color: AppColors.brown)),
-        SvgPicture.asset('assets/young_learners_logo.svg',
-          width: markWidth, height: markHeight, fit: BoxFit.contain),
+    if (compact) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('YL', style: TextStyle(
+            fontFamily: 'Georgia', fontSize: 23, height: .85,
+            fontWeight: FontWeight.w900, letterSpacing: -2, color: AppColors.brown)),
+          SvgPicture.asset('assets/young_learners_logo.svg',
+            width: 38, height: 24, fit: BoxFit.contain),
+        ]),
+        const SizedBox(width: 6),
+        Container(width: 2, height: 43, color: AppColors.gold),
+        const SizedBox(width: 7),
+        const Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('YOUNG LEARNERS', style: TextStyle(
+            fontSize: 11, height: 1, fontWeight: FontWeight.w900,
+            letterSpacing: .1, color: AppColors.brown)),
+          SizedBox(height: 3),
+          _TutorialWordmark(compact: true),
+        ]),
+      ]);
+    }
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('YL', style: TextStyle(
+            fontFamily: 'Georgia', fontSize: 37, height: .85,
+            fontWeight: FontWeight.w900, letterSpacing: -3, color: AppColors.brown)),
+          SvgPicture.asset('assets/young_learners_logo.svg',
+            width: 62, height: 34, fit: BoxFit.contain),
+        ]),
+        const SizedBox(width: 10),
+        Container(width: 2, height: 70, color: AppColors.gold),
+        const SizedBox(width: 10),
+        const Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('YOUNG LEARNERS', maxLines: 1, softWrap: false,
+            style: TextStyle(fontSize: 17, height: 1, fontWeight: FontWeight.w900,
+              letterSpacing: .1, color: AppColors.brown)),
+          SizedBox(height: 5),
+          _TutorialWordmark(),
+        ]),
       ]),
-      SizedBox(width: compact ? 7 : 12),
-      Container(width: 2, height: compact ? 43 : 75, color: AppColors.gold),
-      SizedBox(width: compact ? 7 : 12),
-      Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('YOUNG', style: TextStyle(
-          fontSize: mainSize, height: 1, fontWeight: FontWeight.w900,
-          letterSpacing: compact ? .2 : .8, color: AppColors.brown)),
-        Text('LEARNERS', style: TextStyle(
-          fontSize: mainSize, height: 1, fontWeight: FontWeight.w900,
-          letterSpacing: compact ? .1 : .7, color: AppColors.brown)),
-        SizedBox(height: compact ? 2 : 5),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10, vertical: compact ? 1 : 3),
-          decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(6)),
-          child: Text('TUTORIAL', style: TextStyle(
-            fontSize: subSize, height: 1, fontWeight: FontWeight.w900,
-            letterSpacing: compact ? 1 : 2, color: AppColors.brown)),
-        ),
-        if (!compact) ...[
-          const SizedBox(height: 5),
-          const Text('EVERY CHILD CAN LEARN',
-            style: TextStyle(fontSize: 10, letterSpacing: 1.1,
-              fontWeight: FontWeight.w700, color: AppColors.brown)),
-        ],
-      ]),
+      const SizedBox(height: 5),
+      const Text('EVERY CHILD CAN LEARN',
+        style: TextStyle(fontSize: 10, letterSpacing: 1.1,
+          fontWeight: FontWeight.w700, color: AppColors.brown)),
     ]);
   }
+}
+
+class _TutorialWordmark extends StatelessWidget {
+  final bool compact;
+  const _TutorialWordmark({this.compact = false});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 9, vertical: compact ? 1 : 3),
+    decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(6)),
+    child: Text('TUTORIAL', style: TextStyle(
+      fontSize: compact ? 8 : 12, height: 1, fontWeight: FontWeight.w900,
+      letterSpacing: compact ? .8 : 2, color: AppColors.brown)),
+  );
 }
 
 class YoungLearnersApp extends StatelessWidget {
