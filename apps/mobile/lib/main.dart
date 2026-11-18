@@ -1904,6 +1904,21 @@ class _LearningTabState extends State<_LearningTab> {
       const SizedBox(height: 7),
       const Text('Open a lesson to read its notes and learning materials.', style: TextStyle(color: AppColors.muted, height: 1.45)),
       const SizedBox(height: 20),
+      Card(
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)),
+            child: const Icon(Icons.assured_workload_outlined, color: AppColors.brown),
+          ),
+          title: const Text('Nigerian Examination Preparation', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+          subtitle: const Text('WAEC, NECO, JAMB, NABTEB, NBAIS and entrance examinations'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ExamPreparationPage())),
+        ),
+      ),
+      const SizedBox(height: 18),
       FutureBuilder<List<Map<String, dynamic>>>(future: _lessons, builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(36), child: Center(child: CircularProgressIndicator(color: AppColors.brown)));
         if (snapshot.hasError) return const _InfoNotice(message: 'Lessons could not be loaded. Check your connection and pull down to try again.');
@@ -2238,6 +2253,122 @@ class _FeatureRow extends StatelessWidget {
         color: AppColors.ink)),
       subtitle: Text(detail, style: const TextStyle(color: AppColors.muted)),
       trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+    ),
+  );
+}
+
+
+class ExamPreparationPage extends StatelessWidget {
+  const ExamPreparationPage({super.key});
+
+  static const bodies = <Map<String, String>>[
+    {
+      'name': 'WAEC',
+      'full': 'West African Examinations Council',
+      'exam': 'WASSCE School • WASSCE Private • GCE',
+      'url': 'https://waecnigeria.org/',
+      'domain': 'waecnigeria.org',
+      'note': 'Official WAEC information, examination services and candidate resources.',
+    },
+    {
+      'name': 'NECO',
+      'full': 'National Examinations Council',
+      'exam': 'SSCE Internal • SSCE External • BECE • NCEE • NGE',
+      'url': 'https://neco.gov.ng/',
+      'domain': 'neco.gov.ng',
+      'note': 'National secondary and basic education examinations, including NCEE and BECE.',
+    },
+    {
+      'name': 'JAMB',
+      'full': 'Joint Admissions and Matriculation Board',
+      'exam': 'UTME • Direct Entry',
+      'url': 'https://www.jamb.gov.ng/',
+      'domain': 'jamb.gov.ng',
+      'note': 'Tertiary admission examination and candidate services. JAMB does not conduct GCE.',
+    },
+    {
+      'name': 'NABTEB',
+      'full': 'National Business and Technical Examinations Board',
+      'exam': 'NBC • NTC • ANBC • ANTC',
+      'url': 'https://nabteb.gov.ng/',
+      'domain': 'nabteb.gov.ng',
+      'note': 'Business, technical and vocational examination pathways.',
+    },
+    {
+      'name': 'NBAIS',
+      'full': 'National Board for Arabic and Islamic Studies',
+      'exam': 'SAISSCE • Tahfeez and related pathways',
+      'url': 'https://nbais.gov.ng/',
+      'domain': 'nbais.gov.ng',
+      'note': 'Arabic and Islamic Studies examination and certification information.',
+    },
+  ];
+
+  Future<void> _open(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      throw Exception('Could not open $url');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Examination Preparation')),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        const Text('Prepare with recognised Nigerian examination bodies',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        const SizedBox(height: 8),
+        const Text('Choose an examination pathway to view its official website. Practice tests and mock examinations will be organised by the learner’s class and eligible examination.',
+          style: TextStyle(color: AppColors.muted, height: 1.5)),
+        const SizedBox(height: 18),
+        ...bodies.map((body) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: Image.network(
+                    'https://www.google.com/s2/favicons?domain=${body['domain']}&sz=128',
+                    width: 52, height: 52, fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 52, height: 52, alignment: Alignment.center,
+                      color: AppColors.paleGold,
+                      child: Text(body['name']!.substring(0, 1),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.brown)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(body['name']!, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                  const SizedBox(height: 2),
+                  Text(body['full']!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                  const SizedBox(height: 8),
+                  Text(body['exam']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.brown)),
+                  const SizedBox(height: 5),
+                  Text(body['note']!, style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      try { await _open(body['url']!); }
+                      catch (_) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('The official website could not be opened. Please try again.')));
+                      }
+                    },
+                    child: Text('Visit official website  ↗',
+                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+                  ),
+                ])),
+              ]),
+            ),
+          ),
+        )),
+        const _InfoNotice(message: 'Examination-body logos are loaded as site icons from their official website domains. They are not recreated or presented as partnership badges. Young Learners Tutorial is an independent preparation platform, not an examination-body registration or certification portal.'),
+      ],
     ),
   );
 }
