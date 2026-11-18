@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'learning_access.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -2408,12 +2409,18 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
     final titles = widget.parent ? ['Home', 'Parent learning', 'Child progress', 'Profile'] : ['Home', 'My learning', 'Analytics', 'Profile'];
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          titles[_selectedIndex] == 'Home'
-              ? 'Young Learners Tutorial'
-              : titles[_selectedIndex],
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-        ),
+        title: titles[_selectedIndex] == 'Home'
+            ? SvgPicture.asset(
+                'assets/young_learners_logo.svg',
+                width: 210,
+                height: 48,
+                fit: BoxFit.contain,
+                alignment: Alignment.centerLeft,
+              )
+            : Text(
+                titles[_selectedIndex],
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+              ),
         actions: [
           IconButton(
             tooltip: 'Notifications',
