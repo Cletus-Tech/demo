@@ -740,13 +740,20 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
         ]))),
         actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save lesson'))],
       )));
-      if(ok==true && title.text.trim().isNotEmpty && classId!=null && subjectId!=null) await _save('lessons',{
-        'title':title.text.trim(),'class_id':classId,'subject_id':subjectId,
-        'description':desc.text.trim().isEmpty?null:desc.text.trim(),
-        'content':content.text.trim().isEmpty?null:content.text.trim(),
-        'live_class_url':liveUrl.text.trim().isEmpty?null:liveUrl.text.trim(),
-        'is_published':row?['is_published'] ?? false,
-      },id:row?['id']?.toString());
+      if(ok==true && title.text.trim().isNotEmpty && classId!=null && subjectId!=null) {
+        final meetingLink = liveUrl.text.trim();
+        if (meetingLink.isNotEmpty && !meetingLink.startsWith('https://')) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a secure live-class link beginning with https://')));
+        } else {
+          await _save('lessons',{
+            'title':title.text.trim(),'class_id':classId,'subject_id':subjectId,
+            'description':desc.text.trim().isEmpty?null:desc.text.trim(),
+            'content':content.text.trim().isEmpty?null:content.text.trim(),
+            'live_class_url':meetingLink.isEmpty?null:meetingLink,
+            'is_published':row?['is_published'] ?? false,
+          },id:row?['id']?.toString());
+        }
+      }
     } catch(e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Lesson form could not load: ' + e.toString())));
     } finally { title.dispose(); desc.dispose(); content.dispose(); liveUrl.dispose(); }
