@@ -261,6 +261,14 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
               ],
               if (permissions.contains('students.manage')) ...[
                 Card(child: ListTile(
+                  leading: const Icon(Icons.family_restroom_outlined, color: AppColors.brown),
+                  title: const Text('Parent link requests'),
+                  subtitle: const Text('Verify parent accounts before linking children'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const GuardianPortalPage(admin: true)),
+                )),
+                const SizedBox(height: 8),
+                Card(child: ListTile(
                   leading: const Icon(Icons.people_alt_outlined, color: AppColors.brown),
                   title: const Text('Student records'),
                   subtitle: const Text('View and manage student records and progress'),
@@ -2418,6 +2426,19 @@ class _HomeTab extends StatelessWidget {
                       onTap: onOpenCentre,
                     ),
                   ),
+                ],
+                if (!owner && !admin && !tutor) ...[
+                  Card(child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: const CircleAvatar(backgroundColor: AppColors.paleGold,
+                      child: Icon(Icons.family_restroom_outlined, color: AppColors.brown)),
+                    title: const Text('Parent / guardian dashboard',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                    subtitle: const Text('Link your account to your child’s learning profile'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const GuardianPortalPage())),
+                  )),
                 ],
                 const SizedBox(height: 24),
                 Row(
