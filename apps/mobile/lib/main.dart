@@ -318,7 +318,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final titles = ['Home', 'My learning', 'Notifications', 'Profile'];
+    final titles = ['Home', 'My learning', 'Analytics', 'Profile'];
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -345,7 +345,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
         children: [
           _HomeTab(account: _account, onOpenLearning: () => setState(() => _selectedIndex = 1)),
           const _LearningTab(),
-          const _NotificationsTab(),
+          const _AnalyticsTab(),
           _ProfileTab(account: _account, onRetry: () => setState(() => _account = _loadAccount()), onSignOut: _signOut),
         ],
       ),
@@ -368,7 +368,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
           NavigationDestination(
             icon: Icon(Icons.notifications_none_rounded),
             selectedIcon: Icon(Icons.notifications_rounded),
-            label: 'Alerts',
+            label: 'Analytics',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
@@ -500,28 +500,40 @@ class _LearningTab extends StatelessWidget {
   );
 }
 
-class _NotificationsTab extends StatelessWidget {
-  const _NotificationsTab();
+class _AnalyticsTab extends StatelessWidget {
+  const _AnalyticsTab();
 
   @override
-  Widget build(BuildContext context) => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.notifications_none_rounded, size: 48, color: AppColors.muted),
-          SizedBox(height: 14),
-          Text('You’re all caught up',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
-              color: AppColors.ink)),
-          SizedBox(height: 7),
-          Text('New announcements, class updates and reminders from the centre will appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.muted, height: 1.5)),
-        ],
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      const Text('Your learning at a glance',
+        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+          color: AppColors.ink)),
+      const SizedBox(height: 7),
+      const Text('A clear view of learning activity and academic progress.',
+        style: TextStyle(color: AppColors.muted, height: 1.45)),
+      const SizedBox(height: 22),
+      const _FeatureRow(icon: Icons.menu_book_outlined,
+        title: 'Lessons completed',
+        detail: 'Completed lesson totals will appear here.'),
+      const SizedBox(height: 10),
+      const _FeatureRow(icon: Icons.assignment_turned_in_outlined,
+        title: 'Assignments',
+        detail: 'Submitted and outstanding assignments.'),
+      const SizedBox(height: 10),
+      const _FeatureRow(icon: Icons.assessment_outlined,
+        title: 'Assessment performance',
+        detail: 'Scores and published assessment results.'),
+      const SizedBox(height: 10),
+      const _FeatureRow(icon: Icons.trending_up_rounded,
+        title: 'Progress over time',
+        detail: 'Your academic progress across learning periods.'),
+      const SizedBox(height: 18),
+      const _InfoNotice(
+        message: 'Analytics will populate from your actual lessons, submissions and published results. No progress figures are shown until the centre records that activity.',
       ),
-    ),
+    ],
   );
 }
 
