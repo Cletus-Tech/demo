@@ -2756,9 +2756,9 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
               isThreeLine: true,
               subtitle: Text(
                 '${c['level'] ?? 'Level not set'} • ${c['relationship'] ?? 'Parent'}'
-                '\\nAttendance: ${c['attendance_rate'] == null ? 'No records yet' : '${c['attendance_rate']}%'}'
-                '\\nAssignments submitted: ${c['assignments_submitted'] ?? 0}'
-                '${c['latest_result'] == null ? '' : '\\nLatest result: ${c['latest_result']} in ${c['latest_subject'] ?? 'a subject'}'}',
+                '\nAttendance: ${c['attendance_rate'] == null ? 'No records yet' : '${c['attendance_rate']}%'}'
+                '\nAssignments submitted: ${c['assignments_submitted'] ?? 0}'
+                '${c['latest_result'] == null ? '' : '\nLatest result: ${c['latest_result']} in ${c['latest_subject'] ?? 'a subject'}'}',
               ),
             ))),
             const SizedBox(height: 18),
