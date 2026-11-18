@@ -1389,7 +1389,7 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
     final due=TextEditingController();final max=TextEditingController(text:'10');
     try{
       final db=Supabase.instance.client;
-      final setup=await Future.wait([
+      final setup=await Future.wait<dynamic>([
         db.from('classes').select('id,name').eq('status','active').order('name'),
         db.from('subjects').select('id,name').eq('status','active').order('name'),
         db.rpc('admin_class_tutor_options'),
