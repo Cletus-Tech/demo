@@ -346,44 +346,13 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
   void dispose() { _searchController.dispose(); super.dispose(); }
   Future<List<Map<String, dynamic>>> _load() async {
     final data = await Supabase.instance.client.from('students')
-      .select('id,admission_number,level,status,user_id,profiles(full_name,email)')
+      .select('id,level,status,user_id,profiles(full_name,email)')
       .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(data);
-  }
-  Future<void> _add() async {
-    final admission = TextEditingController();
-    final level = TextEditingController();
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Add student record'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: admission, decoration: const InputDecoration(labelText: 'Admission number')),
-        const SizedBox(height: 10),
-        TextField(controller: level, decoration: const InputDecoration(labelText: 'Class / level')),
-      ]),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
-      ],
-    ));
-    if (ok == true && admission.text.trim().isNotEmpty) {
-      try {
-        await Supabase.instance.client.from('students').insert({
-          'admission_number': admission.text.trim(),
-          'level': level.text.trim().isEmpty ? null : level.text.trim(),
-        });
-        setState(() => _rows = _load());
-      } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create student: $e')));
-      }
-    }
-    admission.dispose(); level.dispose();
   }
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Student records')),
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: _add, backgroundColor: AppColors.brown, foregroundColor: Colors.white,
-      icon: const Icon(Icons.person_add_alt_1), label: const Text('Add student')),
     body: RefreshIndicator(onRefresh: () async => setState(() => _rows = _load()),
       child: FutureBuilder<List<Map<String, dynamic>>>(future: _rows, builder: (context, s) {
         if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
@@ -395,7 +364,7 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
         final filtered = rows.where((r) {
           final p = r['profiles'] as Map<String, dynamic>?;
           final searchable = [
-            p?['full_name'], p?['email'], r['admission_number'], r['level'],
+            p?['full_name'], p?['email'], r['level'],
           ].whereType<Object>().join(' ').toLowerCase();
           return query.isEmpty || searchable.contains(query);
         }).toList();
@@ -412,7 +381,7 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
               controller: _searchController,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'Search name, email, admission number or class',
+                hintText: 'Search name, email or class',
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _searchController.text.isEmpty ? null : IconButton(
                   onPressed: () { _searchController.clear(); setState(() {}); },
