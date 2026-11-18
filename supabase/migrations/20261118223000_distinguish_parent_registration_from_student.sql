@@ -2,6 +2,10 @@
 -- Parent accounts can request verified guardian links but are not counted as
 -- students and do not receive a student profile of their own.
 
+alter table public.profiles
+  add column if not exists account_type text not null default 'student'
+  check (account_type in ('student','parent'));
+
 create or replace function public.handle_new_education_user()
 returns trigger
 language plpgsql
@@ -16,10 +20,13 @@ begin
   if v_name is null then
     v_name := coalesce(nullif(split_part(coalesce(new.email, ''), '@', 1), ''), 'Learner');
   end if;
-  v_account_type := lower(coalesce(new.raw_user_meta_data ->> 'account_type','student'));
+  v_account_type := case
+    when lower(coalesce(new.raw_user_meta_data ->> 'account_type','student'))='parent' then 'parent'
+    else 'student'
+  end;
 
-  insert into public.profiles (id, full_name, email)
-  values (new.id, left(v_name, 120), new.email);
+  insert into public.profiles (id, full_name, email, account_type)
+  values (new.id, left(v_name, 120), new.email, v_account_type);
 
   insert into public.user_roles (user_id, role)
   values (new.id, 'external_learner'::public.app_role);
