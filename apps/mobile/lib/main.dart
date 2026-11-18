@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// Keep the release client pointed at the same active Supabase project used by CI.
 const supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: 'https://lvpetmhhspuagbjojlks.supabase.co',
