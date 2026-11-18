@@ -2721,6 +2721,108 @@ class _AdminAccountsPageState extends State<AdminAccountsPage> {
   );
 }
 
+
+class GuardianChildDetailsPage extends StatefulWidget {
+  final String studentId;
+  final String childName;
+  const GuardianChildDetailsPage({super.key, required this.studentId, required this.childName});
+  @override
+  State<GuardianChildDetailsPage> createState() => _GuardianChildDetailsPageState();
+}
+
+class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
+  late Future<Map<String, dynamic>> _details;
+  @override
+  void initState() { super.initState(); _details = _load(); }
+
+  Future<Map<String, dynamic>> _load() async {
+    final raw = await Supabase.instance.client.rpc('guardian_child_details', params: {
+      'p_student_id': widget.studentId,
+    });
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<void> _refresh() async {
+    final next = _load();
+    setState(() => _details = next);
+    await next;
+  }
+
+  String _date(dynamic raw) {
+    final d = DateTime.tryParse(raw?.toString() ?? '');
+    if (d == null) return 'Date unavailable';
+    final local = d.toLocal();
+    return '${local.day.toString().padLeft(2,'0')}/${local.month.toString().padLeft(2,'0')}/${local.year}';
+  }
+
+  Widget _section(String title, List<Map<String, dynamic>> rows, String empty) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 8),
+          if (rows.isEmpty) Text(empty, style: const TextStyle(color: AppColors.muted, height: 1.4)),
+          ...rows.map((r) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text((r['title'] ?? r['subject'] ?? r['status'] ?? 'Record').toString(),
+                style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+              const SizedBox(height: 3),
+              Text(
+                title == 'Assignments'
+                  ? '${r['subject'] ?? 'Subject'} • ${r['status'] ?? 'Not submitted'} • ${r['score'] == null ? 'Not marked' : '${r['score']}/${r['max_score'] ?? '?'}'}'
+                  : title == 'Results'
+                    ? 'Score: ${r['score'] ?? '-'} • Grade: ${r['grade'] ?? 'Not graded'} • ${_date(r['published_at'])}'
+                    : '${r['status'] ?? ''} • ${_date(r['date'])}',
+                style: const TextStyle(color: AppColors.muted, height: 1.4)),
+              if (r['feedback'] != null && r['feedback'].toString().trim().isNotEmpty)
+                Padding(padding: const EdgeInsets.only(top: 4), child: Text('Tutor feedback: ${r['feedback']}', style: const TextStyle(height: 1.4))),
+              if (r['comment'] != null && r['comment'].toString().trim().isNotEmpty)
+                Padding(padding: const EdgeInsets.only(top: 4), child: Text('Tutor comment: ${r['comment']}', style: const TextStyle(height: 1.4))),
+              if (r['note'] != null && r['note'].toString().trim().isNotEmpty)
+                Padding(padding: const EdgeInsets.only(top: 4), child: Text('Note: ${r['note']}', style: const TextStyle(height: 1.4))),
+              const Divider(height: 14, color: AppColors.line),
+            ]),
+          )),
+        ]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(widget.childName)),
+    body: RefreshIndicator(
+      color: AppColors.brown,
+      onRefresh: _refresh,
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: _details,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+          if (snapshot.hasError) return ListView(padding: const EdgeInsets.all(20), children: [
+            _InfoNotice(message: 'Learner progress could not be loaded: ${snapshot.error}')
+          ]);
+          final data = snapshot.data!;
+          final assignments = List<Map<String, dynamic>>.from(data['assignments'] ?? []);
+          final results = List<Map<String, dynamic>>.from(data['results'] ?? []);
+          final attendance = List<Map<String, dynamic>>.from(data['attendance'] ?? []);
+          final child = Map<String, dynamic>.from(data['child'] ?? {});
+          return ListView(padding: const EdgeInsets.all(18), children: [
+            Text((child['name'] ?? widget.childName).toString(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            Text((child['level'] ?? 'Level not set').toString(), style: const TextStyle(color: AppColors.muted)),
+            const SizedBox(height: 14),
+            _section('Assignments', assignments, 'No assignments have been published for this learner yet.'),
+            _section('Results', results, 'No results have been published yet.'),
+            _section('Attendance', attendance, 'No attendance records have been added yet.'),
+          ]);
+        },
+      ),
+    ),
+  );
+}
+
 class GuardianPortalPage extends StatefulWidget {
   final bool admin;
   const GuardianPortalPage({super.key, this.admin = false});
@@ -2885,6 +2987,12 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
                 '\nAssignments submitted: ${c['assignments_submitted'] ?? 0}'
                 '${c['latest_result'] == null ? '' : '\nLatest result: ${c['latest_result']} in ${c['latest_subject'] ?? 'a subject'}'}',
               ),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => GuardianChildDetailsPage(
+                  studentId: c['student_id'].toString(),
+                  childName: (c['name'] ?? 'Learner').toString(),
+                ),
+              )),
             ))),
             const SizedBox(height: 18),
             const Text('Your requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
