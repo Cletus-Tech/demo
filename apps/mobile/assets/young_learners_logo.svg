@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="300" viewBox="0 0 980 300">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD12D"/><stop offset="1" stop-color="#E7A900"/></linearGradient>
+  </defs>
+  <g fill="#4A2412" stroke="#4A2412">
+    <text x="32" y="174" font-family="Georgia,serif" font-size="190" font-weight="700" letter-spacing="-16">YL</text>
+  </g>
+  <g transform="translate(36 174)">
+    <path d="M0 0 Q72 -44 146 0 Q220 -44 292 0 L292 76 Q220 34 146 76 Q72 34 0 76Z" fill="#4A2412" stroke="#E6AA08" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M146 0 L146 76 M14 13 Q78 -16 132 13 M160 13 Q214 -16 278 13 M14 35 Q78 7 132 35 M160 35 Q214 7 278 35" fill="none" stroke="#FFF7E7" stroke-width="5" stroke-linecap="round"/>
+    <path d="M136 72 Q146 83 156 72" fill="none" stroke="#E6AA08" stroke-width="5"/>
+  </g>
+  <path d="M360 28 V248" stroke="#D49A17" stroke-width="5"/>
+  <g fill="#4A2412" font-family="Arial,sans-serif" font-weight="800">
+    <text x="395" y="105" font-size="76" letter-spacing="1">YOUNG</text>
+    <text x="395" y="181" font-size="76" letter-spacing="1">LEARNERS</text>
+  </g>
+  <rect x="394" y="196" width="500" height="62" rx="18" fill="url(#gold)" stroke="#4A2412" stroke-width="5"/>
+  <text x="644" y="241" text-anchor="middle" font-family="Arial,sans-serif" font-size="42" font-weight="900" letter-spacing="8" fill="#4A2412">TUTORIAL</text>
+  <path d="M396 282 H485 M800 282 H895" stroke="#4A2412" stroke-width="4"/>
+  <text x="645" y="293" text-anchor="middle" font-family="Georgia,serif" font-size="27" font-weight="700" letter-spacing="2" fill="#4A2412">EVERY CHILD CAN LEARN</text>
+</svg>
