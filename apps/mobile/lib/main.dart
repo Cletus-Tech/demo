@@ -2132,9 +2132,11 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id);
-    final role = roles.isEmpty
-        ? 'external learner'
-        : (roles.first['role'] as String).replaceAll('_', ' ');
+    final role = widget.parent
+        ? 'parent / guardian'
+        : roles.isEmpty
+            ? 'external learner'
+            : (roles.first['role'] as String).replaceAll('_', ' ');
     return {
       'name': profile['full_name'] ?? 'Learner',
       'email': profile['email'] ?? user.email ?? '',
