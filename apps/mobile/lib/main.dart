@@ -3749,7 +3749,7 @@ class _LearningTabState extends State<_LearningTab> {
       ),
       if (widget.parent) const SizedBox(height: 10),
 
-      Card(
+      if (!widget.parent) Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
@@ -3968,12 +3968,18 @@ class _ClassroomPageState extends State<ClassroomPage> {
         .eq('class_id',_classId).eq('is_published',true).order('scheduled_at'),
       db.from('classroom_posts').select('id,post_type,title,body,media_path,media_url,created_at')
         .eq('class_id',_classId).eq('is_published',true).order('created_at',ascending:false),
-      db.rpc('student_assignments'),
+      widget.canManage
+        ? db.from('assignments').select('id,title,due_at,max_score,subjects(name)')
+            .eq('class_id',_classId).not('published_at','is',null).order('due_at')
+        : db.rpc('student_assignments'),
     ]);
     final lessons=List<Map<String,dynamic>>.from(results[0] as List);
     final posts=List<Map<String,dynamic>>.from(results[1] as List);
-    final allAssignments=(results[2] as List).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
-    final assignments=allAssignments.where((a)=>(a['class_name']??'').toString()==(widget.classroom['name']??'').toString()).toList();
+    final rawAssignments=(results[2] as List).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+    final assignments=widget.canManage
+      ? rawAssignments.map((a)=>{'id':a['id'],'title':a['title'],'due_at':a['due_at'],'max_score':a['max_score'],
+          'subject_name':a['subjects'] is Map ? a['subjects']['name'] : 'Subject','submission_status':'Published'}).toList()
+      : rawAssignments.where((a)=>(a['class_name']??'').toString()==(widget.classroom['name']??'').toString()).toList();
     return {'lessons':lessons,'posts':posts,'assignments':assignments};
   }
   Future<void> _refresh() async {final f=_load();setState(()=>_data=f);await f;}
@@ -4083,9 +4089,9 @@ class _ClassroomPageState extends State<ClassroomPage> {
         ...assignments.map((a)=>Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
           leading:const CircleAvatar(backgroundColor:AppColors.paleGold,child:Icon(Icons.assignment_outlined,color:AppColors.brown)),
           title:Text(a['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
-          subtitle:Text('${a['subject_name']??'Subject'} • ${a['submission_status']??'To do'}'),
-          trailing:const Icon(Icons.chevron_right_rounded),
-          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentAssignmentDetailPage(assignment:a))),
+          subtitle:Text('${a['subject_name']??'Subject'} • ${widget.canManage?'Published':(a['submission_status']??'To do')}'),
+          trailing:widget.canManage?null:const Icon(Icons.chevron_right_rounded),
+          onTap:widget.canManage?null:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentAssignmentDetailPage(assignment:a))),
         ))),
       ]);
     })),
