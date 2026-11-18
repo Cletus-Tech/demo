@@ -2753,7 +2753,13 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
             ...children.map((c) => Card(child: ListTile(
               leading: const CircleAvatar(backgroundColor: AppColors.paleGold, child: Icon(Icons.school_outlined, color: AppColors.brown)),
               title: Text((c['name'] ?? 'Learner').toString(), style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text('${c['level'] ?? 'Level not set'} • ${c['relationship'] ?? 'Parent'}'),
+              isThreeLine: true,
+              subtitle: Text(
+                '${c['level'] ?? 'Level not set'} • ${c['relationship'] ?? 'Parent'}'
+                '\\nAttendance: ${c['attendance_rate'] == null ? 'No records yet' : '${c['attendance_rate']}%'}'
+                '\\nAssignments submitted: ${c['assignments_submitted'] ?? 0}'
+                '${c['latest_result'] == null ? '' : '\\nLatest result: ${c['latest_result']} in ${c['latest_subject'] ?? 'a subject'}'}',
+              ),
             ))),
             const SizedBox(height: 18),
             const Text('Your requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
