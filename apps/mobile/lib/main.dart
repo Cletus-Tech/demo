@@ -128,10 +128,15 @@ class _RoleRouterState extends State<RoleRouter> {
   Future<List<String>> _load() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return [];
-    final rows = await Supabase.instance.client.from('user_roles')
+    final client = Supabase.instance.client;
+    final rows = await client.from('user_roles')
         .select('role').eq('user_id', user.id);
-    return List<Map<String, dynamic>>.from(rows)
+    final roles = List<Map<String, dynamic>>.from(rows)
         .map((e) => e['role'] as String).toList();
+    final profile = await client.from('profiles')
+        .select('account_type').eq('id', user.id).maybeSingle();
+    if (profile?['account_type'] == 'parent') roles.add('parent_account');
+    return roles;
   }
   @override
   Widget build(BuildContext context) => FutureBuilder<List<String>>(
@@ -155,7 +160,7 @@ class _RoleRouterState extends State<RoleRouter> {
         owner: roles.contains('super_admin'),
         admin: roles.contains('admin') || roles.contains('super_admin'),
         tutor: roles.contains('tutor'),
-        parent: Supabase.instance.client.auth.currentUser?.userMetadata?['account_type'] == 'parent',
+        parent: roles.contains('parent_account'),
       );
     },
   );
