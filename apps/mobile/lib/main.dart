@@ -784,6 +784,10 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create'))],
       )));
       if (ok == true && title.text.trim().isNotEmpty && classId != null && subjectId != null) {
+        if (isPastQuestion && examBody == null) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Choose the examination body for this question set.')));
+          return;
+        }
         final mins = int.tryParse(duration.text.trim()) ?? -1;
         if (mins < 0) {
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid time limit.')));
@@ -3776,8 +3780,10 @@ class _StudentQuestionBankPageState extends State<StudentQuestionBankPage> {
           return ListView(padding:const EdgeInsets.all(20),children:[
             _InfoNotice(message:'The question bank could not be loaded. '+itemsSnap.error.toString())]);
         final all=itemsSnap.data??[];
-        final bodies=['All',...all.map((e)=>e['exam_body']?.toString()??'').where((e)=>e.isNotEmpty).toSet().toList()..sort()];
-        final subjects=['All',...all.map((e)=>e['subject_name']?.toString()??'').where((e)=>e.isNotEmpty).toSet().toList()..sort()];
+        final bodies=all.map((e)=>e['exam_body']?.toString()??'').where((e)=>e.isNotEmpty).toSet().toList()..sort();
+        bodies.insert(0,'All');
+        final subjects=all.map((e)=>e['subject_name']?.toString()??'').where((e)=>e.isNotEmpty).toSet().toList()..sort();
+        subjects.insert(0,'All');
         return FutureBuilder<Set<String>>(future:_saved,builder:(context,savedSnap){
           final saved=savedSnap.data??<String>{};
           final query=_search.text.trim().toLowerCase();
