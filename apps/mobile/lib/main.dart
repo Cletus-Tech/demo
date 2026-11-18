@@ -3080,6 +3080,19 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
     return '${local.day.toString().padLeft(2,'0')}/${local.month.toString().padLeft(2,'0')}/${local.year}';
   }
 
+  Future<void> _openBoardResource(Map<String,dynamic> row) async {
+    try {
+      final path=row['media_path']?.toString();
+      final url=path!=null
+        ? await Supabase.instance.client.storage.from('classroom-resources').createSignedUrl(path,3600)
+        : row['media_url']?.toString();
+      if(url==null||!url.startsWith('https://'))throw Exception('Resource unavailable');
+      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+    } catch(e) {
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open classroom resource: $e')));
+    }
+  }
+
   Widget _section(String title, List<Map<String, dynamic>> rows, String empty) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -3106,7 +3119,9 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
                         ? '${r['material_type'] ?? 'Resource'} • ${r['subject'] ?? 'Learning'} • ${r['lesson_title'] ?? 'Lesson material'}'
                         : title == 'Assessments and CBT'
                           ? '${r['subject'] ?? 'Subject'} • ${r['assessment_type'] ?? 'Assessment'} • ${r['starts_at'] == null ? 'Schedule to be announced' : _date(r['starts_at'])} • ${r['duration_minutes'] ?? '—'} minutes'
-                          : '${r['status'] ?? ''} • ${_date(r['date'])}',
+                          : title == 'Classroom signboard'
+                            ? '${(r['post_type'] ?? 'Class update').toString().toUpperCase()} • ${_date(r['created_at'])} • ${r['body'] ?? ''}'
+                            : '${r['status'] ?? ''} • ${_date(r['date'])}',
                 style: const TextStyle(color: AppColors.muted, height: 1.4)),
               if (r['feedback'] != null && r['feedback'].toString().trim().isNotEmpty)
                 Padding(padding: const EdgeInsets.only(top: 4), child: Text('Tutor feedback: ${r['feedback']}', style: const TextStyle(height: 1.4))),
@@ -3114,6 +3129,10 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
                 Padding(padding: const EdgeInsets.only(top: 4), child: Text('Tutor comment: ${r['comment']}', style: const TextStyle(height: 1.4))),
               if (r['note'] != null && r['note'].toString().trim().isNotEmpty)
                 Padding(padding: const EdgeInsets.only(top: 4), child: Text('Note: ${r['note']}', style: const TextStyle(height: 1.4))),
+              if (title == 'Classroom signboard' && ((r['media_path'] ?? '').toString().isNotEmpty || (r['media_url'] ?? '').toString().isNotEmpty))
+                Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+                  onPressed:()=>_openBoardResource(r),icon:const Icon(Icons.open_in_new_rounded),
+                  label:const Text('Open classroom resource'))),
               const Divider(height: 14, color: AppColors.line),
             ]),
           )),
@@ -3145,6 +3164,7 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
           final upcomingLessons = List<Map<String,dynamic>>.from(data['upcoming_lessons'] ?? []);
           final materials = List<Map<String,dynamic>>.from(data['materials'] ?? []);
           final assessments = List<Map<String,dynamic>>.from(data['assessments'] ?? []);
+          final classroomBoard = List<Map<String,dynamic>>.from(data['classroom_board'] ?? []);
           final pendingAssignments = assignments.where((r) =>
             (r['status'] ?? 'not_submitted').toString() == 'not_submitted' ||
             (r['status'] ?? '').toString() == 'returned').length;
@@ -3171,6 +3191,7 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
             ))),
             _section('Upcoming live and recorded lessons', upcomingLessons, 'No upcoming lessons have been published for this learner yet.'),
             _section('Learning materials', materials, 'No learning materials have been added for this learner yet.'),
+            _section('Classroom signboard', classroomBoard, 'There are no classroom notices or shared resources yet.'),
             _section('Assignments', assignments, 'No assignments have been published for this learner yet.'),
             _section('Assessments and CBT', assessments, 'No upcoming assessments have been published for this learner yet.'),
             _section('Lessons completed', completedLessons, 'No lessons have been marked as completed yet.'),
