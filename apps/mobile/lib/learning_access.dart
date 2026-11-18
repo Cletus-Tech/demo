@@ -252,16 +252,18 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
     finally { if (mounted) setState(() => _busy = false); }
   }
 
-  Future<void> _saveProgramme(List<Map<String, dynamic>> classes) async {
-    final title = TextEditingController();
-    final level = TextEditingController();
-    final description = TextEditingController();
-    final fee = TextEditingController();
-    final duration = TextEditingController(text: 'Monthly');
-    String stage = 'Primary';
-    String? selectedClassId = classes.isEmpty ? null : classes.first['id'].toString();
+  Future<void> _saveProgramme(List<Map<String, dynamic>> classes, [Map<String, dynamic>? existing]) async {
+    final title = TextEditingController(text: existing?['title']?.toString() ?? '');
+    final level = TextEditingController(text: existing?['level']?.toString() ?? '');
+    final description = TextEditingController(text: existing?['description']?.toString() ?? '');
+    final fee = TextEditingController(text: existing?['fee']?.toString() ?? '');
+    final duration = TextEditingController(text: existing?['duration_label']?.toString() ?? 'Monthly');
+    String stage = existing?['stage']?.toString() ?? 'Primary';
+    final existingClassId = existing?['class_id']?.toString();
+    String? selectedClassId = classes.any((c) => c['id'].toString() == existingClassId)
+        ? existingClassId : (classes.isEmpty ? null : classes.first['id'].toString());
     final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, refresh) => AlertDialog(
-      title: const Text('Add learning programme'),
+      title: Text(existing == null ? 'Add learning programme' : 'Edit learning programme'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(controller: title, decoration: const InputDecoration(labelText: 'Programme name')),
         const SizedBox(height: 8),
@@ -274,7 +276,7 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
         if (classes.isEmpty) const Text('Create an active class in Academic Management before adding a programme.')
         else DropdownButtonFormField<String>(value: selectedClassId, isExpanded: true, decoration: const InputDecoration(labelText: 'Connect to classroom'), items: classes.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text('${c['name']}'))).toList(), onChanged: (v) => refresh(() => selectedClassId = v)),
       ])),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save programme'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(existing == null ? 'Save programme' : 'Update programme'))],
     )));
     if (ok == true) {
       final amount = double.tryParse(fee.text.trim());
@@ -283,11 +285,16 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
       } else {
         setState(() => _busy = true);
         try {
-          await Supabase.instance.client.from('learning_programmes').insert({
+          final values = {
             'title': title.text.trim(), 'stage': stage, 'level': level.text.trim(),
             'fee': amount, 'duration_label': duration.text.trim().isEmpty ? 'Monthly' : duration.text.trim(),
-            'description': description.text.trim(), 'class_id': selectedClassId, 'is_active': true,
-          });
+            'description': description.text.trim(), 'class_id': selectedClassId,
+          };
+          if (existing == null) {
+            await Supabase.instance.client.from('learning_programmes').insert({...values, 'is_active': true});
+          } else {
+            await Supabase.instance.client.from('learning_programmes').update(values).eq('id', existing['id']);
+          }
           await _refresh();
         } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create programme: $e'))); }
         finally { if (mounted) setState(() => _busy = false); }
@@ -349,6 +356,11 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
           Card(child: ListTile(leading: const Icon(Icons.add_circle_outline, color: _laBrown), title: const Text('Create a learning programme'), subtitle: const Text('Set the class level, price and duration.'), onTap: _busy ? null : () => _saveProgramme(classes))),
           const SizedBox(height: 8),
           ...programmes.map((p) => Card(child: SwitchListTile(
+            secondary: IconButton(
+              tooltip: 'Edit programme',
+              onPressed: _busy ? null : () => _saveProgramme(classes, p),
+              icon: const Icon(Icons.edit_outlined, color: _laBrown),
+            ),
             value: p['is_active'] == true,
             onChanged: _busy ? null : (v) async {
               await Supabase.instance.client.from('learning_programmes').update({'is_active': v}).eq('id', p['id']);
