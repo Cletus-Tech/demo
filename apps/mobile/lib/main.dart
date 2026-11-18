@@ -529,6 +529,16 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                 )),
                 const SizedBox(height: 8),
               ],
+              if (permissions.contains('communications.send') && !permissions.contains('staff.manage')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.forum_outlined, color: AppColors.brown),
+                  title: const Text('Staff Room'),
+                  subtitle: const Text('Private staff conversations and coordinator announcements'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const StaffRoomPage(canAnnounce: true)),
+                )),
+                const SizedBox(height: 8),
+              ],
               if (permissions.contains('communications.send')) ...[
                 Card(child: ListTile(
                   leading: const Icon(Icons.campaign_outlined, color: AppColors.brown),
@@ -2785,7 +2795,7 @@ class _HomeTab extends StatelessWidget {
                   const SizedBox(height: 20),
                   const _CentreOverview(),
                 ],
-                if (owner || admin || tutor || staffMember) ...[
+                if (owner || tutor || staffMember) ...[
                   const SizedBox(height: 18),
                   Card(child: ListTile(
                     leading: const CircleAvatar(backgroundColor: AppColors.paleGold,
