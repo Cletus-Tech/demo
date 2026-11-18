@@ -38,7 +38,7 @@ class YoungLearnersLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final markWidth = compact ? 44.0 : 76.0;
-    final markHeight = compact ? 42.0 : 68.0;
+    final markHeight = compact ? 29.0 : 68.0;
     final mainSize = compact ? 12.0 : 21.0;
     final subSize = compact ? 8.0 : 12.0;
     return Row(mainAxisSize: MainAxisSize.min, children: [
