@@ -664,7 +664,7 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
   @override
   void initState() {
     super.initState();
-    _materials = Supabase.instance.client.from('learning_materials').select('id,title,description,storage_path,external_url')
+    _materials = Supabase.instance.client.from('learning_materials').select('id,title,material_type,storage_path,external_url')
       .eq('lesson_id', widget.lesson['id']).then((rows) => List<Map<String, dynamic>>.from(rows));
   }
   @override
@@ -689,7 +689,7 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
         return Column(children: items.map((item) => Card(child: ListTile(
           leading: const Icon(Icons.attach_file_rounded, color: AppColors.brown),
           title: Text(item['title'] ?? 'Learning material'),
-          subtitle: item['description'] == null ? null : Text(item['description']),
+          subtitle: Text(item['material_type'] ?? 'Learning resource'),
           trailing: const Icon(Icons.open_in_new_rounded),
           onTap: () {
             final url = item['external_url'];
