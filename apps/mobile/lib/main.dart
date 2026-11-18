@@ -2742,7 +2742,7 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
           ...rows.map((r){
             final status=(r['submission_status']??'not submitted').toString();
             final done=status=='graded';
-            final late=r['due_at']!=null&&DateTime.tryParse(r['due_at'].toString())?.isBefore(DateTime.now().toUtc())==true&&status!='submitted'&&status!='graded';
+            final isOverdue=r['due_at']!=null&&DateTime.tryParse(r['due_at'].toString())?.isBefore(DateTime.now().toUtc())==true&&status!='submitted'&&status!='graded';
             return Card(margin:const EdgeInsets.only(bottom:10),child:ListTile(
               contentPadding:const EdgeInsets.symmetric(horizontal:15,vertical:9),
               leading:Container(width:43,height:43,decoration:BoxDecoration(color:AppColors.paleGold,borderRadius:BorderRadius.circular(11)),
@@ -2750,7 +2750,7 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
               title:Text(r['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
               subtitle:Padding(padding:const EdgeInsets.only(top:5),child:Text(
                 (r['subject_name']??'Subject').toString()+' • '+_date(r['due_at'])+'\n'+
-                (done?'Graded • '+(r['score']??'—').toString()+' marks':status=='submitted'?'Submitted • Awaiting marking':status=='returned'?'Returned for correction':late?'Overdue • Not submitted':'Not submitted'),
+                (done?'Graded • '+(r['score']??'—').toString()+' marks':status=='submitted'?'Submitted • Awaiting marking':status=='returned'?'Returned for correction' :isOverdue?'Overdue • Not submitted':'Not submitted'),
                 style:const TextStyle(color:AppColors.muted,height:1.45))),
               trailing:const Icon(Icons.chevron_right_rounded,color:AppColors.brown),
               onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentAssignmentDetailPage(assignment:r))).then((_)=>_refresh()),
