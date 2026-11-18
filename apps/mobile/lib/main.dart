@@ -602,7 +602,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
     _classes = db.from('classes').select('id,name,level,capacity,status').order('name');
     _subjects = db.from('subjects').select('id,name,code,description,status').order('name');
     _lessons = db.from('lessons').select('id,title,description,content,live_class_url,class_id,subject_id,is_published,classes(name),subjects(name)').order('created_at', ascending: false);
-    _assessments = db.from('assessments').select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published,starts_at,classes(name),subjects(name),questions(id)').order('created_at', ascending: false);
+    _assessments = db.from('assessments').select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published,starts_at,is_past_question,exam_body,exam_year,exam_name,topic,classes(name),subjects(name),questions(id)').order('created_at', ascending: false);
   }
   Future<void> _refresh() async { setState(_reload); await Future.wait([_classes,_subjects,_lessons,_assessments]); }
   Future<void> _save(String table, Map<String,dynamic> values, {String? id}) async {
@@ -729,6 +729,12 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   Future<void> _createAssessment() async {
     final title = TextEditingController();
     final duration = TextEditingController(text: '30');
+    final examYear = TextEditingController();
+    final examName = TextEditingController();
+    final topic = TextEditingController();
+    final sourceNote = TextEditingController();
+    String? examBody;
+    bool isPastQuestion = false;
     try {
       final classes = await _classes; final subjects = await _subjects;
       if (classes.isEmpty || subjects.isEmpty) {
@@ -753,6 +759,26 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
             onChanged: (v) => refreshDialog(() => type = v ?? 'Practice')),
           TextField(controller: duration, keyboardType: TextInputType.number,
             decoration: const InputDecoration(labelText: 'Time limit in minutes (0 = untimed)')),
+          const Divider(height: 22),
+          CheckboxListTile(contentPadding: EdgeInsets.zero, value: isPastQuestion,
+            title: const Text('Add to past-question bank'),
+            subtitle: const Text('Use this for verified past questions or exam-style practice.'),
+            onChanged: (v) => refreshDialog(() => isPastQuestion = v ?? false)),
+          if (isPastQuestion) ...[
+            DropdownButtonFormField<String>(value: examBody,
+              decoration: const InputDecoration(labelText: 'Examination body'),
+              items: ['WAEC','NECO','JAMB','NABTEB','NBAIS','NCEE','BECE']
+                .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+              onChanged: (v) => refreshDialog(() => examBody = v)),
+            TextField(controller: examYear, keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Exam year (optional)')),
+            TextField(controller: examName,
+              decoration: const InputDecoration(labelText: 'Exam type (e.g. WASSCE, UTME)')),
+            TextField(controller: topic,
+              decoration: const InputDecoration(labelText: 'Topic (optional)')),
+            TextField(controller: sourceNote,
+              decoration: const InputDecoration(labelText: 'Source / reference note (optional)')),
+          ],
         ]))),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create'))],
@@ -766,8 +792,14 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
         final created = await Supabase.instance.client.from('assessments').insert({
           'title': title.text.trim(), 'class_id': classId, 'subject_id': subjectId,
           'assessment_type': type, 'duration_minutes': mins == 0 ? null : mins,
+          'is_past_question': isPastQuestion,
+          'exam_body': isPastQuestion ? examBody : null,
+          'exam_year': isPastQuestion ? int.tryParse(examYear.text.trim()) : null,
+          'exam_name': isPastQuestion && examName.text.trim().isNotEmpty ? examName.text.trim() : null,
+          'topic': isPastQuestion && topic.text.trim().isNotEmpty ? topic.text.trim() : null,
+          'source_note': isPastQuestion && sourceNote.text.trim().isNotEmpty ? sourceNote.text.trim() : null,
           'total_marks': 0, 'is_published': false,
-        }).select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published').single();
+        }).select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published,is_past_question,exam_body,exam_year,exam_name,topic').single();
         await _refresh();
         if (mounted) await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => AdminAssessmentQuestionsPage(assessment: Map<String,dynamic>.from(created))));
@@ -775,7 +807,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Assessment could not be created: ' + e.toString())));
-    } finally { title.dispose(); duration.dispose(); }
+    } finally { title.dispose(); duration.dispose(); examYear.dispose(); examName.dispose(); topic.dispose(); sourceNote.dispose(); }
   }
 
   Future<void> _toggleAssessment(Map<String,dynamic> row) async {
@@ -817,6 +849,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
           subtitle: Text((r['classes']?['name'] ?? 'Class').toString() + ' • ' +
             (r['subjects']?['name'] ?? 'Subject').toString() + ' • ' +
             r['assessment_type'].toString() + ' • ' + count.toString() + ' questions • ' +
+            (r['is_past_question'] == true ? ((r['exam_body'] ?? 'Past questions').toString() + (r['exam_year'] == null ? '' : ' ' + r['exam_year'].toString()) + ' • ') : '') +
             (r['is_published'] == true ? 'Published' : 'Draft')),
           trailing: PopupMenuButton<String>(onSelected: (v) async {
             if (v == 'questions') {
@@ -3648,6 +3681,9 @@ class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
           const SizedBox(height: 6),
           const Text('Only tests for your approved learning programmes appear here.', style: TextStyle(color: AppColors.muted)),
           const SizedBox(height: 14),
+          OutlinedButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const StudentQuestionBankPage())),
+            icon: const Icon(Icons.library_books_outlined), label: const Text('Browse past-question bank')),
+          const SizedBox(height: 8),
           OutlinedButton.icon(onPressed: _openHistory, icon: const Icon(Icons.history_rounded), label: const Text('View my previous results')),
           const SizedBox(height: 14),
           if (items.isEmpty) const _InfoNotice(message: 'There are no published practice tests for your current class yet. Your tutor will publish eligible tests here when they are ready.'),
@@ -3670,6 +3706,138 @@ class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
           }),
         ]);
       })),
+  );
+}
+
+
+class StudentQuestionBankPage extends StatefulWidget {
+  const StudentQuestionBankPage({super.key});
+  @override
+  State<StudentQuestionBankPage> createState() => _StudentQuestionBankPageState();
+}
+
+class _StudentQuestionBankPageState extends State<StudentQuestionBankPage> {
+  late Future<List<Map<String,dynamic>>> _items;
+  late Future<Set<String>> _saved;
+  String _body = 'All';
+  String _subject = 'All';
+  bool _savedOnly = false;
+  final TextEditingController _search = TextEditingController();
+
+  @override
+  void initState() { super.initState(); _items = _loadItems(); _saved = _loadSaved(); }
+  @override
+  void dispose() { _search.dispose(); super.dispose(); }
+
+  Future<List<Map<String,dynamic>>> _loadItems() async {
+    final raw = await Supabase.instance.client.rpc('student_available_assessments');
+    if (raw is! List) return [];
+    return raw.map((e) => Map<String,dynamic>.from(e as Map))
+      .where((e) => e['is_past_question'] == true).toList();
+  }
+  Future<Set<String>> _loadSaved() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return <String>{};
+    final rows = await Supabase.instance.client.from('assessment_bookmarks')
+      .select('assessment_id').eq('user_id', uid);
+    return List<Map<String,dynamic>>.from(rows).map((e) => e['assessment_id'].toString()).toSet();
+  }
+  Future<void> _refresh() async {
+    final items = _loadItems(); final saved = _loadSaved();
+    setState(() { _items = items; _saved = saved; });
+    await Future.wait([items,saved]);
+  }
+  Future<void> _toggleSaved(String id, Set<String> saved) async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      if (saved.contains(id)) {
+        await Supabase.instance.client.from('assessment_bookmarks').delete()
+          .eq('user_id',uid).eq('assessment_id',id);
+      } else {
+        await Supabase.instance.client.from('assessment_bookmarks')
+          .insert({'user_id':uid,'assessment_id':id});
+      }
+      if (mounted) setState(() => _saved = _loadSaved());
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bookmark could not be updated: ' + e.toString())));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Past-question bank')),
+    body: RefreshIndicator(color: AppColors.brown,onRefresh:_refresh,
+      child: FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,itemsSnap){
+        if(itemsSnap.connectionState!=ConnectionState.done)
+          return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+        if(itemsSnap.hasError)
+          return ListView(padding:const EdgeInsets.all(20),children:[
+            _InfoNotice(message:'The question bank could not be loaded. '+itemsSnap.error.toString())]);
+        final all=itemsSnap.data??[];
+        final bodies=['All',...all.map((e)=>e['exam_body']?.toString()??'').where((e)=>e.isNotEmpty).toSet().toList()..sort()];
+        final subjects=['All',...all.map((e)=>e['subject_name']?.toString()??'').where((e)=>e.isNotEmpty).toSet().toList()..sort()];
+        return FutureBuilder<Set<String>>(future:_saved,builder:(context,savedSnap){
+          final saved=savedSnap.data??<String>{};
+          final query=_search.text.trim().toLowerCase();
+          final filtered=all.where((e){
+            final body=e['exam_body']?.toString()??'';
+            final subject=e['subject_name']?.toString()??'';
+            final searchable=[e['title'],e['exam_name'],e['topic'],e['exam_year'],subject,e['class_name']]
+              .whereType<Object>().join(' ').toLowerCase();
+            return (_body=='All'||body==_body)&&(_subject=='All'||subject==_subject)
+              &&(!_savedOnly||saved.contains(e['id'].toString()))&&(query.isEmpty||searchable.contains(query));
+          }).toList();
+          return ListView(padding:const EdgeInsets.all(18),children:[
+            const Text('Practise with organised examination questions',
+              style:TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink)),
+            const SizedBox(height:5),
+            const Text('Choose an examination body, subject or topic. Save useful sets to return to them later.',
+              style:TextStyle(color:AppColors.muted)),
+            const SizedBox(height:14),
+            TextField(controller:_search,onChanged:(_)=>setState((){}),
+              decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'Search topic, year or exam')),
+            const SizedBox(height:10),
+            DropdownButtonFormField<String>(value:_body,decoration:const InputDecoration(labelText:'Examination body'),
+              items:bodies.map((v)=>DropdownMenuItem(value:v,child:Text(v))).toList(),
+              onChanged:(v)=>setState(()=>_body=v??'All')),
+            const SizedBox(height:8),
+            DropdownButtonFormField<String>(value:_subject,decoration:const InputDecoration(labelText:'Subject'),
+              items:subjects.map((v)=>DropdownMenuItem(value:v,child:Text(v))).toList(),
+              onChanged:(v)=>setState(()=>_subject=v??'All')),
+            SwitchListTile(contentPadding:EdgeInsets.zero,value:_savedOnly,
+              title:const Text('Show saved question sets'),onChanged:(v)=>setState(()=>_savedOnly=v)),
+            const SizedBox(height:8),
+            if(savedSnap.connectionState!=ConnectionState.done) const LinearProgressIndicator(),
+            if(filtered.isEmpty) const _InfoNotice(message:'No question sets match these filters yet. Published past-question sets for your approved class will appear here.'),
+            ...filtered.map((e){
+              final id=e['id'].toString();
+              final count=(e['question_count'] as num?)?.toInt()??0;
+              final year=e['exam_year']?.toString();
+              final meta=[e['exam_body'],e['exam_name'],year,e['subject_name'],e['class_name']]
+                .where((v)=>v!=null&&v.toString().isNotEmpty).join(' • ');
+              return Padding(padding:const EdgeInsets.only(bottom:10),child:Card(child:ListTile(
+                contentPadding:const EdgeInsets.symmetric(horizontal:14,vertical:8),
+                title:Text(e['title']?.toString()??'Question set',
+                  style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink)),
+                subtitle:Padding(padding:const EdgeInsets.only(top:6),child:Text(
+                  meta+(e['topic']==null?'':'\nTopic: '+e['topic'].toString())+'\n'+count.toString()+' questions',
+                  style:const TextStyle(color:AppColors.muted))),
+                trailing:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+                  IconButton(tooltip:saved.contains(id)?'Remove bookmark':'Save question set',
+                    onPressed:()=>_toggleSaved(id,saved),
+                    icon:Icon(saved.contains(id)?Icons.bookmark:Icons.bookmark_border,color:AppColors.brown)),
+                  const Icon(Icons.chevron_right,color:AppColors.brown),
+                ]),
+                onTap:count==0?null:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder:(_)=>StudentAssessmentRunnerPage(assessment:e))),
+              )));
+            }),
+          ]);
+        });
+      }),
+    ),
   );
 }
 
