@@ -1,4 +1,5 @@
 -- Student CBT assessment access.
+create schema if not exists private;
 -- Questions and answer keys remain behind private SECURITY DEFINER functions.
 -- Public RPC wrappers are SECURITY INVOKER and expose only learner-scoped data.
 
