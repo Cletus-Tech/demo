@@ -464,7 +464,7 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
     final db = Supabase.instance.client;
     final id = widget.student['id'];
     final values = await Future.wait([
-      _safeRows(() => db.from('enrolments').select('id,status,classes(name,level)').eq('student_id', id)),
+      _safeRows(() => db.from('learning_access_requests').select('id,programme_title,level,amount_due,status,payment_reference,created_at,reviewed_at,admin_note').eq('user_id', widget.student['user_id'])),
       _safeRows(() => db.from('attendance_records').select('id,status,attended_at,attendance_date,note').eq('student_id', id).order('attended_at', ascending: false).limit(20)),
       _safeRows(() => db.from('assignment_submissions').select('id,status,score,submitted_at,assignments(title)').eq('student_id', id).order('submitted_at', ascending: false).limit(20)),
       _safeRows(() => db.from('assessment_attempts').select('id,score,submitted_at,assessments(title)').eq('student_id', id).order('started_at', ascending: false).limit(20)),
@@ -473,72 +473,12 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
       _safeRows(() => db.from('payments').select('id,amount,status,paid_at,provider_reference,invoices!inner(description,student_id)').eq('invoices.student_id', id).order('paid_at', ascending: false).limit(20)),
     ]);
     return {
-      'enrolments': values[0], 'attendance': values[1],
+      'learning_access': values[0], 'attendance': values[1],
       'submissions': values[2], 'assessments': values[3],
       'results': values[4], 'invoices': values[5], 'payments': values[6],
     };
   }
 
-  Future<void> _enrolStudent() async {
-    final db = Supabase.instance.client;
-    try {
-      final session = await db.from('academic_sessions')
-        .select('id,name').eq('is_current', true).maybeSingle();
-      if (session == null) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Set a current academic session in Academic management first.')));
-        return;
-      }
-      final classes = await db.from('classes')
-        .select('id,name,level').eq('status', 'active').order('name');
-      if (classes.isEmpty) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Create an active class before enrolling students.')));
-        return;
-      }
-      String? classId = classes.first['id'].toString();
-      final selected = await showDialog<String>(context: context,
-        builder: (ctx) => StatefulBuilder(builder: (ctx, refreshDialog) => AlertDialog(
-          title: Text('Enrol in ' + session['name'].toString()),
-          content: DropdownButtonFormField<String>(
-            value: classId,
-            decoration: const InputDecoration(labelText: 'Choose class'),
-            items: classes.map<DropdownMenuItem<String>>((row) =>
-              DropdownMenuItem<String>(value: row['id'].toString(),
-                child: Text(row['name'].toString() +
-                  (row['level'] == null ? '' : ' • ' + row['level'].toString())))).toList(),
-            onChanged: (value) => refreshDialog(() => classId = value),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, classId), child: const Text('Enrol student')),
-          ],
-        )));
-      if (selected == null) return;
-      final existing = await db.from('enrolments').select('id')
-        .eq('student_id', widget.student['id'])
-        .eq('session_id', session['id']).eq('status', 'active');
-      if ((existing as List).isNotEmpty) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This student already has an active enrolment for the current session.')));
-        return;
-      }
-      await db.from('enrolments').insert({
-        'student_id': widget.student['id'],
-        'class_id': selected,
-        'session_id': session['id'],
-        'status': 'active',
-      });
-      if (mounted) {
-        setState(() => _records = _load());
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Student enrolled successfully. Their published class lessons will now appear in Learning.')));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not enrol student: ' + e.toString())));
-    }
-  }
 
   Widget _section(String title, List<Map<String, dynamic>> rows,
       String empty, String Function(Map<String, dynamic>) primary,
@@ -580,10 +520,7 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
     final profile = student['profiles'] as Map<String, dynamic>?;
     final name = profile?['full_name'] as String? ?? 'Unlinked student record';
     return Scaffold(
-      appBar: AppBar(title: const Text('Student profile'), actions: [
-        IconButton(tooltip: 'Enrol student', onPressed: _enrolStudent,
-          icon: const Icon(Icons.person_add_alt_1_rounded)),
-      ]),
+      appBar: AppBar(title: const Text('Student profile')),
       body: RefreshIndicator(
         onRefresh: () async { final next = _load(); setState(() => _records = next); await next; },
         child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
@@ -609,10 +546,10 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
                 ]),
               )),
               const SizedBox(height: 8),
-              _section('Class enrolments', data['enrolments'] ?? [],
-                'No enrolments recorded.',
-                (r) => (r['classes']?['name'] ?? 'Class').toString(),
-                (r) => 'Status: ${r['status'] ?? 'Not set'}'),
+              _section('Learning access requests', data['learning_access'] ?? [],
+                'No programme requests recorded.',
+                (r) => (r['programme_title'] ?? 'Learning programme').toString(),
+                (r) => '${r['level'] ?? 'Level not set'} • ₦${r['amount_due'] ?? '-'} • ${r['status'] ?? 'Not set'}'),
               _section('Attendance history', data['attendance'] ?? [],
                 'No attendance records available.',
                 (r) => (r['status'] ?? 'Attendance').toString(),
@@ -3709,7 +3646,7 @@ class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
         return ListView(padding: const EdgeInsets.all(20), children: [
           const Text('Available for your class', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
           const SizedBox(height: 6),
-          const Text('Only tests published for your active class enrolment appear here.', style: TextStyle(color: AppColors.muted)),
+          const Text('Only tests for your approved learning programmes appear here.', style: TextStyle(color: AppColors.muted)),
           const SizedBox(height: 14),
           OutlinedButton.icon(onPressed: _openHistory, icon: const Icon(Icons.history_rounded), label: const Text('View my previous results')),
           const SizedBox(height: 14),
