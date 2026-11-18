@@ -5496,7 +5496,7 @@ class _StaffRoomPageState extends State<StaffRoomPage>{
   void initState(){super.initState();_messages=_load();_subscribe();}
   Future<List<Map<String,dynamic>>> _load() async{
     final rows=await Supabase.instance.client.from('staff_room_messages')
-      .select('id,sender_id,body,message_type,pinned,created_at,profiles(full_name)')
+      .select('id,sender_id,sender_name,body,message_type,pinned,created_at')
       .order('created_at',ascending:false).limit(150);
     return List<Map<String,dynamic>>.from(rows);
   }
@@ -5538,11 +5538,11 @@ class _StaffRoomPageState extends State<StaffRoomPage>{
             Icon(Icons.forum_outlined,size:48,color:AppColors.gold),const SizedBox(height:12),
             const _InfoNotice(message:'The staff room is ready. The first coordinator message or staff conversation will appear here.')]);
           return ListView.builder(reverse:true,padding:const EdgeInsets.all(14),itemCount:rows.length,itemBuilder:(context,index){
-            final r=rows[rows.length-1-index];final profile=r['profiles'] is Map?Map<String,dynamic>.from(r['profiles']):<String,dynamic>{};
+            final r=rows[rows.length-1-index];
             final announcement=r['message_type']=='announcement';
             return Card(color:announcement?AppColors.cream:null,margin:const EdgeInsets.only(bottom:9),
               child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                Row(children:[Expanded(child:Text(profile['full_name']?.toString()??'Staff member',
+                Row(children:[Expanded(child:Text(r['sender_name']?.toString()??'Staff member',
                   style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink))),
                   if(announcement)const Chip(label:Text('CENTRE NOTICE'),visualDensity:VisualDensity.compact),
                 ]),
@@ -5756,8 +5756,10 @@ class _AdminEmployeePageState extends State<AdminEmployeePage>{
         actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Add employee'))],
       )));
       if(ok==true&&uid!=null&&title.text.trim().isNotEmpty){
-        await db.from('staff_members').insert({'user_id':uid,'job_title':title.text.trim(),'department':dept.text.trim().isEmpty?null:dept.text.trim(),'created_by':db.auth.currentUser!.id});
-        await db.from('user_roles').insert({'user_id':uid,'role':'staff'});
+        await db.rpc('add_staff_member',params:{
+          'p_user_id':uid,'p_job_title':title.text.trim(),
+          'p_department':dept.text.trim().isEmpty?null:dept.text.trim(),
+        });
         setState(()=>_staff=_load());
       }
       title.dispose();dept.dispose();
