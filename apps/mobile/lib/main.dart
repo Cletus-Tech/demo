@@ -466,11 +466,12 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
       _safeRows(() => db.from('assessment_attempts').select('id,score,submitted_at,assessments(title)').eq('student_id', id).order('started_at', ascending: false).limit(20)),
       _safeRows(() => db.from('results').select('id,score,grade,published_at,tutor_comment,subjects(name)').eq('student_id', id).order('created_at', ascending: false).limit(20)),
       _safeRows(() => db.from('invoices').select('id,description,amount,currency,status,due_at').eq('student_id', id).order('created_at', ascending: false).limit(20)),
+      _safeRows(() => db.from('payments').select('id,amount,status,paid_at,provider_reference,invoices!inner(description,student_id)').eq('invoices.student_id', id).order('paid_at', ascending: false).limit(20)),
     ]);
     return {
       'enrolments': values[0], 'attendance': values[1],
       'submissions': values[2], 'assessments': values[3],
-      'results': values[4], 'invoices': values[5],
+      'results': values[4], 'invoices': values[5], 'payments': values[6],
     };
   }
 
@@ -625,10 +626,15 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
                 'No results have been published.',
                 (r) => (r['subjects']?['name'] ?? 'Subject').toString(),
                 (r) => 'Score: ${r['score']} • Grade: ${r['grade'] ?? '—'} • ${_date(r['published_at'])}'),
-              _section('School fees', data['invoices'] ?? [],
+              _section('School fee invoices', data['invoices'] ?? [],
                 'No fee invoices recorded.',
                 (r) => (r['description'] ?? 'Invoice').toString(),
-                (r) => '${r['currency'] ?? 'NGN'} ${r['amount']} • ${r['status']}'),
+                (r) => '${r['currency'] ?? 'NGN'} ${r['amount']} • ${r['status']} • Due: ${_date(r['due_at'])}'),
+              _section('Payment history', data['payments'] ?? [],
+                'No payment transactions recorded.',
+                (r) => (r['invoices']?['description'] ?? 'Fee payment').toString(),
+                (r) => 'Amount: ${r['amount']} • Status: ${r['status']} • Paid: ${_date(r['paid_at'])}' +
+                  (r['provider_reference'] == null ? '' : ' • Ref: ${r['provider_reference']}')),
             ]);
           },
         ),
