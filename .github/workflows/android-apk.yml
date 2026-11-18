@@ -1,4 +1,4 @@
-name: Android APK
+name: Young Learners Android APK
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
       - name: Run tests
         run: flutter test
       - name: Build optimised release APKs
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --split-per-abi --dart-define=SUPABASE_URL=https://lvpetmhhspuagbjojlks.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB
       - name: Upload architecture-specific APKs
         uses: actions/upload-artifact@v4
         with:
