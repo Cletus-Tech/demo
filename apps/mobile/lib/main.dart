@@ -331,34 +331,25 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
   void dispose() { _title.dispose(); _body.dispose(); super.dispose(); }
   Future<void> _publish() async {
     if (_title.text.trim().isEmpty || _body.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a title and message.'))); return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a title and message.')));
+      return;
     }
     setState(() => _busy = true);
     try {
-      final db = Supabase.instance.client;
-      await db.from('announcements').insert({
-        'title': _title.text.trim(), 'body': _body.text.trim(), 'audience': null,
-        'published_at': DateTime.now().toUtc().toIso8601String(),
-        'created_by': db.auth.currentUser!.id,
+      final sent = await Supabase.instance.client.rpc('publish_centre_announcement', params: {
+        '_title': _title.text.trim(),
+        '_body': _body.text.trim(),
+        '_notify_students': _notify,
       });
-      var sent = 0;
-      if (_notify) {
-        final linked = await db.from('students').select('user_id').not('user_id','is',null);
-        final ids = List<Map<String,dynamic>>.from(linked)
-          .map((e) => e['user_id'] as String?).whereType<String>().toSet().toList();
-        if (ids.isNotEmpty) {
-          await db.from('notifications').insert(ids.map((id) => {
-            'user_id': id, 'title': _title.text.trim(), 'body': _body.text.trim(),
-          }).toList());
-          sent = ids.length;
-        }
-      }
-      _title.clear(); _body.clear();
+      _title.clear();
+      _body.clear();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Published. Personal notifications sent to ' + sent.toString() + ' linked student account(s).')));
+        SnackBar(content: Text('Announcement published. Personal notifications sent to ' + sent.toString() + ' linked student account(s).')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message could not be sent: $e')));
-    } finally { if (mounted) setState(() => _busy = false); }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message could not be published: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
   @override
   Widget build(BuildContext context) => Scaffold(
