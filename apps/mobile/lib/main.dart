@@ -1139,7 +1139,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
             onOpenCentre: () => _openCentrePortal(),
           ),
           const _LearningTab(),
-          const _AnalyticsTab(),
+          _AnalyticsTab(owner: widget.owner, admin: widget.admin),
           _ProfileTab(account: _account, onRetry: () => setState(() => _account = _loadAccount()), onSignOut: _signOut),
         ],
       ),
@@ -1645,7 +1645,9 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
   }
 }
 class _AnalyticsTab extends StatefulWidget {
-  const _AnalyticsTab();
+  final bool owner;
+  final bool admin;
+  const _AnalyticsTab({this.owner = false, this.admin = false});
   @override
   State<_AnalyticsTab> createState() => _AnalyticsTabState();
 }
@@ -1688,7 +1690,23 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
   }
 
   @override
-  Widget build(BuildContext context) => RefreshIndicator(
+  Widget build(BuildContext context) {
+    if (widget.owner) {
+      return ListView(
+        padding: const EdgeInsets.all(20),
+        children: const [
+          Text('Centre analytics',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+              color: AppColors.ink)),
+          SizedBox(height: 7),
+          Text('Live totals from the centre records. Detailed reports will build on these connected records.',
+            style: TextStyle(color: AppColors.muted, height: 1.45)),
+          SizedBox(height: 18),
+          _CentreOverview(),
+        ],
+      );
+    }
+    return RefreshIndicator(
     color: AppColors.brown,
     onRefresh: _refresh,
     child: ListView(
@@ -1757,6 +1775,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
       ],
     ),
   );
+  }
 }
 
 class _ProfileTab extends StatelessWidget {
