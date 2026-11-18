@@ -3135,14 +3135,38 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
           final child = Map<String, dynamic>.from(data['child'] ?? {});
           final lessonProgress = Map<String,dynamic>.from(data['lesson_progress'] ?? {});
           final completedLessons = List<Map<String,dynamic>>.from(lessonProgress['items'] ?? []);
+          final upcomingLessons = List<Map<String,dynamic>>.from(data['upcoming_lessons'] ?? []);
+          final materials = List<Map<String,dynamic>>.from(data['materials'] ?? []);
+          final assessments = List<Map<String,dynamic>>.from(data['assessments'] ?? []);
+          final pendingAssignments = assignments.where((r) =>
+            (r['status'] ?? 'not_submitted').toString() == 'not_submitted' ||
+            (r['status'] ?? '').toString() == 'returned').length;
           return ListView(padding: const EdgeInsets.all(18), children: [
-            Text((child['name'] ?? widget.childName).toString(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
-            Text((child['level'] ?? 'Level not set').toString(), style: const TextStyle(color: AppColors.muted)),
-            const SizedBox(height: 6),
-            Text('Lessons completed: ${lessonProgress['completed'] ?? 0} of ${lessonProgress['available'] ?? 0}',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.brown)),
-            const SizedBox(height: 14),
-            _section('Lessons completed', completedLessons, 'No lessons have been marked as completed yet.'),
+            Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text((child['name'] ?? widget.childName).toString(),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                const SizedBox(height: 3),
+                Text('${child['class_name'] ?? child['level'] ?? 'Class not set'} • Supervised student view',
+                  style: const TextStyle(color: AppColors.muted)),
+                const SizedBox(height: 13),
+                Row(children: [
+                  Expanded(child: _guardianMetric('Lessons', (lessonProgress['completed'] ?? 0) as int)),
+                  const SizedBox(width: 7),
+                  Expanded(child: _guardianMetric('To submit', pendingAssignments)),
+                  const SizedBox(width: 7),
+                  Expanded(child: _guardianMetric('Results', results.length)),
+                ]),
+                const SizedBox(height: 8),
+                const Text('This is a parent view of the learner’s portal. You can monitor learning activity and feedback here; the child’s sign-in and submitted work remain separate.',
+                  style: TextStyle(color: AppColors.muted, height: 1.4, fontSize: 12)),
+              ],
+            ))),
+            _section('Upcoming live and recorded lessons', upcomingLessons, 'No upcoming lessons have been published for this learner yet.'),
+            _section('Learning materials', materials, 'No learning materials have been added for this learner yet.'),
             _section('Assignments', assignments, 'No assignments have been published for this learner yet.'),
+            _section('Assessments and CBT', assessments, 'No upcoming assessments have been published for this learner yet.'),
+            _section('Lessons completed', completedLessons, 'No lessons have been marked as completed yet.'),
             _section('Results', results, 'No results have been published yet.'),
             _section('Attendance', attendance, 'No attendance records have been added yet.'),
           ]);
