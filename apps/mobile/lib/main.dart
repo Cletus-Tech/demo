@@ -3263,7 +3263,7 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
                       const Padding(padding: EdgeInsets.only(top: 7), child: _InfoNotice(
                         message: 'No learner account matches this email yet. Do not approve until the learner registers with this exact email and the parent resubmits.')),
                     if (r['admin_note'] != null && r['admin_note'].toString().isNotEmpty)
-                      Padding(padding: const EdgeInsets.only(top: 7), child: Text('Previous note: \u0024{r['admin_note']}',
+                      Padding(padding: const EdgeInsets.only(top: 7), child: Text('Previous note: ' + r['admin_note'].toString(),
                         style: const TextStyle(color: AppColors.muted, fontSize: 12))),
                     const SizedBox(height: 12),
                     Row(children: [
