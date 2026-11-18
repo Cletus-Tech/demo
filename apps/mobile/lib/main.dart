@@ -230,6 +230,7 @@ class _RoleRouterState extends State<RoleRouter> {
         owner: roles.contains('super_admin'),
         admin: roles.contains('admin') || roles.contains('super_admin'),
         tutor: roles.contains('tutor'),
+        staffMember: roles.contains('staff'),
         parent: roles.contains('parent_account'),
       );
     },
@@ -559,6 +560,30 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                 const SizedBox(height: 8),
               ],
               if (permissions.contains('staff.manage')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.forum_outlined, color: AppColors.brown),
+                  title: const Text('Staff Room'),
+                  subtitle: const Text('Private staff conversations and coordinator announcements'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const StaffRoomPage(canAnnounce: true)),
+                )),
+                const SizedBox(height: 8),
+                Card(child: ListTile(
+                  leading: const Icon(Icons.fact_check_outlined, color: AppColors.brown),
+                  title: const Text('Tutor Interview Centre'),
+                  subtitle: const Text('Review applications, shortlist candidates and schedule interviews'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const TutorInterviewCentrePage(admin: true)),
+                )),
+                const SizedBox(height: 8),
+                Card(child: ListTile(
+                  leading: const Icon(Icons.groups_2_outlined, color: AppColors.brown),
+                  title: const Text('Staff directory'),
+                  subtitle: const Text('Add employees and manage staff-room access'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminEmployeePage()),
+                )),
+                const SizedBox(height: 8),
                 Card(child: ListTile(
                   leading: const Icon(Icons.badge_outlined, color: AppColors.brown),
                   title: const Text('Tutor and staff management'),
@@ -2422,8 +2447,9 @@ class LearnerHomePage extends StatefulWidget {
   final bool owner;
   final bool admin;
   final bool tutor;
+  final bool staffMember;
   final bool parent;
-  const LearnerHomePage({super.key, this.owner = false, this.admin = false, this.tutor = false, this.parent = false});
+  const LearnerHomePage({super.key, this.owner = false, this.admin = false, this.tutor = false, this.staffMember = false, this.parent = false});
   @override
   State<LearnerHomePage> createState() => _LearnerHomePageState();
 }
@@ -2511,6 +2537,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
             owner: widget.owner,
             admin: widget.admin,
             tutor: widget.tutor,
+            staffMember: widget.staffMember,
             parent: widget.parent,
             onOpenCentre: () => _openCentrePortal(),
           ),
@@ -2697,6 +2724,7 @@ class _HomeTab extends StatelessWidget {
   final bool owner;
   final bool admin;
   final bool tutor;
+  final bool staffMember;
   final bool parent;
   final VoidCallback onOpenCentre;
   const _HomeTab({
@@ -2705,6 +2733,7 @@ class _HomeTab extends StatelessWidget {
     required this.owner,
     required this.admin,
     required this.tutor,
+    required this.staffMember,
     required this.parent,
     required this.onOpenCentre,
   });
@@ -2755,6 +2784,32 @@ class _HomeTab extends StatelessWidget {
                 if (owner) ...[
                   const SizedBox(height: 20),
                   const _CentreOverview(),
+                ],
+                if (owner || admin || tutor || staffMember) ...[
+                  const SizedBox(height: 18),
+                  Card(child: ListTile(
+                    leading: const CircleAvatar(backgroundColor: AppColors.paleGold,
+                      child: Icon(Icons.forum_outlined, color: AppColors.brown)),
+                    title: const Text('Staff Room', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                    subtitle: const Text('Private updates and conversations with the centre team'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => StaffRoomPage(canAnnounce: owner || admin),
+                    )),
+                  )),
+                ],
+                if (!owner && !admin && !tutor && !staffMember && !parent) ...[
+                  const SizedBox(height: 18),
+                  Card(child: ListTile(
+                    leading: const CircleAvatar(backgroundColor: AppColors.paleGold,
+                      child: Icon(Icons.record_voice_over_outlined, color: AppColors.brown)),
+                    title: const Text('Become a tutor', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                    subtitle: const Text('Apply to teach with Young Learners Tutorial'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const TutorInterviewCentrePage(),
+                    )),
+                  )),
                 ],
                 if (admin) ...[
                   const SizedBox(height: 20),
@@ -5423,4 +5478,309 @@ class ExamPreparationPage extends StatelessWidget {
       ],
     ),
   );
+}
+
+class StaffRoomPage extends StatefulWidget {
+  final bool canAnnounce;
+  const StaffRoomPage({super.key,this.canAnnounce=false});
+  @override
+  State<StaffRoomPage> createState()=>_StaffRoomPageState();
+}
+class _StaffRoomPageState extends State<StaffRoomPage>{
+  final _composer=TextEditingController();
+  late Future<List<Map<String,dynamic>>> _messages;
+  dynamic _channel;
+  bool _sending=false;
+  bool _announcement=false;
+  @override
+  void initState(){super.initState();_messages=_load();_subscribe();}
+  Future<List<Map<String,dynamic>>> _load() async{
+    final rows=await Supabase.instance.client.from('staff_room_messages')
+      .select('id,sender_id,body,message_type,pinned,created_at,profiles(full_name)')
+      .order('created_at',ascending:false).limit(150);
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  void _subscribe(){
+    _channel=Supabase.instance.client.channel('staff-room-live')
+      .onPostgresChanges(event:PostgresChangeEvent.all,schema:'public',table:'staff_room_messages',
+        callback:(_)=>_refresh())
+      .subscribe();
+  }
+  Future<void> _refresh() async{final next=_load();if(mounted)setState(()=>_messages=next);await next;}
+  Future<void> _send() async{
+    final body=_composer.text.trim();if(body.isEmpty||_sending)return;
+    setState(()=>_sending=true);
+    try{
+      await Supabase.instance.client.from('staff_room_messages').insert({
+        'sender_id':Supabase.instance.client.auth.currentUser!.id,
+        'body':body,'message_type':_announcement?'announcement':'message',
+      });
+      _composer.clear();if(mounted)setState(()=>_announcement=false);await _refresh();
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Message could not be sent: $e')));}
+    finally{if(mounted)setState(()=>_sending=false);}
+  }
+  @override
+  void dispose(){_composer.dispose();if(_channel!=null)Supabase.instance.client.removeChannel(_channel);super.dispose();}
+  @override
+  Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Staff Room')),
+    body:Column(children:[
+      Container(width:double.infinity,padding:const EdgeInsets.all(16),color:AppColors.cream,
+        child:const Row(children:[Icon(Icons.lock_outline,color:AppColors.brown),SizedBox(width:10),
+          Expanded(child:Text('A private space for tutors, employees and centre coordinators.',
+            style:TextStyle(color:AppColors.ink,fontWeight:FontWeight.w600)))])),
+      Expanded(child:RefreshIndicator(onRefresh:_refresh,child:FutureBuilder<List<Map<String,dynamic>>>(
+        future:_messages,builder:(context,s){
+          if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+          if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[_InfoNotice(message:'Staff messages could not be loaded. Check your staff access and try again.')]);
+          final rows=s.data??[];
+          if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(24),children:[const SizedBox(height:60),
+            Icon(Icons.forum_outlined,size:48,color:AppColors.gold),const SizedBox(height:12),
+            const _InfoNotice(message:'The staff room is ready. The first coordinator message or staff conversation will appear here.')]);
+          return ListView.builder(reverse:true,padding:const EdgeInsets.all(14),itemCount:rows.length,itemBuilder:(context,index){
+            final r=rows[rows.length-1-index];final profile=r['profiles'] is Map?Map<String,dynamic>.from(r['profiles']):<String,dynamic>{};
+            final announcement=r['message_type']=='announcement';
+            return Card(color:announcement?AppColors.cream:null,margin:const EdgeInsets.only(bottom:9),
+              child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Row(children:[Expanded(child:Text(profile['full_name']?.toString()??'Staff member',
+                  style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink))),
+                  if(announcement)const Chip(label:Text('CENTRE NOTICE'),visualDensity:VisualDensity.compact),
+                ]),
+                const SizedBox(height:5),Text(r['body'].toString(),style:const TextStyle(height:1.45,color:AppColors.ink)),
+                const SizedBox(height:7),Text(_staffDate(r['created_at']),style:const TextStyle(fontSize:11,color:AppColors.muted)),
+              ])));
+          });
+        }))),
+      SafeArea(top:false,child:Padding(padding:const EdgeInsets.fromLTRB(12,8,12,12),child:Column(children:[
+        if(widget.canAnnounce)CheckboxListTile(value:_announcement,onChanged:(v)=>setState(()=>_announcement=v??false),
+          dense:true,contentPadding:EdgeInsets.zero,title:const Text('Post as a centre announcement')),
+        Row(crossAxisAlignment:CrossAxisAlignment.end,children:[
+          Expanded(child:TextField(controller:_composer,minLines:1,maxLines:4,
+            decoration:const InputDecoration(hintText:'Write a staff message...',border:OutlineInputBorder()))),
+          const SizedBox(width:8),IconButton.filled(onPressed:_sending?null:_send,
+            style:IconButton.styleFrom(backgroundColor:AppColors.brown,foregroundColor:Colors.white),
+            icon:_sending?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.send_rounded)),
+        ]),
+      ]))),
+    ]),
+  );
+}
+
+String _staffDate(dynamic raw){
+  if(raw==null)return '';
+  final d=DateTime.tryParse(raw.toString())?.toLocal();if(d==null)return '';
+  String two(int n)=>n.toString().padLeft(2,'0');
+  return '${d.day}/${d.month}/${d.year} • ${two(d.hour)}:${two(d.minute)}';
+}
+
+class TutorInterviewCentrePage extends StatefulWidget{
+  final bool admin;
+  const TutorInterviewCentrePage({super.key,this.admin=false});
+  @override
+  State<TutorInterviewCentrePage> createState()=>_TutorInterviewCentrePageState();
+}
+class _TutorInterviewCentrePageState extends State<TutorInterviewCentrePage>{
+  late Future<List<Map<String,dynamic>>> _applications;
+  final _phone=TextEditingController(),_qualification=TextEditingController(),_experience=TextEditingController(text:'0'),
+    _intro=TextEditingController(),_portfolio=TextEditingController();
+  List<Map<String,dynamic>> _subjects=[],_classes=[];
+  final Set<String> _selectedSubjects={},_selectedClasses={};
+  Map<String,dynamic>? _mine;
+  bool _loading=true,_saving=false;
+  @override
+  void initState(){super.initState();if(widget.admin){_applications=_loadApplications();_loading=false;}else{_applications=Future.value([]);_loadForm();}}
+  Future<void> _loadForm() async{
+    try{
+      final results=await Future.wait([
+        Supabase.instance.client.from('subjects').select('id,name').eq('status','active').order('name'),
+        Supabase.instance.client.from('classes').select('id,name').eq('status','active').order('name'),
+        Supabase.instance.client.from('tutor_applications').select().eq('user_id',Supabase.instance.client.auth.currentUser!.id).maybeSingle(),
+      ]);
+      if(!mounted)return;setState(()=>_subjects=List<Map<String,dynamic>>.from(results[0])..sort((a,b)=>a['name'].toString().compareTo(b['name'].toString())));
+      setState(()=>_classes=List<Map<String,dynamic>>.from(results[1])..sort((a,b)=>a['name'].toString().compareTo(b['name'].toString())));
+      _mine=results[2] as Map<String,dynamic>?;
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Application form could not load: $e')));}
+    finally{if(mounted)setState(()=>_loading=false);}
+  }
+  Future<List<Map<String,dynamic>>> _loadApplications() async{
+    final rows=await Supabase.instance.client.from('tutor_applications')
+      .select('*,profiles(full_name,email)')
+      .order('created_at',ascending:false);
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  Future<void> _submit() async{
+    final exp=num.tryParse(_experience.text.trim())??-1;
+    if(_phone.text.trim().isEmpty||_qualification.text.trim().isEmpty||exp<0||
+      _selectedSubjects.isEmpty||_selectedClasses.isEmpty||_intro.text.trim().length<30){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Complete your contact, qualification, experience, subjects, class levels and introduction (at least 30 characters).')));return;
+    }
+    setState(()=>_saving=true);
+    try{
+      await Supabase.instance.client.from('tutor_applications').insert({
+        'user_id':Supabase.instance.client.auth.currentUser!.id,'phone':_phone.text.trim(),
+        'qualification':_qualification.text.trim(),'experience_years':exp,
+        'subjects':_subjects.where((x)=>_selectedSubjects.contains(x['id'].toString())).map((x)=>x['name'].toString()).toList(),
+        'class_levels':_classes.where((x)=>_selectedClasses.contains(x['id'].toString())).map((x)=>x['name'].toString()).toList(),
+        'introduction':_intro.text.trim(),'portfolio_url':_portfolio.text.trim().isEmpty?null:_portfolio.text.trim(),
+      });
+      await _loadForm();
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your tutor application has been submitted for review.')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Application could not be submitted: $e')));}
+    finally{if(mounted)setState(()=>_saving=false);}
+  }
+  Future<void> _review(Map<String,dynamic> app) async{
+    String status=(app['status']??'submitted').toString(),note=(app['review_note']??'').toString();
+    DateTime? interview=app['interview_at']==null?null:DateTime.tryParse(app['interview_at'].toString())?.toLocal();
+    final noteController=TextEditingController(text:note);
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setDialog)=>AlertDialog(
+      title:const Text('Review tutor application'),
+      content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        DropdownButtonFormField<String>(value:status,decoration:const InputDecoration(labelText:'Application stage'),
+          items:['reviewing','shortlisted','interview_scheduled','approved','rejected'].map((v)=>DropdownMenuItem(value:v,child:Text(v.replaceAll('_',' ').toUpperCase()))).toList(),
+          onChanged:(v)=>setDialog(()=>status=v??status)),
+        if(status=='interview_scheduled')...[
+          const SizedBox(height:10),
+          OutlinedButton.icon(onPressed:()async{final d=await showDatePicker(context:ctx,firstDate:DateTime.now(),lastDate:DateTime.now().add(const Duration(days:365)),initialDate:interview??DateTime.now());if(d==null)return;final t=await showTimePicker(context:ctx,initialTime:TimeOfDay.fromDateTime(interview??DateTime.now()));if(t!=null)setDialog(()=>interview=DateTime(d.year,d.month,d.day,t.hour,t.minute));},
+            icon:const Icon(Icons.calendar_month_outlined),label:Text(interview==null?'Choose interview date and time':_staffDate(interview!.toIso8601String()))),
+        ],
+        TextField(controller:noteController,minLines:2,maxLines:4,decoration:const InputDecoration(labelText:'Private review note')),
+      ])),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+        FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save review'))],
+    )));
+    if(ok!=true){noteController.dispose();return;}
+    if(status=='interview_scheduled'&&interview==null){noteController.dispose();ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Choose the interview date and time.')));return;}
+    try{
+      await Supabase.instance.client.rpc('review_tutor_application',params:{
+        'p_application_id':app['id'],'p_status':status,'p_review_note':noteController.text.trim().isEmpty?null:noteController.text.trim(),
+        'p_interview_at':status=='interview_scheduled'?interview!.toUtc().toIso8601String():null,
+      });
+      setState(()=>_applications=_loadApplications());
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Application review failed: $e')));}
+    finally{noteController.dispose();}
+  }
+  @override
+  void dispose(){_phone.dispose();_qualification.dispose();_experience.dispose();_intro.dispose();_portfolio.dispose();super.dispose();}
+  Widget _choiceList(String title,List<Map<String,dynamic>> rows,Set<String> selected){
+    return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text(title,style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink)),
+      const SizedBox(height:6),Wrap(spacing:7,runSpacing:5,children:rows.map((r){
+        final id=r['id'].toString(),active=selected.contains(id);
+        return FilterChip(label:Text(r['name'].toString()),selected:active,
+          onSelected:(v)=>setState(()=>v?selected.add(id):selected.remove(id)));
+      }).toList()),
+    ]);
+  }
+  @override
+  Widget build(BuildContext context){
+    if(widget.admin)return Scaffold(appBar:AppBar(title:const Text('Tutor Interview Centre')),
+      body:RefreshIndicator(onRefresh:()async=>setState(()=>_applications=_loadApplications()),
+        child:FutureBuilder<List<Map<String,dynamic>>>(future:_applications,builder:(context,s){
+          if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+          if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[_InfoNotice(message:'Applications could not be loaded: ${s.error}')]);
+          final rows=s.data??[];
+          if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(20),children:const [_InfoNotice(message:'No tutor applications yet. New applications will appear here.')]);
+          return ListView(padding:const EdgeInsets.all(16),children:[
+            const Text('TUTOR CANDIDATES',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+            const SizedBox(height:10),...rows.map((a){final p=a['profiles'] is Map?Map<String,dynamic>.from(a['profiles']):<String,dynamic>{};
+              return Card(child:ListTile(isThreeLine:true,onTap:()=>_review(a),
+                leading:const CircleAvatar(backgroundColor:AppColors.paleGold,child:Icon(Icons.person_outline,color:AppColors.brown)),
+                title:Text(p['full_name']?.toString()??'Applicant',style:const TextStyle(fontWeight:FontWeight.w800)),
+                subtitle:Text('${a['qualification']} • ${a['experience_years']} years\n${(a['subjects'] as List).join(', ')}\nStatus: ${a['status'].toString().replaceAll('_',' ')}'),
+                trailing:const Icon(Icons.chevron_right_rounded)));
+            }),
+          ]);
+        })));
+    return Scaffold(appBar:AppBar(title:const Text('Tutor Interview Centre')),
+      body:_loading?const Center(child:CircularProgressIndicator()):_mine!=null
+        ?ListView(padding:const EdgeInsets.all(20),children:[
+          const Icon(Icons.assignment_turned_in_outlined,size:52,color:AppColors.brown),
+          const SizedBox(height:12),const Text('Your tutor application',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
+          const SizedBox(height:8),Text('Current stage: ${_mine!['status'].toString().replaceAll('_',' ').toUpperCase()}',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.brown)),
+          if(_mine!['interview_at']!=null)Text('Interview: ${_staffDate(_mine!['interview_at'])}'),
+          if(_mine!['review_note']!=null)Text('Centre update: ${_mine!['review_note']}'),
+          const SizedBox(height:12),const _InfoNotice(message:'The centre will notify you when your application moves to another stage. Approval is required before tutor access is activated.'),
+        ])
+        :ListView(padding:const EdgeInsets.all(18),children:[
+          Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:AppColors.brown,borderRadius:BorderRadius.circular(16)),
+            child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Icon(Icons.school_outlined,color:AppColors.gold,size:34),SizedBox(height:10),
+              Text('Teach. Inspire. Make a difference.',style:TextStyle(color:Colors.white,fontSize:21,fontWeight:FontWeight.w800)),
+              SizedBox(height:7),Text('Tell us about your teaching experience and the subjects you can support. Our team will review your application and contact you about the next stage.',style:TextStyle(color:Color(0xFFE7DED6),height:1.5)),
+            ])),
+          const SizedBox(height:18),TextField(controller:_phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'Phone / WhatsApp number')),
+          const SizedBox(height:10),TextField(controller:_qualification,decoration:const InputDecoration(labelText:'Highest qualification')),
+          const SizedBox(height:10),TextField(controller:_experience,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Teaching experience (years)')),
+          const SizedBox(height:16),_choiceList('Subjects you can teach',_subjects,_selectedSubjects),
+          const SizedBox(height:16),_choiceList('Class levels you can teach',_classes,_selectedClasses),
+          const SizedBox(height:12),TextField(controller:_intro,minLines:4,maxLines:7,decoration:const InputDecoration(labelText:'Brief introduction and teaching approach',hintText:'Tell us about your experience and how you help learners understand...',alignLabelWithHint:true)),
+          const SizedBox(height:10),TextField(controller:_portfolio,decoration:const InputDecoration(labelText:'Portfolio / sample lesson link (optional)')),
+          const SizedBox(height:20),FilledButton.icon(onPressed:_saving?null:_submit,icon:const Icon(Icons.send_rounded),label:Text(_saving?'Submitting...':'Submit tutor application')),
+          const SizedBox(height:12),const Text('Please note: submitting this form does not guarantee employment. The centre will review your application and may schedule an interview.',style:TextStyle(fontSize:12,color:AppColors.muted,height:1.4)),
+        ]),
+    );
+  }
+}
+
+class AdminEmployeePage extends StatefulWidget{
+  const AdminEmployeePage({super.key});
+  @override
+  State<AdminEmployeePage> createState()=>_AdminEmployeePageState();
+}
+class _AdminEmployeePageState extends State<AdminEmployeePage>{
+  late Future<List<Map<String,dynamic>>> _staff;
+  @override
+  void initState(){super.initState();_staff=_load();}
+  Future<List<Map<String,dynamic>>> _load() async{
+    final r=await Supabase.instance.client.from('staff_members').select('id,user_id,job_title,department,status,profiles(full_name,email)').order('created_at',ascending:false);
+    return List<Map<String,dynamic>>.from(r);
+  }
+  Future<void> _add() async{
+    final db=Supabase.instance.client;
+    try{
+      final all=await db.from('profiles').select('id,full_name,email,account_type').eq('status','active').order('full_name');
+      final existing=await db.from('staff_members').select('user_id');
+      final tutors=await db.from('tutors').select('user_id').eq('status','active');
+      final used={...(existing as List).map((x)=>x['user_id'].toString()),...(tutors as List).map((x)=>x['user_id'].toString())};
+      final candidates=List<Map<String,dynamic>>.from(all).where((p)=>p['account_type']!='parent'&&!used.contains(p['id'].toString())).toList();
+      if(candidates.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No eligible accounts found. The employee must create an account first.')));return;}
+      final title=TextEditingController(),dept=TextEditingController();String? uid=candidates.first['id'].toString();
+      final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
+        title:const Text('Add employee to staff room'),
+        content:Column(mainAxisSize:MainAxisSize.min,children:[
+          DropdownButtonFormField<String>(value:uid,decoration:const InputDecoration(labelText:'Account'),
+            items:candidates.map((p)=>DropdownMenuItem(value:p['id'].toString(),child:Text('${p['full_name']??'Unnamed'} • ${p['email']??''}'))).toList(),onChanged:(v)=>setD(()=>uid=v)),
+          TextField(controller:title,decoration:const InputDecoration(labelText:'Job title')),
+          TextField(controller:dept,decoration:const InputDecoration(labelText:'Department / team (optional)')),
+        ]),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Add employee'))],
+      )));
+      if(ok==true&&uid!=null&&title.text.trim().isNotEmpty){
+        await db.from('staff_members').insert({'user_id':uid,'job_title':title.text.trim(),'department':dept.text.trim().isEmpty?null:dept.text.trim(),'created_by':db.auth.currentUser!.id});
+        await db.from('user_roles').insert({'user_id':uid,'role':'staff'});
+        setState(()=>_staff=_load());
+      }
+      title.dispose();dept.dispose();
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Employee could not be added: $e')));}
+  }
+  Future<void> _status(Map<String,dynamic> row,String status) async{
+    await Supabase.instance.client.from('staff_members').update({'status':status}).eq('id',row['id']);
+    if(mounted)setState(()=>_staff=_load());
+  }
+  @override
+  Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Staff directory')),
+    floatingActionButton:FloatingActionButton.extended(onPressed:_add,backgroundColor:AppColors.brown,foregroundColor:Colors.white,
+      icon:const Icon(Icons.person_add_alt_1),label:const Text('Add employee')),
+    body:RefreshIndicator(onRefresh:()async=>setState(()=>_staff=_load()),child:FutureBuilder<List<Map<String,dynamic>>>(future:_staff,builder:(context,s){
+      if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+      if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[_InfoNotice(message:'Staff list could not load: ${s.error}')]);
+      final rows=s.data??[];
+      if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(20),children:const [_InfoNotice(message:'No employees have been added yet. Add an existing account to give them staff-room access.')]);
+      return ListView(padding:const EdgeInsets.all(16),children:rows.map((r){final p=r['profiles'] is Map?Map<String,dynamic>.from(r['profiles']):<String,dynamic>{};final active=r['status']=='active';
+        return Card(child:ListTile(title:Text(p['full_name']?.toString()??'Employee'),subtitle:Text('${r['job_title']} • ${r['department']??'General'} • ${r['status']}'),
+          trailing:PopupMenuButton<String>(onSelected:(v)=>_status(r,v),itemBuilder:(_)=>[
+            PopupMenuItem(value:active?'inactive':'active',child:Text(active?'Deactivate':'Reactivate')),
+          ])));
+      }).toList());
+    })));
 }
