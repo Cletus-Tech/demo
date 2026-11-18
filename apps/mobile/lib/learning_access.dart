@@ -199,7 +199,8 @@ class _LearningAccessPageState extends State<LearningAccessPage> {
 
 class OwnerLearningAccessPage extends StatefulWidget {
   final bool owner;
-  const OwnerLearningAccessPage({super.key, this.owner = false});
+  final bool canManageFinance;
+  const OwnerLearningAccessPage({super.key, this.owner = false, this.canManageFinance = false});
   @override
   State<OwnerLearningAccessPage> createState() => _OwnerLearningAccessPageState();
 }
@@ -334,7 +335,7 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
         const Text('Payment verification', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: _laBrown)),
         const SizedBox(height: 5), Text('$pending payment submission(s) waiting for review', style: const TextStyle(color: _laMuted)),
         const SizedBox(height: 16),
-        Card(child: Padding(padding: const EdgeInsets.all(15), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (widget.canManageFinance) Card(child: Padding(padding: const EdgeInsets.all(15), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('BANK ACCOUNT DETAILS', style: TextStyle(fontSize: 11, letterSpacing: 1, fontWeight: FontWeight.w800, color: _laMuted)),
           const SizedBox(height: 10),
           TextField(controller: _bank, decoration: const InputDecoration(labelText: 'Bank name')),
