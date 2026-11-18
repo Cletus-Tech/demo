@@ -3648,8 +3648,12 @@ class _LearningTabState extends State<_LearningTab> {
     // Owners and authorised administrators can inspect the centre's published
     // catalogue. Learners only receive lessons for approved learning programmes.
     if (!widget.owner && !widget.admin) {
+      final currentUserId = db.auth.currentUser?.id;
+      if (currentUserId == null) return [];
       final approvedRequests = await db.from('learning_access_requests')
-        .select('learning_programmes(class_id)').eq('status', 'approved');
+        .select('learning_programmes(class_id)')
+        .eq('user_id', currentUserId)
+        .eq('status', 'approved');
       final classIds = approvedRequests.map((row) {
         final programme = row['learning_programmes'] as Map<String, dynamic>?;
         return programme?['class_id']?.toString();
