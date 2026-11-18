@@ -147,9 +147,13 @@ class _RoleRouterState extends State<RoleRouter> {
         ])));
       }
       final roles = s.data ?? [];
-      if (roles.contains('super_admin')) return const AdminPortalPage(owner: true);
-      if (roles.contains('admin')) return const AdminPortalPage(owner: false);
-      return const LearnerHomePage();
+      // Every authenticated account enters the same connected app shell.
+      // Owner/admin tools are role-aware destinations inside the main dashboard,
+      // not a replacement for the learner-facing home experience.
+      return LearnerHomePage(
+        owner: roles.contains('super_admin'),
+        admin: roles.contains('admin') || roles.contains('super_admin'),
+      );
     },
   );
 }
@@ -1045,7 +1049,9 @@ class _SignInPageState extends State<SignInPage> {
 }
 
 class LearnerHomePage extends StatefulWidget {
-  const LearnerHomePage({super.key});
+  final bool owner;
+  final bool admin;
+  const LearnerHomePage({super.key, this.owner = false, this.admin = false});
   @override
   State<LearnerHomePage> createState() => _LearnerHomePageState();
 }
@@ -1092,6 +1098,12 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
     ));
   }
 
+  void _openCentrePortal() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => AdminPortalPage(owner: widget.owner),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final titles = ['Home', 'My learning', 'Analytics', 'Profile'];
@@ -1119,7 +1131,13 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          _HomeTab(account: _account, onOpenLearning: () => setState(() => _selectedIndex = 1)),
+          _HomeTab(
+            account: _account,
+            onOpenLearning: () => setState(() => _selectedIndex = 1),
+            owner: widget.owner,
+            admin: widget.admin,
+            onOpenCentre: () => _openCentrePortal(),
+          ),
           const _LearningTab(),
           const _AnalyticsTab(),
           _ProfileTab(account: _account, onRetry: () => setState(() => _account = _loadAccount()), onSignOut: _signOut),
@@ -1300,7 +1318,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
 class _HomeTab extends StatelessWidget {
   final Future<Map<String, dynamic>> account;
   final VoidCallback onOpenLearning;
-  const _HomeTab({required this.account, required this.onOpenLearning});
+  final bool owner;
+  final bool admin;
+  final VoidCallback onOpenCentre;
+  const _HomeTab({
+    required this.account,
+    required this.onOpenLearning,
+    required this.owner,
+    required this.admin,
+    required this.onOpenCentre,
+  });
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
@@ -1315,7 +1342,7 @@ class _HomeTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('LEARNER PORTAL',
+                Text(owner ? 'OWNER DASHBOARD' : admin ? 'CENTRE DASHBOARD' : 'LEARNER PORTAL',
                   style: TextStyle(fontSize: 10, letterSpacing: 1.4,
                     fontWeight: FontWeight.w800, color: AppColors.muted)),
                 const SizedBox(height: 8),
@@ -1343,6 +1370,25 @@ class _HomeTab extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (admin) ...[
+                  const SizedBox(height: 20),
+                  Card(
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      leading: const CircleAvatar(
+                        backgroundColor: AppColors.paleGold,
+                        child: Icon(Icons.admin_panel_settings_outlined, color: AppColors.brown),
+                      ),
+                      title: Text(owner ? 'Owner centre' : 'Administration centre',
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      subtitle: Text(owner
+                        ? 'Manage the centre, administrators, academic setup and operations.'
+                        : 'Open the management tools assigned to your account.'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: onOpenCentre,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
