@@ -1,5 +1,6 @@
 name: iPhone Web Preview
 
+# Re-run after allowing the young-learners-foundation deployment branch.
 on:
   workflow_dispatch:
   push:
