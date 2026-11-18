@@ -77,10 +77,17 @@ class _LearningAccessPageState extends State<LearningAccessPage> {
     final reference = TextEditingController();
     final note = TextEditingController();
     final bank = settings ?? {};
+    final bankConfigured = (bank['bank_name'] ?? '').toString().trim().isNotEmpty &&
+        (bank['account_name'] ?? '').toString().trim().isNotEmpty &&
+        (bank['account_number'] ?? '').toString().trim().length >= 8;
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: const Text('Submit payment details'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Transfer to the account below. Confirm the account name before sending money.'),
+        if (!bankConfigured) ...[
+          const SizedBox(height: 10),
+          const Text('The tutorial centre has not added its bank details yet. You can return later to complete payment.', style: TextStyle(color: Colors.red)),
+        ],
         const SizedBox(height: 12),
         Container(width: double.infinity, padding: const EdgeInsets.all(13), decoration: BoxDecoration(color: _laCream, borderRadius: BorderRadius.circular(12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Bank: ${bank['bank_name'] ?? 'Not configured'}'),
@@ -98,7 +105,7 @@ class _LearningAccessPageState extends State<LearningAccessPage> {
         const SizedBox(height: 10),
         TextField(controller: note, maxLines: 2, decoration: const InputDecoration(labelText: 'Additional note (optional)')),
       ])),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit payment'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: bankConfigured ? () => Navigator.pop(ctx, true) : null, child: const Text('Submit payment'))],
     ));
     if (ok == true) {
       final value = double.tryParse(amount.text.trim());
