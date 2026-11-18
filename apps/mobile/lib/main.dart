@@ -2250,24 +2250,13 @@ class _SignInPageState extends State<SignInPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Container(
-                        width: 52, height: 52,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AppColors.brown,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.school_outlined, color: Colors.white, size: 28),
-                      ),
-                      const SizedBox(height: 22),
-                      const Text('YOUNG LEARNERS',
-                        style: TextStyle(fontSize: 12, letterSpacing: 1.4,
-                          fontWeight: FontWeight.w800, color: AppColors.ink)),
-                      const SizedBox(height: 5),
-                      const Text('Every Child Can Learn.',
-                        style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700,
-                          color: AppColors.ink)),
-                      const SizedBox(height: 8),
+                      Center(child: SvgPicture.asset(
+                        'assets/young_learners_logo.svg',
+                        width: 300,
+                        height: 96,
+                        fit: BoxFit.contain,
+                      )),
+                      const SizedBox(height: 16),
                       Text(_creating ? 'Create your account.' : 'Sign in to continue learning.',
                         style: const TextStyle(color: AppColors.muted)),
                       const SizedBox(height: 24),
