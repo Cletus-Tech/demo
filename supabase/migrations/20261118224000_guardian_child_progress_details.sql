@@ -34,7 +34,7 @@ begin
     and exists (
       select 1 from public.students st
       join public.learning_access_requests r on r.user_id=st.user_id and r.status='approved'
-      join public.learning_programmes p on p.id=r.programme_id and p.is_active=true
+      join public.learning_programmes p on p.id=r.programme_id
       where st.id=p_student_id and p.class_id=a.class_id
     );
 
