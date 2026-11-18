@@ -3152,10 +3152,16 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
         FilledButton(
-          onPressed: approving || note.text.trim().isNotEmpty ? () => Navigator.pop(ctx, true) : null,
+          onPressed: () => Navigator.pop(ctx, true),
           child: Text(approving ? 'Confirm approval' : 'Reject request')),
       ],
     ));
+    if (confirmed == true && !approving && note.text.trim().isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a short reason before rejecting this request.')));
+      note.dispose();
+      return;
+    }
     if (confirmed == true) {
       setState(() => _busy = true);
       try {
