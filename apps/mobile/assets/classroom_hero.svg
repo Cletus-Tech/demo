@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 260">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4A3022"/><stop offset="1" stop-color="#7A4B2C"/></linearGradient><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F4D27A"/><stop offset="1" stop-color="#C99A3D"/></linearGradient></defs>
+<rect width="720" height="260" rx="28" fill="url(#bg)"/>
+<circle cx="620" cy="40" r="105" fill="#FFFFFF" opacity=".06"/><circle cx="80" cy="245" r="120" fill="#FFFFFF" opacity=".05"/>
+<path d="M410 180V78q52-28 103 0v102q-51-27-103 0Z" fill="#FFF9EE"/><path d="M513 78q51-28 103 0v102q-52-27-103 0Z" fill="#F0E1C4"/><path d="M513 78v102" stroke="#C99A3D" stroke-width="5"/><path d="M425 98q32-15 70-1M425 120q32-15 70-1M527 98q32-15 70-1M527 120q32-15 70-1" stroke="#B08A4F" stroke-width="4" fill="none" stroke-linecap="round"/>
+<path d="M390 190q123 28 248 0" stroke="url(#gold)" stroke-width="8" fill="none" stroke-linecap="round"/>
+<path d="M70 65h24v88H70z" fill="#E4B84F"/><path d="M58 65h48v10H58z" fill="#F5D88D"/><path d="M82 43l17 22H65z" fill="#FFF3D8"/>
+<text x="132" y="93" fill="#FFF9EE" font-family="Arial,sans-serif" font-size="31" font-weight="700">YOUR CLASSROOM</text>
+<text x="132" y="132" fill="#F4D27A" font-family="Arial,sans-serif" font-size="19" font-weight="700">Learn • Practise • Grow</text>
+<text x="132" y="164" fill="#F7EDE0" font-family="Arial,sans-serif" font-size="14">Lessons, resources and guidance — all in one place</text>
+</svg>
