@@ -2269,7 +2269,8 @@ class ExamPreparationPage extends StatelessWidget {
       'url': 'https://waecnigeria.org/',
       'logo': 'https://waecinternational.org/timetable/images/logo.png',
       'domain': 'waecnigeria.org',
-      'note': 'Official WAEC information, examination services and candidate resources.',
+      'stage': 'SS3 and eligible private candidates',
+      'note': 'WASSCE school candidates are generally in SS3. Private-candidate routes are for eligible candidates outside the school-candidate route.',
     },
     {
       'name': 'NECO',
@@ -2278,7 +2279,8 @@ class ExamPreparationPage extends StatelessWidget {
       'url': 'https://neco.gov.ng/',
       'logo': 'https://d1jcea4y7xhp7l.cloudfront.net/2021/01/neco-timetable-novdec-e1457601333710.jpg',
       'domain': 'neco.gov.ng',
-      'note': 'National secondary and basic education examinations, including NCEE and BECE.',
+      'stage': 'Primary 6 • JSS3 • SS3',
+      'note': 'NCEE is for pupils completing Primary 6; BECE is for eligible JSS3 candidates; SSCE is the senior secondary certificate route.',
     },
     {
       'name': 'JAMB',
@@ -2287,7 +2289,8 @@ class ExamPreparationPage extends StatelessWidget {
       'url': 'https://www.jamb.gov.ng/',
       'logo': 'https://www.jamb.gov.ng/assets/layouts/layout3/img/banner.png',
       'domain': 'jamb.gov.ng',
-      'note': 'Tertiary admission examination and candidate services. JAMB does not conduct GCE.',
+      'stage': 'SS3 and post-secondary eligible candidates',
+      'note': 'UTME and Direct Entry are tertiary-admission pathways. JAMB does not conduct GCE; WAEC and NECO offer external/private-candidate routes.',
     },
     {
       'name': 'NABTEB',
@@ -2296,7 +2299,8 @@ class ExamPreparationPage extends StatelessWidget {
       'url': 'https://nabteb.gov.ng/',
       'logo': 'https://jambhub.com/wp-content/uploads/2022/02/National-Business-and-Technical-Examinations-Board-Nabteb.jpg',
       'domain': 'nabteb.gov.ng',
-      'note': 'Business, technical and vocational examination pathways.',
+      'stage': 'Senior secondary and technical/vocational candidates',
+      'note': 'National business, technical, advanced and modular trade certificate pathways.',
     },
     {
       'name': 'NBAIS',
@@ -2305,7 +2309,8 @@ class ExamPreparationPage extends StatelessWidget {
       'url': 'https://nbais.gov.ng/',
       'logo': 'https://wazobianet.com/static/landing/assets/images/parters/nbais.jpg',
       'domain': 'nbais.gov.ng',
-      'note': 'Arabic and Islamic Studies examination and certification information.',
+      'stage': 'Learners in recognised Arabic and Islamic studies pathways',
+      'note': 'SAISSCE, Tahfeez and related Arabic and Islamic studies certification pathways.',
     },
   ];
 
@@ -2356,6 +2361,8 @@ class ExamPreparationPage extends StatelessWidget {
                   Text(body['full']!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                   const SizedBox(height: 8),
                   Text(body['exam']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.brown)),
+                  const SizedBox(height: 5),
+                  Text('Recommended stage: ${body['stage']!}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.brown)),
                   const SizedBox(height: 5),
                   Text(body['note']!, style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
                   const SizedBox(height: 8),
