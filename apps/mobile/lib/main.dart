@@ -391,8 +391,7 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
 
   Future<List<Map<String, dynamic>>> _safeRows(
       Future<dynamic> Function() request) async {
-    try { return List<Map<String, dynamic>>.from(await request()); }
-    catch (_) { return <Map<String, dynamic>>[]; }
+    return List<Map<String, dynamic>>.from(await request());
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _load() async {
