@@ -2323,17 +2323,22 @@ class _StudentAssessmentRunnerPageState extends State<StudentAssessmentRunnerPag
   int _remaining = 0;
   bool _submitting = false;
   String? _loadError;
+  String? _attemptId;
   @override
   void initState() {
     super.initState();
-    final mins = (widget.assessment['duration_minutes'] as num?)?.toInt() ?? 0;
-    _remaining = mins > 0 ? mins * 60 : 0;
     _questions = _loadQuestions();
   }
   Future<List<Map<String, dynamic>>> _loadQuestions() async {
     try {
-      final raw = await Supabase.instance.client.rpc('student_assessment_questions',
+      final started = await Supabase.instance.client.rpc('start_student_assessment',
         params: {'p_assessment_id': widget.assessment['id']});
+      final startData = Map<String, dynamic>.from(started as Map);
+      _attemptId = startData['attempt_id']?.toString();
+      final mins = (startData['duration_minutes'] as num?)?.toInt() ?? 0;
+      _remaining = mins > 0 ? mins * 60 : 0;
+      final raw = await Supabase.instance.client.rpc('student_assessment_questions',
+        params: {'p_attempt_id': _attemptId});
       if (raw is! List) return [];
       final rows = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       if (rows.isNotEmpty && _remaining > 0) _startTimer();
@@ -2379,7 +2384,7 @@ class _StudentAssessmentRunnerPageState extends State<StudentAssessmentRunnerPag
     setState(() => _submitting = true); _timer?.cancel();
     try {
       final raw = await Supabase.instance.client.rpc('submit_student_assessment',
-        params: {'p_assessment_id': widget.assessment['id'], 'p_answers': _answers});
+        params: {'p_attempt_id': _attemptId, 'p_answers': _answers});
       final result = Map<String, dynamic>.from(raw as Map);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
