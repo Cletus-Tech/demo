@@ -26,6 +26,19 @@ jobs:
           cache: true
       - name: Generate Android platform scaffolding
         run: flutter create . --platforms=android
+      - name: Ensure release app has internet permission
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          content = manifest.read_text()
+          permission = '    <uses-permission android:name="android.permission.INTERNET" />'
+          if permission not in content:
+              content = content.replace('<application', permission + '\\n    <application', 1)
+          manifest.write_text(content)
+          assert 'android.permission.INTERNET' in manifest.read_text()
+          print("Verified INTERNET permission in main (release) manifest")
+          PY
       - name: Resolve packages
         run: flutter pub get
       - name: Run tests
