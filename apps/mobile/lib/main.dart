@@ -386,8 +386,63 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
   }
 }
 
-class NotificationsPage extends StatelessWidget {
+class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
+  @override
+  State<NotificationsPage> createState() => _NotificationsPageState();
+}
+
+class _NotificationsPageState extends State<NotificationsPage> {
+  late Future<List<Map<String, dynamic>>> _items;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = _loadItems();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadItems() async {
+    final client = Supabase.instance.client;
+    final notifications = await client
+        .from('notifications')
+        .select('id,title,body,read_at,created_at')
+        .order('created_at', ascending: false);
+    final announcements = await client
+        .from('announcements')
+        .select('id,title,body,published_at,created_at')
+        .not('published_at', 'is', null)
+        .lte('published_at', DateTime.now().toUtc().toIso8601String())
+        .order('published_at', ascending: false);
+    final items = <Map<String, dynamic>>[
+      ...List<Map<String, dynamic>>.from(notifications).map((item) => {
+        ...item,
+        'kind': 'notification',
+        'sort_at': item['created_at'],
+      }),
+      ...List<Map<String, dynamic>>.from(announcements).map((item) => {
+        ...item,
+        'kind': 'announcement',
+        'sort_at': item['published_at'],
+      }),
+    ];
+    items.sort((a, b) => DateTime.parse(b['sort_at'] as String)
+        .compareTo(DateTime.parse(a['sort_at'] as String)));
+    return items;
+  }
+
+  Future<void> _refresh() async {
+    final next = _loadItems();
+    setState(() => _items = next);
+    await next;
+  }
+
+  Future<void> _markRead(Map<String, dynamic> item) async {
+    if (item['kind'] != 'notification' || item['read_at'] != null) return;
+    await Supabase.instance.client.from('notifications')
+        .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('id', item['id']);
+    await _refresh();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -399,20 +454,74 @@ class NotificationsPage extends StatelessWidget {
         child: Divider(height: 1, color: AppColors.line),
       ),
     ),
-    body: ListView(
-      padding: const EdgeInsets.all(20),
-      children: const [
-        Text('Centre updates',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
-            color: AppColors.ink)),
-        SizedBox(height: 7),
-        Text('Important notices and learning reminders will appear here.',
-          style: TextStyle(color: AppColors.muted, height: 1.45)),
-        SizedBox(height: 22),
-        _InfoNotice(
-          message: 'You have no notifications yet. When the centre publishes announcements or sends learning reminders to your account, they will appear here.',
-        ),
-      ],
+    body: RefreshIndicator(
+      color: AppColors.brown,
+      onRefresh: _refresh,
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('Centre updates',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+              color: AppColors.ink)),
+          const SizedBox(height: 7),
+          const Text('Announcements and personal learning reminders.',
+            style: TextStyle(color: AppColors.muted, height: 1.45)),
+          const SizedBox(height: 20),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _items,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator(color: AppColors.brown)),
+                );
+              }
+              if (snapshot.hasError) {
+                return const _InfoNotice(
+                  message: 'Updates could not be loaded. Pull down to try again.',
+                );
+              }
+              final items = snapshot.data ?? [];
+              if (items.isEmpty) {
+                return const _InfoNotice(
+                  message: 'You have no notifications yet. Centre announcements and reminders sent to your account will appear here.',
+                );
+              }
+              return Column(
+                children: items.map((item) {
+                  final isAnnouncement = item['kind'] == 'announcement';
+                  final isUnread = !isAnnouncement && item['read_at'] == null;
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      onTap: () => _markRead(item),
+                      leading: Icon(
+                        isAnnouncement ? Icons.campaign_outlined : Icons.notifications_none_rounded,
+                        color: AppColors.brown,
+                      ),
+                      title: Text(item['title'] ?? 'Update',
+                        style: TextStyle(
+                          fontWeight: isUnread ? FontWeight.w800 : FontWeight.w600,
+                          color: AppColors.ink,
+                        )),
+                      subtitle: item['body'] == null
+                          ? null
+                          : Padding(
+                              padding: const EdgeInsets.only(top: 5),
+                              child: Text(item['body'],
+                                style: const TextStyle(color: AppColors.muted, height: 1.4)),
+                            ),
+                      trailing: isUnread
+                          ? const Icon(Icons.circle, size: 9, color: AppColors.gold)
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
     ),
   );
 }
