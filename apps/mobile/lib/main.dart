@@ -2863,14 +2863,17 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
     if (_email.text.trim().isEmpty) return;
     setState(() => _busy = true);
     try {
-      await Supabase.instance.client.rpc('request_guardian_link', params: {
+      final result = await Supabase.instance.client.rpc('request_guardian_link', params: {
         'p_student_email': _email.text.trim(),
         'p_relationship': _relationship,
       });
       _email.clear();
       await _refresh();
+      final message = result is Map && result['message'] != null
+        ? result['message'].toString()
+        : 'Your request has been sent for centre verification.';
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Your request has been sent for centre verification.')));
+        SnackBar(content: Text(message)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Request could not be submitted: $e')));
