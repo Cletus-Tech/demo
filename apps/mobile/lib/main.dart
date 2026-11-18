@@ -3382,10 +3382,29 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
           final data = Map<String, dynamic>.from(snapshot.data as Map);
           final children = List<Map<String, dynamic>>.from(data['children'] ?? []);
           final requests = List<Map<String, dynamic>>.from(data['requests'] ?? []);
+          final totalSubmitted = children.fold<int>(0, (sum, c) =>
+            sum + (int.tryParse((c['assignments_submitted'] ?? 0).toString()) ?? 0));
+          final attendanceValues = children
+            .where((c) => c['attendance_rate'] != null)
+            .map((c) => double.tryParse(c['attendance_rate'].toString()) ?? 0)
+            .toList();
+          final familyAttendance = attendanceValues.isEmpty ? null :
+            (attendanceValues.reduce((a,b) => a+b) / attendanceValues.length).round();
           return ListView(padding: const EdgeInsets.all(20), children: [
-            const Text('Your children’s learning', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const Text('Family learning dashboard', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.ink)),
             const SizedBox(height: 6),
-            const Text('Link your account to a learner account to follow learning progress. The centre will verify every request before sharing information.', style: TextStyle(color: AppColors.muted, height: 1.45)),
+            const Text('One parent account for all your linked children. Choose a child to open their supervised student portal and review their learning activity.', style: TextStyle(color: AppColors.muted, height: 1.45)),
+            const SizedBox(height: 13),
+            Row(children: [
+              Expanded(child: _guardianMetric('Children', children.length)),
+              const SizedBox(width: 8),
+              Expanded(child: _guardianMetric('Submitted', totalSubmitted)),
+              const SizedBox(width: 8),
+              Expanded(child: _guardianMetric('Attendance', familyAttendance == null ? 0 : familyAttendance)),
+            ]),
+            const SizedBox(height: 7),
+            const Text('Attendance is an average across children with attendance records.',
+              style: TextStyle(color: AppColors.muted, fontSize: 11)),
             const SizedBox(height: 18),
             Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('Request a child link', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink)),
@@ -3406,7 +3425,7 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
                 child: Text(_busy ? 'Submitting...' : 'Send link request'))),
             ]))),
             const SizedBox(height: 18),
-            const Text('Linked children', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const Text('Your children', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
             const SizedBox(height: 8),
             if (children.isEmpty) const _InfoNotice(message: 'No child accounts have been linked yet. Once the centre approves your request, linked learners will appear here.'),
             ...children.map((c) => Card(child: ListTile(
@@ -3420,6 +3439,7 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
                 '\nLessons completed: ${c['lessons_completed'] ?? 0} of ${c['lessons_available'] ?? 0}'
                 '${c['latest_result'] == null ? '' : '\nLatest result: ${c['latest_result']} in ${c['latest_subject'] ?? 'a subject'}'}',
               ),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.brown),
               onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                 builder: (_) => GuardianChildDetailsPage(
                   studentId: c['student_id'].toString(),
