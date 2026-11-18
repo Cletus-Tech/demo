@@ -2605,7 +2605,7 @@ class _LearningTabState extends State<_LearningTab> {
           title: const Text('Class attendance', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
           subtitle: const Text('Take and update the register for your assigned classes'),
           trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const AdminAttendancePage())),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Class attendance')), body: const AdminAttendancePage()))),
         ),
       ),
       if (widget.tutor) const SizedBox(height: 10),
