@@ -599,7 +599,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   late Future<List<Map<String, dynamic>>> _classes, _subjects, _lessons, _sessions, _assessments;
   bool _busy = false;
   @override
-  void initState() { super.initState(); _tabs = TabController(length: 5, vsync: this); _reload(); }
+  void initState() { super.initState(); _tabs = TabController(length: 6, vsync: this); _reload(); }
   @override
   void dispose() { _tabs.dispose(); super.dispose(); }
   void _reload() {
