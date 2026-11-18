@@ -659,7 +659,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
     final db = Supabase.instance.client;
     _classes = db.from('classes').select('id,name,level,capacity,status').order('name');
     _subjects = db.from('subjects').select('id,name,code,description,status').order('name');
-    _lessons = db.from('lessons').select('id,title,description,content,class_id,subject_id,is_published,classes(name),subjects(name)').order('created_at', ascending: false);
+    _lessons = db.from('lessons').select('id,title,description,content,live_class_url,class_id,subject_id,is_published,classes(name),subjects(name)').order('created_at', ascending: false);
     _assessments = db.from('assessments').select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published,starts_at,classes(name),subjects(name),questions(id)').order('created_at', ascending: false);
   }
   Future<void> _refresh() async { setState(_reload); await Future.wait([_classes,_subjects,_lessons,_assessments]); }
@@ -715,6 +715,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
     final title=TextEditingController(text:row?['title']?.toString() ?? '');
     final desc=TextEditingController(text:row?['description']?.toString() ?? '');
     final content=TextEditingController(text:row?['content']?.toString() ?? '');
+    final liveUrl=TextEditingController(text:row?['live_class_url']?.toString() ?? '');
     try {
       final classes=await _classes; final subjects=await _subjects;
       if(classes.isEmpty || subjects.isEmpty) {
@@ -735,6 +736,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
             onChanged:(v)=>refreshDialog(()=>subjectId=v)),
           TextField(controller:desc,minLines:2,maxLines:3,decoration:const InputDecoration(labelText:'Short description')),
           TextField(controller:content,minLines:3,maxLines:5,decoration:const InputDecoration(labelText:'Lesson content')),
+          TextField(controller:liveUrl,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'Live class link (optional)',hintText:'https://...')),
         ]))),
         actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save lesson'))],
       )));
@@ -742,11 +744,12 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
         'title':title.text.trim(),'class_id':classId,'subject_id':subjectId,
         'description':desc.text.trim().isEmpty?null:desc.text.trim(),
         'content':content.text.trim().isEmpty?null:content.text.trim(),
+        'live_class_url':liveUrl.text.trim().isEmpty?null:liveUrl.text.trim(),
         'is_published':row?['is_published'] ?? false,
       },id:row?['id']?.toString());
     } catch(e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Lesson form could not load: ' + e.toString())));
-    } finally { title.dispose(); desc.dispose(); content.dispose(); }
+    } finally { title.dispose(); desc.dispose(); content.dispose(); liveUrl.dispose(); }
   }
 
   Future<void> _createAssessment() async {
@@ -2987,7 +2990,7 @@ class _LearningTabState extends State<_LearningTab> {
     if (widget.tutor || widget.parent) return [];
     final db = Supabase.instance.client;
     var query = db.from('lessons')
-      .select('id,title,description,content,scheduled_at,duration_minutes,subjects(name),classes(name)')
+      .select('id,title,description,content,live_class_url,scheduled_at,duration_minutes,subjects(name),classes(name)')
       .eq('is_published', true);
     // Owners and authorised administrators can inspect the centre's published
     // catalogue. Learners only receive lessons for their active enrolments.
@@ -3128,6 +3131,16 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
       Text(lesson['title'] ?? 'Lesson', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink)),
       const SizedBox(height: 9),
       if (lesson['description'] != null) Text(lesson['description'], style: const TextStyle(color: AppColors.muted, height: 1.5)),
+      if (lesson['live_class_url'] is String && (lesson['live_class_url'] as String).startsWith('https://')) ...[
+        const SizedBox(height: 14),
+        Card(child: ListTile(
+          leading: const Icon(Icons.video_camera_front_outlined, color: AppColors.brown),
+          title: const Text('Join live class', style: TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: const Text('Open your tutor’s virtual classroom'),
+          trailing: const Icon(Icons.open_in_new_rounded),
+          onTap: () => launchUrl(Uri.parse(lesson['live_class_url'] as String), mode: LaunchMode.externalApplication),
+        )),
+      ],
       const SizedBox(height: 22),
       const Text('LESSON NOTES', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
       const SizedBox(height: 10),
