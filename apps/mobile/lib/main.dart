@@ -2574,6 +2574,184 @@ class _CentreOverviewState extends State<_CentreOverview> {
   );
 }
 
+
+class GuardianPortalPage extends StatefulWidget {
+  final bool admin;
+  const GuardianPortalPage({super.key, this.admin = false});
+  @override
+  State<GuardianPortalPage> createState() => _GuardianPortalPageState();
+}
+
+class _GuardianPortalPageState extends State<GuardianPortalPage> {
+  late Future<dynamic> _data;
+  final TextEditingController _email = TextEditingController();
+  String _relationship = 'Parent';
+  bool _busy = false;
+
+  @override
+  void initState() { super.initState(); _data = _load(); }
+
+  Future<dynamic> _load() async {
+    final db = Supabase.instance.client;
+    final raw = await db.rpc(widget.admin ? 'admin_guardian_link_requests' : 'guardian_portal_summary');
+    if (widget.admin) return List<Map<String, dynamic>>.from(raw as List);
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<void> _refresh() async {
+    final next = _load();
+    setState(() => _data = next);
+    await next;
+  }
+
+  Future<void> _submit() async {
+    if (_email.text.trim().isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await Supabase.instance.client.rpc('request_guardian_link', params: {
+        'p_student_email': _email.text.trim(),
+        'p_relationship': _relationship,
+      });
+      _email.clear();
+      await _refresh();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your request has been sent for centre verification.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Request could not be submitted: $e')));
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  Future<void> _review(Map<String, dynamic> row, String decision) async {
+    setState(() => _busy = true);
+    try {
+      await Supabase.instance.client.rpc('review_guardian_link_request', params: {
+        'p_request_id': row['id'],
+        'p_decision': decision,
+        'p_admin_note': decision == 'approved' ? null : 'Please confirm the learner email and contact the centre if needed.',
+      });
+      await _refresh();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(decision == 'approved' ? 'Parent account linked.' : 'Request rejected.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Request could not be reviewed: $e')));
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  @override
+  void dispose() { _email.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(widget.admin ? 'Parent link requests' : 'Parent / guardian')),
+    body: RefreshIndicator(
+      color: AppColors.brown,
+      onRefresh: _refresh,
+      child: FutureBuilder<dynamic>(
+        future: _data,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+          }
+          if (snapshot.hasError) return ListView(padding: const EdgeInsets.all(20), children: [
+            _InfoNotice(message: 'Parent information could not be loaded: ${snapshot.error}')
+          ]);
+          if (widget.admin) {
+            final rows = List<Map<String, dynamic>>.from(snapshot.data ?? []);
+            if (rows.isEmpty) return ListView(padding: const EdgeInsets.all(20), children: const [
+              Text('Parent verification', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+              SizedBox(height: 10),
+              _InfoNotice(message: 'There are no parent link requests waiting for review.')
+            ]);
+            return ListView(padding: const EdgeInsets.all(18), children: [
+              const Text('Verify parent and learner accounts', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+              const SizedBox(height: 6),
+              const Text('Confirm that the parent is authorised to view the learner account before approving the link.', style: TextStyle(color: AppColors.muted, height: 1.4)),
+              const SizedBox(height: 14),
+              ...rows.map((r) => Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text((r['guardian_name'] ?? 'Parent account').toString(), style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
+                    const SizedBox(height: 4),
+                    Text((r['guardian_email'] ?? '').toString(), style: const TextStyle(color: AppColors.muted)),
+                    const Divider(height: 20),
+                    Text('Learner email: ${r['requested_email'] ?? ''}'),
+                    Text('Learner account: ${r['student_name'] ?? 'Not found yet'}'),
+                    Text('Relationship: ${r['relationship'] ?? 'Parent'}'),
+                    if (r['student_id'] == null)
+                      const Padding(padding: EdgeInsets.only(top: 7), child: Text('No matching active learner account was found. Do not approve until the email is corrected.', style: TextStyle(color: Colors.red, height: 1.35))),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(child: OutlinedButton(
+                        onPressed: _busy ? null : () => _review(r, 'rejected'),
+                        child: const Text('Reject'))),
+                      const SizedBox(width: 10),
+                      Expanded(child: FilledButton(
+                        onPressed: _busy || r['student_id'] == null ? null : () => _review(r, 'approved'),
+                        child: const Text('Approve link'))),
+                    ]),
+                  ]),
+                ),
+              )),
+            ]);
+          }
+
+          final data = Map<String, dynamic>.from(snapshot.data as Map);
+          final children = List<Map<String, dynamic>>.from(data['children'] ?? []);
+          final requests = List<Map<String, dynamic>>.from(data['requests'] ?? []);
+          return ListView(padding: const EdgeInsets.all(20), children: [
+            const Text('Your children’s learning', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 6),
+            const Text('Link your account to a learner account to follow learning progress. The centre will verify every request before sharing information.', style: TextStyle(color: AppColors.muted, height: 1.45)),
+            const SizedBox(height: 18),
+            Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Request a child link', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink)),
+              const SizedBox(height: 6),
+              const Text('Enter the email address the learner uses to sign in to Young Learners Tutorial.', style: TextStyle(color: AppColors.muted, height: 1.4)),
+              const SizedBox(height: 10),
+              TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Learner account email')),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: _relationship,
+                decoration: const InputDecoration(labelText: 'Your relationship to the learner'),
+                items: const ['Parent','Mother','Father','Guardian','Other'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                onChanged: _busy ? null : (v) => setState(() => _relationship = v ?? 'Parent'),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(width: double.infinity, child: FilledButton(
+                onPressed: _busy ? null : _submit,
+                child: Text(_busy ? 'Submitting...' : 'Send link request'))),
+            ]))),
+            const SizedBox(height: 18),
+            const Text('Linked children', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 8),
+            if (children.isEmpty) const _InfoNotice(message: 'No child accounts have been linked yet. Once the centre approves your request, linked learners will appear here.'),
+            ...children.map((c) => Card(child: ListTile(
+              leading: const CircleAvatar(backgroundColor: AppColors.paleGold, child: Icon(Icons.school_outlined, color: AppColors.brown)),
+              title: Text((c['name'] ?? 'Learner').toString(), style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text('${c['level'] ?? 'Level not set'} • ${c['relationship'] ?? 'Parent'}'),
+            ))),
+            const SizedBox(height: 18),
+            const Text('Your requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 8),
+            if (requests.isEmpty) const _InfoNotice(message: 'You have not submitted a parent link request yet.'),
+            ...requests.map((r) => Card(child: ListTile(
+              title: Text((r['requested_email'] ?? '').toString()),
+              subtitle: Text('${r['relationship'] ?? 'Parent'} • ${r['status'] ?? 'pending'}${r['admin_note'] == null ? '' : ' • ${r['admin_note']}'}'),
+              trailing: Icon(
+                r['status'] == 'approved' ? Icons.check_circle_outline : r['status'] == 'rejected' ? Icons.info_outline : Icons.hourglass_top_rounded,
+                color: r['status'] == 'approved' ? Colors.green : AppColors.gold),
+            ))),
+          ]);
+        },
+      ),
+    ),
+  );
+}
+
 class _LearningTab extends StatefulWidget {
   final bool owner;
   final bool admin;
