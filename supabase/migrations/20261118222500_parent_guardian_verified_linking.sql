@@ -20,6 +20,8 @@ create table if not exists public.guardian_link_requests (
 );
 alter table public.guardian_link_requests enable row level security;
 revoke all on public.guardian_link_requests from anon, authenticated;
+create policy guardian_link_requests_no_direct_access on public.guardian_link_requests
+  for all to authenticated using (false) with check (false);
 create index if not exists guardian_link_requests_status_created_idx
   on public.guardian_link_requests(status,created_at desc);
 create index if not exists guardian_link_requests_guardian_user_idx
