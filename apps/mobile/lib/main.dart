@@ -420,6 +420,54 @@ class _OwnerAdminManagementPageState extends State<OwnerAdminManagementPage> {
     catch(e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not revoke access: $e'))); }
     finally { if (mounted) setState(() => _busy = false); }
   }
+  Future<void> _configure(Map<String, dynamic> admin) async {
+    final email = admin['email'] as String? ?? '';
+    final selected = List<String>.from(admin['permissions'] ?? []).toSet();
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, refreshDialog) => AlertDialog(
+          title: const Text('Configure administrator'),
+          content: SizedBox(
+            width: 430,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: labels.entries.map((entry) => CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: selected.contains(entry.key),
+                  title: Text(entry.value),
+                  onChanged: (value) => refreshDialog(() {
+                    if (value == true) { selected.add(entry.key); }
+                    else { selected.remove(entry.key); }
+                  }),
+                )).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, selected), child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    setState(() => _busy = true);
+    try {
+      await Supabase.instance.client.rpc('owner_set_admin_permissions', params: {
+        '_email': email,
+        '_permissions': result.toList(),
+      });
+      await _refresh();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update permissions: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Administrator access')),
@@ -453,8 +501,17 @@ class _OwnerAdminManagementPageState extends State<OwnerAdminManagementPage> {
             title: Text(a['full_name'] as String? ?? email),
             subtitle: Text(email + '\n' + (permissions.isEmpty ? 'No permissions assigned' : permissions.map((p) => labels[p] ?? p).join(' • '))),
             isThreeLine: true,
-            trailing: IconButton(tooltip: 'Revoke access', onPressed: _busy ? null : () => _revoke(email),
-              icon: const Icon(Icons.person_remove_outlined, color: Colors.red)),
+            trailing: PopupMenuButton<String>(
+              enabled: !_busy,
+              onSelected: (action) {
+                if (action == 'configure') _configure(a);
+                if (action == 'revoke') _revoke(email);
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'configure', child: Text('Configure permissions')),
+                PopupMenuItem(value: 'revoke', child: Text('Revoke access')),
+              ],
+            ),
           ));
         }).toList());
       }),
