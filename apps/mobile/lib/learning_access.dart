@@ -37,7 +37,7 @@ class _LearningAccessPageState extends State<LearningAccessPage> {
 
   Future<Map<String, dynamic>> _load() async {
     final db = Supabase.instance.client;
-    final results = await Future.wait([
+    final results = await Future.wait<dynamic>([
       db.from('learning_programmes').select('id,title,stage,level,description,duration_label,fee').eq('is_active', true).order('stage').order('level'),
       db.from('learning_access_requests').select('id,learner_name,level,programme_title,amount_due,status,payment_reference,payment_amount,payment_note,admin_note,created_at').order('created_at', ascending: false),
       db.from('learning_payment_settings').select('bank_name,account_name,account_number,payment_instructions').eq('id', 1).maybeSingle(),
