@@ -161,8 +161,22 @@ class AdminPortalPage extends StatefulWidget {
 }
 class _AdminPortalPageState extends State<AdminPortalPage> {
   late Future<Map<String, int>> _stats;
+  late Future<Set<String>> _access;
   @override
-  void initState() { super.initState(); _stats = _loadStats(); }
+  void initState() {
+    super.initState();
+    _stats = _loadStats();
+    _access = widget.owner
+        ? Future<Set<String>>.value({
+            'students.manage','academics.manage','staff.manage',
+            'communications.send','finance.manage','reports.view',
+          })
+        : _loadPermissions();
+  }
+  Future<Set<String>> _loadPermissions() async {
+    final data = await Supabase.instance.client.rpc('current_admin_permissions');
+    return Set<String>.from(data as List);
+  }
   Future<Map<String, int>> _loadStats() async {
     const tables = {'Students':'students','Tutors':'tutors','Classes':'classes','Lessons':'lessons','Announcements':'announcements'};
     final result = <String, int>{};
@@ -209,21 +223,55 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
         const SizedBox(height: 22),
         const Text('MANAGEMENT', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
         const SizedBox(height: 8),
-        Card(child: ListTile(
-          leading: const Icon(Icons.people_alt_outlined, color: AppColors.brown),
-          title: const Text('Student records'),
-          subtitle: const Text('View and create student records'),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => _open(const AdminStudentsPage()),
-        )),
-        const SizedBox(height: 8),
-        Card(child: ListTile(
-          leading: const Icon(Icons.campaign_outlined, color: AppColors.brown),
-          title: const Text('Centre communications'),
-          subtitle: const Text('Publish general messages and notify linked students'),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => _open(const AdminCommunicationsPage()),
-        )),
+        FutureBuilder<Set<String>>(
+          future: _access,
+          builder: (context, accessSnapshot) {
+            if (accessSnapshot.connectionState != ConnectionState.done) {
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (accessSnapshot.hasError) {
+              return const _InfoNotice(
+                message: 'Your administrator permissions could not be verified. Sign out and sign in again, or contact the owner.',
+              );
+            }
+            final permissions = accessSnapshot.data ?? <String>{};
+            return Column(children: [
+              if (permissions.contains('students.manage')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.people_alt_outlined, color: AppColors.brown),
+                  title: const Text('Student records'),
+                  subtitle: const Text('View and manage student records and progress'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminStudentsPage()),
+                )),
+                const SizedBox(height: 8),
+              ],
+              if (permissions.contains('communications.send')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.campaign_outlined, color: AppColors.brown),
+                  title: const Text('Centre communications'),
+                  subtitle: const Text('Publish general messages and notify linked students'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminCommunicationsPage()),
+                )),
+                const SizedBox(height: 8),
+              ],
+              if (permissions.contains('academics.manage'))
+                const _InfoNotice(message: 'Academic management access is active. Class, subject and lesson management tools are being added next.'),
+              if (permissions.contains('staff.manage'))
+                const _InfoNotice(message: 'Staff management access is active. Tutor and staff management tools are being added next.'),
+              if (permissions.contains('finance.manage'))
+                const _InfoNotice(message: 'Finance management access is active. Fee and payment management tools are being added next.'),
+              if (permissions.contains('reports.view'))
+                const _InfoNotice(message: 'Reports access is active. Detailed centre reporting is being added next.'),
+              if (permissions.isEmpty && !widget.owner)
+                const _InfoNotice(message: 'Your account has administrator status but no management permissions have been assigned. Ask the owner to configure your access.'),
+            ]);
+          },
+        ),
         if (widget.owner) ...[
           const SizedBox(height: 8),
           Card(child: ListTile(
@@ -306,15 +354,154 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
             final r = rows[i];
             final p = r['profiles'] as Map<String, dynamic>?;
             return Card(child: ListTile(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => _StudentRecordDetailPage(student: r),
+              )),
               title: Text(p?['full_name'] as String? ?? 'Account not linked'),
               subtitle: Text('Admission: ' + (r['admission_number'] ?? 'Not assigned').toString() +
                 '  •  Level: ' + (r['level'] ?? 'Not set').toString() +
                 '  •  Status: ' + (r['status'] ?? '').toString()),
+              trailing: const Icon(Icons.chevron_right_rounded),
             ));
           });
       }),
     ),
   );
+}
+
+class _StudentRecordDetailPage extends StatefulWidget {
+  final Map<String, dynamic> student;
+  const _StudentRecordDetailPage({required this.student});
+  @override
+  State<_StudentRecordDetailPage> createState() => _StudentRecordDetailPageState();
+}
+
+class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
+  late Future<Map<String, List<Map<String, dynamic>>>> _records;
+  @override
+  void initState() { super.initState(); _records = _load(); }
+
+  Future<List<Map<String, dynamic>>> _safeRows(
+      Future<dynamic> Function() request) async {
+    try { return List<Map<String, dynamic>>.from(await request()); }
+    catch (_) { return <Map<String, dynamic>>[]; }
+  }
+
+  Future<Map<String, List<Map<String, dynamic>>>> _load() async {
+    final db = Supabase.instance.client;
+    final id = widget.student['id'];
+    final values = await Future.wait([
+      _safeRows(() => db.from('enrolments').select('id,status,classes(name,level)').eq('student_id', id)),
+      _safeRows(() => db.from('attendance_records').select('id,status,attended_at,note').eq('student_id', id).order('attended_at', ascending: false).limit(20)),
+      _safeRows(() => db.from('assignment_submissions').select('id,status,score,submitted_at,assignments(title)').eq('student_id', id).order('submitted_at', ascending: false).limit(20)),
+      _safeRows(() => db.from('assessment_attempts').select('id,score,submitted_at,assessments(title)').eq('student_id', id).order('started_at', ascending: false).limit(20)),
+      _safeRows(() => db.from('results').select('id,score,grade,published_at,tutor_comment,subjects(name)').eq('student_id', id).order('created_at', ascending: false).limit(20)),
+      _safeRows(() => db.from('invoices').select('id,description,amount,currency,status,due_at').eq('student_id', id).order('created_at', ascending: false).limit(20)),
+    ]);
+    return {
+      'enrolments': values[0], 'attendance': values[1],
+      'submissions': values[2], 'assessments': values[3],
+      'results': values[4], 'invoices': values[5],
+    };
+  }
+
+  Widget _section(String title, List<Map<String, dynamic>> rows,
+      String empty, String Function(Map<String, dynamic>) primary,
+      String Function(Map<String, dynamic>) secondary) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 8),
+          if (rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(empty, style: const TextStyle(color: AppColors.muted, height: 1.4)),
+            )
+          else
+            ...rows.map((row) => ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(primary(row), style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(secondary(row)),
+            )),
+        ]),
+      ),
+    );
+  }
+
+  String _date(dynamic value) {
+    if (value == null) return 'Date not recorded';
+    final parsed = DateTime.tryParse(value.toString());
+    if (parsed == null) return value.toString();
+    return '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final student = widget.student;
+    final profile = student['profiles'] as Map<String, dynamic>?;
+    final name = profile?['full_name'] as String? ?? 'Unlinked student record';
+    return Scaffold(
+      appBar: AppBar(title: const Text('Student profile')),
+      body: RefreshIndicator(
+        onRefresh: () async { final next = _load(); setState(() => _records = next); await next; },
+        child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+          future: _records,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done)
+              return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+            if (snapshot.hasError)
+              return ListView(children: const [ _InfoNotice(message: 'Student progress could not be loaded. Pull down to retry.') ]);
+            final data = snapshot.data ?? {};
+            return ListView(padding: const EdgeInsets.all(16), children: [
+              Card(child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                  const SizedBox(height: 6),
+                  Text(profile?['email'] as String? ?? 'No learner account linked',
+                    style: const TextStyle(color: AppColors.muted)),
+                  const Divider(height: 22),
+                  Text('Admission: ${student['admission_number'] ?? 'Not assigned'}'),
+                  Text('Level: ${student['level'] ?? 'Not set'}'),
+                  Text('Status: ${student['status'] ?? 'Unknown'}'),
+                  Text('Account: ${student['user_id'] == null ? 'Not linked' : 'Linked'}'),
+                ]),
+              )),
+              const SizedBox(height: 8),
+              _section('Class enrolments', data['enrolments'] ?? [],
+                'No enrolments recorded.',
+                (r) => (r['classes']?['name'] ?? 'Class').toString(),
+                (r) => 'Status: ${r['status'] ?? 'Not set'}'),
+              _section('Attendance history', data['attendance'] ?? [],
+                'No attendance records available.',
+                (r) => (r['status'] ?? 'Attendance').toString(),
+                (r) => _date(r['attended_at']) + (r['note'] == null ? '' : ' • ${r['note']}')),
+              _section('Assignments', data['submissions'] ?? [],
+                'No assignment submissions recorded.',
+                (r) => (r['assignments']?['title'] ?? 'Assignment').toString(),
+                (r) => 'Status: ${r['status'] ?? '—'} • Score: ${r['score'] ?? 'Not graded'}'),
+              _section('Assessment attempts', data['assessments'] ?? [],
+                'No assessment attempts recorded.',
+                (r) => (r['assessments']?['title'] ?? 'Assessment').toString(),
+                (r) => 'Score: ${r['score'] ?? 'Pending'} • ${_date(r['submitted_at'])}'),
+              _section('Published results', data['results'] ?? [],
+                'No results have been published.',
+                (r) => (r['subjects']?['name'] ?? 'Subject').toString(),
+                (r) => 'Score: ${r['score']} • Grade: ${r['grade'] ?? '—'} • ${_date(r['published_at'])}'),
+              _section('School fees', data['invoices'] ?? [],
+                'No fee invoices recorded.',
+                (r) => (r['description'] ?? 'Invoice').toString(),
+                (r) => '${r['currency'] ?? 'NGN'} ${r['amount']} • ${r['status']}'),
+            ]);
+          },
+        ),
+      ),
+    );
+  }
 }
 
 class AdminCommunicationsPage extends StatefulWidget {
