@@ -262,6 +262,14 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
               ],
               if (permissions.contains('students.manage')) ...[
                 Card(child: ListTile(
+                  leading: const Icon(Icons.manage_accounts_outlined, color: AppColors.brown),
+                  title: const Text('Registered accounts'),
+                  subtitle: const Text('View every student, parent and staff account'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminAccountsPage()),
+                )),
+                const SizedBox(height: 8),
+                Card(child: ListTile(
                   leading: const Icon(Icons.family_restroom_outlined, color: AppColors.brown),
                   title: const Text('Parent link requests'),
                   subtitle: const Text('Verify parent accounts before linking children'),
@@ -2613,6 +2621,109 @@ class _CentreOverviewState extends State<_CentreOverview> {
   );
 }
 
+
+
+class AdminAccountsPage extends StatefulWidget {
+  const AdminAccountsPage({super.key});
+  @override
+  State<AdminAccountsPage> createState() => _AdminAccountsPageState();
+}
+
+class _AdminAccountsPageState extends State<AdminAccountsPage> {
+  late Future<List<Map<String, dynamic>>> _accounts;
+  String _search = '';
+
+  @override
+  void initState() { super.initState(); _accounts = _load(); }
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final rows = await Supabase.instance.client.from('profiles')
+      .select('id,full_name,email,account_type,created_at,user_roles(role),students(id,level,status)')
+      .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<void> _refresh() async {
+    final next = _load();
+    setState(() => _accounts = next);
+    await next;
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Registered accounts')),
+    body: RefreshIndicator(
+      color: AppColors.brown,
+      onRefresh: _refresh,
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _accounts,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+          }
+          if (snapshot.hasError) return ListView(padding: const EdgeInsets.all(20), children: [
+            _InfoNotice(message: 'Registered accounts could not be loaded: ${snapshot.error}')
+          ]);
+          final all = snapshot.data ?? [];
+          final q = _search.trim().toLowerCase();
+          final rows = all.where((r) =>
+            q.isEmpty ||
+            (r['full_name'] ?? '').toString().toLowerCase().contains(q) ||
+            (r['email'] ?? '').toString().toLowerCase().contains(q)
+          ).toList();
+          return ListView(padding: const EdgeInsets.all(18), children: [
+            const Text('Every registered user', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 5),
+            Text('${all.length} account(s) • Includes users who have not requested classroom access',
+              style: const TextStyle(color: AppColors.muted)),
+            const SizedBox(height: 12),
+            TextField(
+              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), labelText: 'Search name or email'),
+              onChanged: (v) => setState(() => _search = v),
+            ),
+            const SizedBox(height: 12),
+            if (rows.isEmpty) const _InfoNotice(message: 'No matching accounts were found.'),
+            ...rows.map((r) {
+              final roles = r['user_roles'] is List
+                ? List<Map<String, dynamic>>.from(r['user_roles'] as List)
+                : <Map<String, dynamic>>[];
+              final roleNames = roles.map((v) => v['role'].toString().replaceAll('_',' ')).join(', ');
+              final rawStudent = r['students'];
+              final student = rawStudent is Map
+                ? Map<String, dynamic>.from(rawStudent)
+                : rawStudent is List && rawStudent.isNotEmpty
+                  ? Map<String, dynamic>.from(rawStudent.first as Map)
+                  : <String, dynamic>{};
+              final isStaff = roles.any((v) => ['admin','super_admin','tutor'].contains(v['role']));
+              final accountType = isStaff ? 'Staff account'
+                : r['account_type'] == 'parent' ? 'Parent / guardian'
+                : 'Student account';
+              final created = DateTime.tryParse(r['created_at']?.toString() ?? '');
+              final createdLabel = created == null ? 'Date unavailable'
+                : '${created.toLocal().day.toString().padLeft(2,'0')}/${created.toLocal().month.toString().padLeft(2,'0')}/${created.toLocal().year}';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 9),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: AppColors.paleGold,
+                    child: Icon(r['account_type'] == 'parent' ? Icons.family_restroom_outlined : Icons.person_outline_rounded, color: AppColors.brown),
+                  ),
+                  title: Text((r['full_name'] ?? 'Unnamed account').toString(), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                  subtitle: Text(
+                    '${r['email'] ?? 'No email'}\n$accountType • Created $createdLabel'
+                    '${student.isEmpty ? '' : '\nLevel: ${student['level'] ?? 'Not set'}'}'
+                    '${roleNames.isEmpty ? '' : '\nAccess: $roleNames'}',
+                  ),
+                  isThreeLine: true,
+                ),
+              );
+            }),
+          ]);
+        },
+      ),
+    ),
+  );
+}
 
 class GuardianPortalPage extends StatefulWidget {
   final bool admin;
