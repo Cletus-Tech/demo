@@ -2421,11 +2421,13 @@ class _HomeTab extends StatelessWidget {
                   child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Your learning journey starts here',
+                      Text(parent ? 'Stay connected to your child’s learning' : 'Your learning journey starts here',
                         style: TextStyle(color: Colors.white, fontSize: 21,
                           fontWeight: FontWeight.w700)),
                       SizedBox(height: 8),
-                      Text('Your classes, subjects, learning materials and progress will appear here as the centre activates them.',
+                      Text(parent
+                        ? 'Link your child’s learner account to follow assignments, results and attendance from one place.'
+                        : 'Your classes, subjects, learning materials and progress will appear here as the centre activates them.',
                         style: TextStyle(color: Color(0xFFE7DED6), height: 1.5)),
                     ],
                   ),
@@ -2466,6 +2468,7 @@ class _HomeTab extends StatelessWidget {
                       builder: (_) => const GuardianPortalPage())),
                   )),
                 ],
+                if (!parent) ...[
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2490,6 +2493,8 @@ class _HomeTab extends StatelessWidget {
                   title: 'Learning progress',
                   detail: 'Track learning activity and published results.'),
                 const SizedBox(height: 26),
+
+                ],
                 const Center(child: Text('YOUNG LEARNERS TUTORIAL CENTRE',
                   style: TextStyle(fontSize: 10, letterSpacing: 1.1,
                     color: AppColors.muted, fontWeight: FontWeight.w600))),
