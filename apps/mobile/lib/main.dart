@@ -3983,6 +3983,48 @@ class _ClassroomPageState extends State<ClassroomPage> {
     return {'lessons':lessons,'posts':posts,'assignments':assignments};
   }
   Future<void> _refresh() async {final f=_load();setState(()=>_data=f);await f;}
+  Future<void> _createAssignment() async {
+    final db=Supabase.instance.client;
+    final subjects=List<Map<String,dynamic>>.from(await db.from('subjects')
+      .select('id,name').eq('status','active').order('name'));
+    if(subjects.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Add an active subject before creating an assignment.')));return;}
+    final title=TextEditingController(),instructions=TextEditingController(),marks=TextEditingController(text:'10'),due=TextEditingController();
+    String? subjectId=subjects.first['id'].toString();
+    final submit=await showDialog<bool>(context:context,builder:(dialogContext)=>StatefulBuilder(builder:(context,setDialogState)=>AlertDialog(
+      title:const Text('Create class assignment'),
+      content:SizedBox(width:420,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        DropdownButtonFormField<String>(value:subjectId,decoration:const InputDecoration(labelText:'Subject'),
+          items:subjects.map((x)=>DropdownMenuItem(value:x['id'].toString(),child:Text(x['name'].toString()))).toList(),
+          onChanged:(v)=>setDialogState(()=>subjectId=v)),
+        const SizedBox(height:10),TextField(controller:title,decoration:const InputDecoration(labelText:'Assignment title')),
+        const SizedBox(height:10),TextField(controller:instructions,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'Instructions')),
+        const SizedBox(height:10),TextField(controller:marks,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Maximum marks')),
+        const SizedBox(height:10),TextField(controller:due,decoration:const InputDecoration(labelText:'Due date (YYYY-MM-DD)',hintText:'2026-12-01')),
+      ]))),
+      actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext,false),child:const Text('Cancel')),
+        FilledButton(onPressed:()=>Navigator.pop(dialogContext,true),child:const Text('Publish assignment'))],
+    )));
+    if(submit!=true){title.dispose();instructions.dispose();marks.dispose();due.dispose();return;}
+    final maxScore=double.tryParse(marks.text.trim());
+    final dueDate=due.text.trim().isEmpty?null:DateTime.tryParse(due.text.trim());
+    if(title.text.trim().length<3||maxScore==null||maxScore<=0||(due.text.trim().isNotEmpty&&dueDate==null)){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Check the title, maximum marks and due date.')));
+      title.dispose();instructions.dispose();marks.dispose();due.dispose();return;
+    }
+    setState(()=>_busy=true);
+    try{
+      await db.from('assignments').insert({
+        'class_id':_classId,'subject_id':subjectId,'tutor_id':db.auth.currentUser!.id,
+        'title':title.text.trim(),'instructions':instructions.text.trim().isEmpty?null:instructions.text.trim(),
+        'max_score':maxScore,'due_at':dueDate?.toUtc().toIso8601String(),
+        'published_at':DateTime.now().toUtc().toIso8601String(),
+      });
+      await _refresh();
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Assignment published to this classroom.')));
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not publish assignment: $e')));
+    }finally{title.dispose();instructions.dispose();marks.dispose();due.dispose();if(mounted)setState(()=>_busy=false);}
+  }
   Future<void> _createPost() async {
     final title=TextEditingController(),body=TextEditingController(),url=TextEditingController();
     String type='notice'; PlatformFile? file;
@@ -4081,7 +4123,8 @@ class _ClassroomPageState extends State<ClassroomPage> {
   @override
   Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:Text((widget.classroom['name']??'Classroom').toString()),
-      actions:[if(widget.canManage)IconButton(onPressed:_busy?null:_createPost,icon:const Icon(Icons.add_circle_outline),tooltip:'Add classroom content')]),
+      actions:[if(widget.canManage)IconButton(onPressed:_busy?null:_createAssignment,icon:const Icon(Icons.assignment_add_outlined),tooltip:'Create assignment'),
+        if(widget.canManage)IconButton(onPressed:_busy?null:_createPost,icon:const Icon(Icons.add_circle_outline),tooltip:'Add classroom content')]),
     floatingActionButton:widget.canManage?FloatingActionButton.extended(onPressed:_busy?null:_createPost,backgroundColor:AppColors.brown,icon:const Icon(Icons.add,color:Colors.white),label:const Text('Add to board',style:TextStyle(color:Colors.white))):null,
     body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,child:FutureBuilder<Map<String,dynamic>>(future:_data,builder:(context,s){
       if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
