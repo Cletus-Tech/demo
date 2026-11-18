@@ -2953,10 +2953,15 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
           final results = List<Map<String, dynamic>>.from(data['results'] ?? []);
           final attendance = List<Map<String, dynamic>>.from(data['attendance'] ?? []);
           final child = Map<String, dynamic>.from(data['child'] ?? {});
+          final lessonProgress = Map<String,dynamic>.from(data['lesson_progress'] ?? {});
+          final completedLessons = List<Map<String,dynamic>>.from(lessonProgress['items'] ?? []);
           return ListView(padding: const EdgeInsets.all(18), children: [
             Text((child['name'] ?? widget.childName).toString(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
             Text((child['level'] ?? 'Level not set').toString(), style: const TextStyle(color: AppColors.muted)),
+            const SizedBox(height: 6),
+            Text('Lessons completed: ${lessonProgress['completed'] ?? 0} of ${lessonProgress['available'] ?? 0}',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.brown)),
             const SizedBox(height: 14),
+            _section('Lessons completed', completedLessons, 'No lessons have been marked as completed yet.'),
             _section('Assignments', assignments, 'No assignments have been published for this learner yet.'),
             _section('Results', results, 'No results have been published yet.'),
             _section('Attendance', attendance, 'No attendance records have been added yet.'),
@@ -3132,6 +3137,7 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
                 '${c['level'] ?? 'Level not set'} • ${c['relationship'] ?? 'Parent'}'
                 '\nAttendance: ${c['attendance_rate'] == null ? 'No records yet' : '${c['attendance_rate']}%'}'
                 '\nAssignments submitted: ${c['assignments_submitted'] ?? 0}'
+                '\nLessons completed: ${c['lessons_completed'] ?? 0} of ${c['lessons_available'] ?? 0}'
                 '${c['latest_result'] == null ? '' : '\nLatest result: ${c['latest_result']} in ${c['latest_subject'] ?? 'a subject'}'}',
               ),
               onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
