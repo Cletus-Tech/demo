@@ -3089,6 +3089,7 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
   late Future<dynamic> _data;
   final TextEditingController _email = TextEditingController();
   String _relationship = 'Parent';
+  String _adminFilter = 'Pending';
   bool _busy = false;
 
   @override
@@ -3129,20 +3130,49 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
   }
 
   Future<void> _review(Map<String, dynamic> row, String decision) async {
-    setState(() => _busy = true);
-    try {
-      await Supabase.instance.client.rpc('review_guardian_link_request', params: {
-        'p_request_id': row['id'],
-        'p_decision': decision,
-        'p_admin_note': decision == 'approved' ? null : 'Please confirm the learner email and contact the centre if needed.',
-      });
-      await _refresh();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(decision == 'approved' ? 'Parent account linked.' : 'Request rejected.')));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Request could not be reviewed: $e')));
-    } finally { if (mounted) setState(() => _busy = false); }
+    final note = TextEditingController();
+    final approving = decision == 'approved';
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: Text(approving ? 'Verify and approve parent link' : 'Reject parent link request'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Parent: ' + (row['guardian_name'] ?? 'Parent account').toString()),
+        Text('Parent email: ' + (row['guardian_email'] ?? 'Not available').toString()),
+        const SizedBox(height: 8),
+        Text('Learner: ' + (row['student_name'] ?? 'Not found').toString()),
+        Text('Learner email: ' + (row['requested_email'] ?? '').toString()),
+        Text('Relationship: ' + (row['relationship'] ?? 'Parent').toString()),
+        const SizedBox(height: 12),
+        Text(approving
+          ? 'Confirm that the learner account matches this email and that the requester is authorised to view the child’s learning information.'
+          : 'Give the parent a clear reason so they know what needs to be corrected.'),
+        const SizedBox(height: 10),
+        TextField(controller: note, maxLines: 3, decoration: InputDecoration(
+          labelText: approving ? 'Verification note (optional)' : 'Reason for rejection')),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: approving || note.text.trim().isNotEmpty ? () => Navigator.pop(ctx, true) : null,
+          child: Text(approving ? 'Confirm approval' : 'Reject request')),
+      ],
+    ));
+    if (confirmed == true) {
+      setState(() => _busy = true);
+      try {
+        await Supabase.instance.client.rpc('review_guardian_link_request', params: {
+          'p_request_id': row['id'],
+          'p_decision': decision,
+          'p_admin_note': note.text.trim().isEmpty ? null : note.text.trim(),
+        });
+        await _refresh();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(approving ? 'Parent account linked successfully.' : 'Request rejected and parent notified.')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Request could not be reviewed: $e')));
+      } finally { if (mounted) setState(() => _busy = false); }
+    }
+    note.dispose();
   }
 
   @override
@@ -3165,6 +3195,15 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
           ]);
           if (widget.admin) {
             final rows = List<Map<String, dynamic>>.from(snapshot.data ?? []);
+            final pendingCount = rows.where((r) => r['status'] != 'approved' && r['status'] != 'rejected').length;
+            final approvedCount = rows.where((r) => r['status'] == 'approved').length;
+            final rejectedCount = rows.where((r) => r['status'] == 'rejected').length;
+            final visibleRows = rows.where((r) {
+              if (_adminFilter == 'Pending') return r['status'] != 'approved' && r['status'] != 'rejected';
+              if (_adminFilter == 'Approved') return r['status'] == 'approved';
+              if (_adminFilter == 'Rejected') return r['status'] == 'rejected';
+              return true;
+            }).toList();
             if (rows.isEmpty) return ListView(padding: const EdgeInsets.all(20), children: const [
               Text('Parent verification', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
               SizedBox(height: 10),
@@ -3173,9 +3212,29 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
             return ListView(padding: const EdgeInsets.all(18), children: [
               const Text('Verify parent and learner accounts', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
               const SizedBox(height: 6),
-              const Text('Confirm that the parent is authorised to view the learner account before approving the link.', style: TextStyle(color: AppColors.muted, height: 1.4)),
+              const Text('Review the parent account, learner email and stated relationship. Approval gives the parent access to that learner’s progress and learning records.', style: TextStyle(color: AppColors.muted, height: 1.4)),
               const SizedBox(height: 14),
-              ...rows.map((r) => Card(
+              Row(children: [
+                Expanded(child: _guardianMetric('Pending', pendingCount)),
+                const SizedBox(width: 7),
+                Expanded(child: _guardianMetric('Approved', approvedCount)),
+                const SizedBox(width: 7),
+                Expanded(child: _guardianMetric('Rejected', rejectedCount)),
+              ]),
+              const SizedBox(height: 12),
+              Wrap(spacing: 7, children: [
+                for (final filter in ['Pending', 'Approved', 'Rejected', 'All'])
+                  ChoiceChip(
+                    label: Text(filter),
+                    selected: _adminFilter == filter,
+                    onSelected: (_) => setState(() => _adminFilter = filter),
+                    selectedColor: AppColors.paleGold,
+                  ),
+              ]),
+              const SizedBox(height: 10),
+              if (visibleRows.isEmpty)
+                _InfoNotice(message: 'There are no ' + _adminFilter.toLowerCase() + ' parent link requests.'),
+              ...visibleRows.map((r) => Card(
                 margin: const EdgeInsets.only(bottom: 10),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -3188,7 +3247,11 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
                     Text('Learner account: ${r['student_name'] ?? 'Not found yet'}'),
                     Text('Relationship: ${r['relationship'] ?? 'Parent'}'),
                     if (r['student_id'] == null)
-                      const Padding(padding: EdgeInsets.only(top: 7), child: Text('No matching active learner account was found. Do not approve until the email is corrected.', style: TextStyle(color: Colors.red, height: 1.35))),
+                      const Padding(padding: EdgeInsets.only(top: 7), child: _InfoNotice(
+                        message: 'No learner account matches this email yet. Do not approve until the learner registers with this exact email and the parent resubmits.')),
+                    if (r['admin_note'] != null && r['admin_note'].toString().isNotEmpty)
+                      Padding(padding: const EdgeInsets.only(top: 7), child: Text('Previous note: \u0024{r['admin_note']}',
+                        style: const TextStyle(color: AppColors.muted, fontSize: 12))),
                     const SizedBox(height: 12),
                     Row(children: [
                       Expanded(child: OutlinedButton(
@@ -3197,7 +3260,8 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
                       const SizedBox(width: 10),
                       Expanded(child: FilledButton(
                         onPressed: _busy || r['student_id'] == null ? null : () => _review(r, 'approved'),
-                        child: const Text('Approve link'))),
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.brown),
+                        child: const Text('Verify & approve'))),
                     ]),
                   ]),
                 ),
@@ -3271,6 +3335,17 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
   );
 }
 
+
+
+Widget _guardianMetric(String label, int value) => Card(
+  child: Padding(padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 7),
+    child: Column(children: [
+      Text(value.toString(), style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.brown)),
+      const SizedBox(height: 3),
+      Text(label, style: const TextStyle(fontSize: 11, color: AppColors.muted, fontWeight: FontWeight.w700)),
+    ]),
+  ),
+);
 
 class TutorWorkspacePage extends StatefulWidget {
   const TutorWorkspacePage({super.key});
