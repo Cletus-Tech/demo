@@ -498,43 +498,98 @@ class _HomeTab extends StatelessWidget {
   );
 }
 
-class _LearningTab extends StatelessWidget {
+class _LearningTab extends StatefulWidget {
   const _LearningTab();
-
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(20),
-    children: [
-      const Text('Keep building your knowledge',
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
-          color: AppColors.ink)),
+  State<_LearningTab> createState() => _LearningTabState();
+}
+class _LearningTabState extends State<_LearningTab> {
+  late Future<List<Map<String, dynamic>>> _lessons;
+  @override
+  void initState() { super.initState(); _lessons = _loadLessons(); }
+  Future<List<Map<String, dynamic>>> _loadLessons() async {
+    final rows = await Supabase.instance.client.from('lessons')
+      .select('id,title,description,content,scheduled_at,duration_minutes,subjects(name),classes(name)')
+      .eq('is_published', true).order('scheduled_at', ascending: true);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+  Future<void> _refresh() async { final next = _loadLessons(); setState(() => _lessons = next); await next; }
+  @override
+  Widget build(BuildContext context) => RefreshIndicator(
+    color: AppColors.brown, onRefresh: _refresh,
+    child: ListView(padding: const EdgeInsets.all(20), children: [
+      const Text('My learning', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700, color: AppColors.ink)),
       const SizedBox(height: 7),
-      const Text('Your enrolled learning activities will be organised here.',
-        style: TextStyle(color: AppColors.muted, height: 1.45)),
-      const SizedBox(height: 22),
-      const _FeatureRow(icon: Icons.menu_book_outlined,
-        title: 'Subjects and lessons',
-        detail: 'Subjects, lesson schedules and learning materials.'),
-      const SizedBox(height: 10),
-      const _FeatureRow(icon: Icons.assignment_outlined,
-        title: 'Assignments',
-        detail: 'Homework and tasks assigned by your tutors.'),
-      const SizedBox(height: 10),
-      const _FeatureRow(icon: Icons.quiz_outlined,
-        title: 'Assessments',
-        detail: 'Practice exercises, tests and assessment history.'),
-      const SizedBox(height: 10),
-      const _FeatureRow(icon: Icons.query_stats_outlined,
-        title: 'My progress',
-        detail: 'Learning activity and results published by the centre.'),
-      const SizedBox(height: 18),
-      const _InfoNotice(
-        message: 'These sections are being connected to the centre’s class and lesson records. They will show your actual learning data when it is made available to your account.',
-      ),
-    ],
+      const Text('Open a lesson to read its notes and learning materials.', style: TextStyle(color: AppColors.muted, height: 1.45)),
+      const SizedBox(height: 20),
+      FutureBuilder<List<Map<String, dynamic>>>(future: _lessons, builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) return const Padding(padding: EdgeInsets.all(36), child: Center(child: CircularProgressIndicator(color: AppColors.brown)));
+        if (snapshot.hasError) return const _InfoNotice(message: 'Lessons could not be loaded. Check your connection and pull down to try again.');
+        final lessons = snapshot.data ?? [];
+        if (lessons.isEmpty) return const _InfoNotice(message: 'There are no published lessons available yet. New lessons will appear here when your tutorial centre publishes them.');
+        return Column(children: lessons.map((lesson) {
+          final subject = lesson['subjects']; final classInfo = lesson['classes'];
+          final meta = [if (subject is Map && subject['name'] != null) subject['name'], if (classInfo is Map && classInfo['name'] != null) classInfo['name']].join(' • ');
+          return Padding(padding: const EdgeInsets.only(bottom: 11), child: Card(child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.menu_book_rounded, color: AppColors.brown)),
+            title: Text(lesson['title'] ?? 'Lesson', style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+            subtitle: Padding(padding: const EdgeInsets.only(top: 5), child: Text([if (meta.isNotEmpty) meta, if (lesson['duration_minutes'] != null) '\${lesson['duration_minutes']} min'].join('  •  '), style: const TextStyle(color: AppColors.muted))),
+            trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LessonDetailPage(lesson: lesson))),
+          )));
+        }).toList());
+      }),
+    ]),
   );
 }
-
+class LessonDetailPage extends StatefulWidget {
+  final Map<String, dynamic> lesson;
+  const LessonDetailPage({super.key, required this.lesson});
+  @override
+  State<LessonDetailPage> createState() => _LessonDetailPageState();
+}
+class _LessonDetailPageState extends State<LessonDetailPage> {
+  late Future<List<Map<String, dynamic>>> _materials;
+  @override
+  void initState() {
+    super.initState();
+    _materials = Supabase.instance.client.from('learning_materials').select('id,title,description,file_path,external_url')
+      .eq('lesson_id', widget.lesson['id']).then((rows) => List<Map<String, dynamic>>.from(rows));
+  }
+  @override
+  Widget build(BuildContext context) {
+    final lesson = widget.lesson;
+    return Scaffold(appBar: AppBar(title: const Text('Lesson details')), body: ListView(padding: const EdgeInsets.all(20), children: [
+      Text(lesson['title'] ?? 'Lesson', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      const SizedBox(height: 9),
+      if (lesson['description'] != null) Text(lesson['description'], style: const TextStyle(color: AppColors.muted, height: 1.5)),
+      const SizedBox(height: 22),
+      const Text('LESSON NOTES', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
+      const SizedBox(height: 10),
+      Card(child: Padding(padding: const EdgeInsets.all(17), child: SelectableText((lesson['content'] as String?)?.trim().isNotEmpty == true ? lesson['content'] as String : 'Your tutor has not added lesson notes yet.', style: const TextStyle(height: 1.65, color: AppColors.ink)))),
+      const SizedBox(height: 22),
+      const Text('LEARNING MATERIALS', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
+      const SizedBox(height: 10),
+      FutureBuilder<List<Map<String, dynamic>>>(future: _materials, builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+        if (snapshot.hasError) return const _InfoNotice(message: 'Learning materials could not be loaded.');
+        final items = snapshot.data ?? [];
+        if (items.isEmpty) return const _InfoNotice(message: 'No extra materials have been added to this lesson yet.');
+        return Column(children: items.map((item) => Card(child: ListTile(
+          leading: const Icon(Icons.attach_file_rounded, color: AppColors.brown),
+          title: Text(item['title'] ?? 'Learning material'),
+          subtitle: item['description'] == null ? null : Text(item['description']),
+          trailing: const Icon(Icons.open_in_new_rounded),
+          onTap: () {
+            final url = item['external_url'] ?? item['file_path'];
+            if (url is String && url.startsWith('https://')) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Resource link selected. Link opening will be enabled in the next integration pass.')));
+          },
+        ))).toList());
+      }),
+    ]));
+  }
+}
 class _AnalyticsTab extends StatelessWidget {
   const _AnalyticsTab();
 
