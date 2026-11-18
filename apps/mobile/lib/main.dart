@@ -274,8 +274,16 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                 )),
                 const SizedBox(height: 8),
               ],
-              if (permissions.contains('staff.manage'))
-                const _InfoNotice(message: 'Staff management access is active. Tutor and staff management tools are being added next.'),
+              if (permissions.contains('staff.manage')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.badge_outlined, color: AppColors.brown),
+                  title: const Text('Tutor and staff management'),
+                  subtitle: const Text('Link staff accounts and assign tutors to classes and subjects'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminStaffPage()),
+                )),
+                const SizedBox(height: 8),
+              ],
               if (permissions.contains('finance.manage'))
                 const _InfoNotice(message: 'Finance management access is active. Fee and payment management tools are being added next.'),
               if (permissions.contains('reports.view'))
@@ -801,6 +809,201 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   );
 }
 
+
+class AdminStaffPage extends StatefulWidget {
+  const AdminStaffPage({super.key});
+  @override
+  State<AdminStaffPage> createState() => _AdminStaffPageState();
+}
+
+class _AdminStaffPageState extends State<AdminStaffPage> {
+  late Future<List<Map<String, dynamic>>> _tutors;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tutors = _loadTutors();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadTutors() async {
+    final rows = await Supabase.instance.client.from('tutors')
+      .select('id,user_id,staff_number,qualification,status,profiles(full_name,email)')
+      .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<void> _addTutor() async {
+    final db = Supabase.instance.client;
+    try {
+      final profiles = await db.from('profiles')
+        .select('id,full_name,email').eq('status', 'active').order('full_name');
+      final tutors = await db.from('tutors').select('user_id');
+      final linked = (tutors as List).map((r) => r['user_id'].toString()).toSet();
+      final available = List<Map<String, dynamic>>.from(profiles)
+        .where((p) => !linked.contains(p['id'].toString())).toList();
+      if (available.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No unlinked active accounts found. The staff member must create an account first.')));
+        return;
+      }
+      final staffNo = TextEditingController();
+      final qualification = TextEditingController();
+      String? userId = available.first['id'].toString();
+      final ok = await showDialog<bool>(context: context,
+        builder: (ctx) => StatefulBuilder(builder: (ctx, refreshDialog) => AlertDialog(
+          title: const Text('Add tutor'),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            DropdownButtonFormField<String>(
+              value: userId,
+              decoration: const InputDecoration(labelText: 'Existing account'),
+              items: available.map<DropdownMenuItem<String>>((p) =>
+                DropdownMenuItem<String>(value: p['id'].toString(),
+                  child: Text((p['full_name'] ?? 'Unnamed').toString() +
+                    (p['email'] == null ? '' : ' • ' + p['email'].toString())))).toList(),
+              onChanged: (v) => refreshDialog(() => userId = v),
+            ),
+            TextField(controller: staffNo, decoration: const InputDecoration(labelText: 'Staff number (optional)')),
+            TextField(controller: qualification, decoration: const InputDecoration(labelText: 'Qualification (optional)')),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add tutor')),
+          ],
+        )));
+      if (ok == true && userId != null) {
+        await db.from('tutors').insert({
+          'user_id': userId,
+          'staff_number': staffNo.text.trim().isEmpty ? null : staffNo.text.trim(),
+          'qualification': qualification.text.trim().isEmpty ? null : qualification.text.trim(),
+          'status': 'active',
+        });
+        if (mounted) setState(() => _tutors = _loadTutors());
+      }
+      staffNo.dispose();
+      qualification.dispose();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not add tutor: ' + e.toString())));
+    }
+  }
+
+  Future<void> _assign(Map<String, dynamic> tutor) async {
+    final db = Supabase.instance.client;
+    try {
+      final results = await Future.wait([
+        db.from('classes').select('id,name').eq('status', 'active').order('name'),
+        db.from('subjects').select('id,name').eq('status', 'active').order('name'),
+      ]);
+      final classes = List<Map<String, dynamic>>.from(results[0]);
+      final subjects = List<Map<String, dynamic>>.from(results[1]);
+      if (classes.isEmpty || subjects.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Create an active class and subject before assigning a tutor.')));
+        return;
+      }
+      String? classId = classes.first['id'].toString();
+      String? subjectId = subjects.first['id'].toString();
+      final ok = await showDialog<bool>(context: context,
+        builder: (ctx) => StatefulBuilder(builder: (ctx, refreshDialog) => AlertDialog(
+          title: const Text('Assign tutor'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            DropdownButtonFormField<String>(
+              value: classId, decoration: const InputDecoration(labelText: 'Class'),
+              items: classes.map<DropdownMenuItem<String>>((r) =>
+                DropdownMenuItem(value: r['id'].toString(), child: Text(r['name'].toString()))).toList(),
+              onChanged: (v) => refreshDialog(() => classId = v),
+            ),
+            DropdownButtonFormField<String>(
+              value: subjectId, decoration: const InputDecoration(labelText: 'Subject'),
+              items: subjects.map<DropdownMenuItem<String>>((r) =>
+                DropdownMenuItem(value: r['id'].toString(), child: Text(r['name'].toString()))).toList(),
+              onChanged: (v) => refreshDialog(() => subjectId = v),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Assign')),
+          ],
+        )));
+      if (ok == true && classId != null && subjectId != null) {
+        await db.from('class_tutors').upsert({
+          'tutor_id': tutor['id'], 'class_id': classId, 'subject_id': subjectId,
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tutor assigned to the selected class and subject.')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not assign tutor: ' + e.toString())));
+    }
+  }
+
+  Future<void> _setStatus(Map<String, dynamic> tutor, String status) async {
+    try {
+      await Supabase.instance.client.from('tutors').update({'status': status}).eq('id', tutor['id']);
+      if (mounted) setState(() => _tutors = _loadTutors());
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update tutor: ' + e.toString())));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Tutor and staff management')),
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: _busy ? null : _addTutor,
+      backgroundColor: AppColors.brown, foregroundColor: Colors.white,
+      icon: const Icon(Icons.person_add_alt_1), label: const Text('Add tutor')),
+    body: RefreshIndicator(
+      onRefresh: () async => setState(() => _tutors = _loadTutors()),
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _tutors,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done)
+            return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+          if (snapshot.hasError)
+            return ListView(padding: const EdgeInsets.all(20), children: [
+              _InfoNotice(message: 'Tutor records could not be loaded: ' + snapshot.error.toString()),
+            ]);
+          final rows = snapshot.data ?? [];
+          if (rows.isEmpty)
+            return ListView(padding: const EdgeInsets.all(20), children: const [
+              _InfoNotice(message: 'No tutors have been linked yet. Add a tutor using an existing registered account.'),
+            ]);
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+            itemCount: rows.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final row = rows[index];
+              final profile = row['profiles'] as Map<String, dynamic>?;
+              return Card(child: ListTile(
+                title: Text((profile?['full_name'] ?? 'Staff account').toString()),
+                subtitle: Text((profile?['email'] ?? 'No email') .toString() +
+                  ' • ' + (row['qualification'] ?? 'Qualification not set').toString() +
+                  ' • ' + row['status'].toString()),
+                trailing: PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'assign') _assign(row);
+                    if (v == 'off') _setStatus(row, 'inactive');
+                    if (v == 'on') _setStatus(row, 'active');
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'assign', child: Text('Assign to class and subject')),
+                    if (row['status'] == 'active') const PopupMenuItem(value: 'off', child: Text('Deactivate')),
+                    if (row['status'] != 'active') const PopupMenuItem(value: 'on', child: Text('Activate')),
+                  ],
+                ),
+              ));
+            },
+          );
+        },
+      ),
+    ),
+  );
+}
 
 class AdminCommunicationsPage extends StatefulWidget {
   const AdminCommunicationsPage({super.key});
