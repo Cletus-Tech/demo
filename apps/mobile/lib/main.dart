@@ -596,10 +596,10 @@ class AdminAcademicPage extends StatefulWidget {
 }
 class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTickerProviderStateMixin {
   late TabController _tabs;
-  late Future<List<Map<String, dynamic>>> _classes, _subjects, _lessons, _sessions;
+  late Future<List<Map<String, dynamic>>> _classes, _subjects, _lessons, _sessions, _assessments;
   bool _busy = false;
   @override
-  void initState() { super.initState(); _tabs = TabController(length: 4, vsync: this); _reload(); }
+  void initState() { super.initState(); _tabs = TabController(length: 5, vsync: this); _reload(); }
   @override
   void dispose() { _tabs.dispose(); super.dispose(); }
   void _reload() {
@@ -608,8 +608,9 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
     _subjects = db.from('subjects').select('id,name,code,description,status').order('name');
     _lessons = db.from('lessons').select('id,title,description,content,class_id,subject_id,is_published,classes(name),subjects(name)').order('created_at', ascending: false);
     _sessions = db.from('academic_sessions').select('id,name,starts_on,ends_on,is_current').order('starts_on', ascending: false);
+    _assessments = db.from('assessments').select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published,starts_at,classes(name),subjects(name),questions(id)').order('created_at', ascending: false);
   }
-  Future<void> _refresh() async { setState(_reload); await Future.wait([_classes,_subjects,_lessons,_sessions]); }
+  Future<void> _refresh() async { setState(_reload); await Future.wait([_classes,_subjects,_lessons,_sessions,_assessments]); }
   Future<void> _save(String table, Map<String,dynamic> values, {String? id}) async {
     setState(() => _busy = true);
     try {
@@ -733,6 +734,115 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Lesson form could not load: ' + e.toString())));
     } finally { title.dispose(); desc.dispose(); content.dispose(); }
   }
+
+  Future<void> _createAssessment() async {
+    final title = TextEditingController();
+    final duration = TextEditingController(text: '30');
+    try {
+      final classes = await _classes; final subjects = await _subjects;
+      if (classes.isEmpty || subjects.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Create a class and subject before creating an assessment.')));
+        return;
+      }
+      String? classId = classes.first['id'].toString();
+      String? subjectId = subjects.first['id'].toString();
+      String type = 'Practice';
+      final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, refreshDialog) => AlertDialog(
+        title: const Text('Create assessment'),
+        content: SizedBox(width: 440, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: title, decoration: const InputDecoration(labelText: 'Assessment title')),
+          DropdownButtonFormField<String>(value: classId, decoration: const InputDecoration(labelText: 'Class'),
+            items: classes.map((c) => DropdownMenuItem<String>(value: c['id'].toString(), child: Text(c['name'].toString()))).toList(),
+            onChanged: (v) => refreshDialog(() => classId = v)),
+          DropdownButtonFormField<String>(value: subjectId, decoration: const InputDecoration(labelText: 'Subject'),
+            items: subjects.map((v) => DropdownMenuItem<String>(value: v['id'].toString(), child: Text(v['name'].toString()))).toList(),
+            onChanged: (v) => refreshDialog(() => subjectId = v)),
+          DropdownButtonFormField<String>(value: type, decoration: const InputDecoration(labelText: 'Assessment type'),
+            items: ['Practice','Mock examination','Class test','Revision'].map((v) => DropdownMenuItem<String>(value: v, child: Text(v))).toList(),
+            onChanged: (v) => refreshDialog(() => type = v ?? 'Practice')),
+          TextField(controller: duration, keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Time limit in minutes (0 = untimed)')),
+        ]))),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create'))],
+      )));
+      if (ok == true && title.text.trim().isNotEmpty && classId != null && subjectId != null) {
+        final mins = int.tryParse(duration.text.trim()) ?? -1;
+        if (mins < 0) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid time limit.')));
+          return;
+        }
+        final created = await Supabase.instance.client.from('assessments').insert({
+          'title': title.text.trim(), 'class_id': classId, 'subject_id': subjectId,
+          'assessment_type': type, 'duration_minutes': mins == 0 ? null : mins,
+          'total_marks': 0, 'is_published': false,
+        }).select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published').single();
+        await _refresh();
+        if (mounted) await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => AdminAssessmentQuestionsPage(assessment: Map<String,dynamic>.from(created))));
+        if (mounted) await _refresh();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Assessment could not be created: ' + e.toString())));
+    } finally { title.dispose(); duration.dispose(); }
+  }
+
+  Future<void> _toggleAssessment(Map<String,dynamic> row) async {
+    final id = row['id'].toString();
+    if (row['is_published'] == true) {
+      await _save('assessments', {'is_published': false}, id: id);
+      return;
+    }
+    try {
+      final qs = await Supabase.instance.client.from('questions').select('marks').eq('assessment_id', id);
+      if (qs.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add at least one question before publishing.')));
+        return;
+      }
+      final total = qs.fold<num>(0, (sum, q) => sum + ((q['marks'] as num?) ?? 0));
+      await _save('assessments', {'total_marks': total, 'is_published': true}, id: id);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Assessment could not be published: ' + e.toString())));
+    }
+  }
+
+  Widget _assessmentsTab() => FutureBuilder<List<Map<String,dynamic>>>(future: _assessments, builder: (context,s) {
+    if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+    if (s.hasError) return _err(s.error);
+    final rows = s.data ?? [];
+    return ListView(padding: const EdgeInsets.all(16), children: [
+      Row(children: [
+        const Expanded(child: Text('Assessments and CBT', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: AppColors.ink))),
+        FilledButton.icon(onPressed: _busy ? null : _createAssessment, icon: const Icon(Icons.add), label: const Text('Create')),
+      ]),
+      const Padding(padding: EdgeInsets.only(top: 8,bottom: 12),
+        child: Text('Create a test, add its questions and answer key, then publish it to the selected class.', style: TextStyle(color: AppColors.muted))),
+      if (rows.isEmpty) const _InfoNotice(message: 'No assessments have been created. Add a practice test or mock examination to begin.'),
+      ...rows.map((r) {
+        final q = r['questions'];
+        final count = q is List ? q.length : 0;
+        return Card(child: ListTile(
+          title: Text(r['title'].toString(), style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text((r['classes']?['name'] ?? 'Class').toString() + ' • ' +
+            (r['subjects']?['name'] ?? 'Subject').toString() + ' • ' +
+            r['assessment_type'].toString() + ' • ' + count.toString() + ' questions • ' +
+            (r['is_published'] == true ? 'Published' : 'Draft')),
+          trailing: PopupMenuButton<String>(onSelected: (v) async {
+            if (v == 'questions') {
+              await Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => AdminAssessmentQuestionsPage(assessment: r)));
+              if (mounted) await _refresh();
+            }
+            if (v == 'publish') await _toggleAssessment(r);
+          }, itemBuilder: (_) => [
+            const PopupMenuItem(value: 'questions', child: Text('Manage questions')),
+            PopupMenuItem(value: 'publish', child: Text(r['is_published'] == true ? 'Unpublish' : 'Publish')),
+          ]),
+        ));
+      }),
+    ]);
+  });
+
   Widget _err(Object? e)=>Padding(padding:const EdgeInsets.all(16),child:_InfoNotice(message:'Could not load this section. Check access or connection, then retry. ' + e.toString()));
   Widget _sessionsTab()=>FutureBuilder<List<Map<String,dynamic>>>(future:_sessions,builder:(context,s){
     if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
@@ -801,14 +911,117 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   @override
   Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Academic management'),bottom:TabBar(controller:_tabs,tabs:const[
-      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Sessions'),
+      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Sessions'),Tab(text:'Assessments'),
     ])),
     body:RefreshIndicator(onRefresh:_refresh,child:TabBarView(controller:_tabs,children:[
-      _classesTab(),_subjectsTab(),_lessonsTab(),_sessionsTab(),
+      _classesTab(),_subjectsTab(),_lessonsTab(),_sessionsTab(),_assessmentsTab(),
     ])),
   );
 }
 
+
+
+class AdminAssessmentQuestionsPage extends StatefulWidget {
+  final Map<String,dynamic> assessment;
+  const AdminAssessmentQuestionsPage({super.key, required this.assessment});
+  @override
+  State<AdminAssessmentQuestionsPage> createState() => _AdminAssessmentQuestionsPageState();
+}
+class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsPage> {
+  late Future<List<Map<String,dynamic>>> _questions;
+  bool _busy = false;
+  @override
+  void initState() { super.initState(); _questions = _load(); }
+  Future<List<Map<String,dynamic>>> _load() async {
+    final rows = await Supabase.instance.client.from('questions').select('id,question_text,options,correct_answer,marks,position')
+      .eq('assessment_id', widget.assessment['id']).order('position');
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  Future<void> _refresh() async { final next = _load(); setState(() => _questions = next); await next; }
+  Future<void> _addQuestion() async {
+    final question = TextEditingController();
+    final a = TextEditingController(); final b = TextEditingController();
+    final c = TextEditingController(); final d = TextEditingController();
+    final marks = TextEditingController(text: '1');
+    String correct = 'A';
+    try {
+      final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx,refreshDialog) => AlertDialog(
+        title: const Text('Add multiple-choice question'),
+        content: SizedBox(width: 460, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: question, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'Question')),
+          TextField(controller: a, decoration: const InputDecoration(labelText: 'Option A')),
+          TextField(controller: b, decoration: const InputDecoration(labelText: 'Option B')),
+          TextField(controller: c, decoration: const InputDecoration(labelText: 'Option C')),
+          TextField(controller: d, decoration: const InputDecoration(labelText: 'Option D')),
+          DropdownButtonFormField<String>(value: correct, decoration: const InputDecoration(labelText: 'Correct answer'),
+            items: ['A','B','C','D'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+            onChanged: (v) => refreshDialog(() => correct = v ?? 'A')),
+          TextField(controller: marks, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Marks')),
+        ]))),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx,false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx,true), child: const Text('Save question'))],
+      )));
+      if (ok == true) {
+        final opts = {'A':a.text.trim(),'B':b.text.trim(),'C':c.text.trim(),'D':d.text.trim()};
+        final markValue = num.tryParse(marks.text.trim());
+        if (question.text.trim().isEmpty || opts.values.any((v) => v.isEmpty) || markValue == null || markValue <= 0) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Complete the question, all four options and a positive mark value.')));
+          return;
+        }
+        setState(() => _busy = true);
+        await Supabase.instance.client.from('questions').insert({
+          'assessment_id': widget.assessment['id'], 'question_text': question.text.trim(),
+          'options': opts, 'correct_answer': correct, 'marks': markValue,
+          'position': (await _load()).length + 1,
+        });
+        await _refresh();
+        final all = await Supabase.instance.client.from('questions').select('marks').eq('assessment_id', widget.assessment['id']);
+        final total = all.fold<num>(0, (sum,q) => sum + ((q['marks'] as num?) ?? 0));
+        await Supabase.instance.client.from('assessments').update({'total_marks':total,'is_published':false}).eq('id',widget.assessment['id']);
+        if (mounted) setState(() => _busy = false);
+      }
+    } catch (e) {
+      if (mounted) { setState(() => _busy = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Question could not be saved: ' + e.toString()))); }
+    } finally { question.dispose(); a.dispose(); b.dispose(); c.dispose(); d.dispose(); marks.dispose(); }
+  }
+  Future<void> _deleteQuestion(Map<String,dynamic> q) async {
+    try {
+      await Supabase.instance.client.from('questions').delete().eq('id',q['id']);
+      final all = await Supabase.instance.client.from('questions').select('marks').eq('assessment_id',widget.assessment['id']);
+      final total = all.fold<num>(0,(sum,v)=>sum+((v['marks'] as num?)??0));
+      await Supabase.instance.client.from('assessments').update({'total_marks':total,'is_published':false}).eq('id',widget.assessment['id']);
+      await _refresh();
+    } catch(e) { if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Question could not be removed: '+e.toString()))); }
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Manage questions')),
+    floatingActionButton: FloatingActionButton.extended(onPressed: _busy ? null : _addQuestion,
+      backgroundColor: AppColors.brown, foregroundColor: Colors.white,
+      icon: const Icon(Icons.add), label: const Text('Add question')),
+    body: RefreshIndicator(color: AppColors.brown,onRefresh:_refresh,
+      child: FutureBuilder<List<Map<String,dynamic>>>(future:_questions,builder:(context,s){
+        if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+        if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[_InfoNotice(message:'Questions could not be loaded: '+s.error.toString())]);
+        final rows=s.data??[];
+        return ListView(padding:const EdgeInsets.fromLTRB(16,16,16,90),children:[
+          Text(widget.assessment['title']?.toString()??'Assessment',style:const TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink)),
+          const SizedBox(height:6),
+          Text(rows.length.toString()+' questions • Add an answer key for each item. Adding or removing questions returns the assessment to draft.',style:const TextStyle(color:AppColors.muted)),
+          const SizedBox(height:14),
+          if(rows.isEmpty)const _InfoNotice(message:'No questions yet. Add the first multiple-choice question.'),
+          ...rows.map((q){
+            final options=q['options'] is Map ? Map<String,dynamic>.from(q['options'] as Map) : <String,dynamic>{};
+            return Card(child:ListTile(
+              title:Text(q['question_text'].toString(),maxLines:3,overflow:TextOverflow.ellipsis),
+              subtitle:Text('A. '+(options['A']??'').toString()+'   B. '+(options['B']??'').toString()+'\nCorrect answer: '+(q['correct_answer']??'').toString()+' • '+q['marks'].toString()+' mark(s)'),
+              trailing:IconButton(icon:const Icon(Icons.delete_outline,color:AppColors.muted),onPressed:()=>_deleteQuestion(q)),
+            ));
+          }),
+        ]);
+      })),
+  );
+}
 
 class AdminStaffPage extends StatefulWidget {
   const AdminStaffPage({super.key});
