@@ -28,6 +28,18 @@ create index if not exists guardian_link_requests_guardian_user_idx
   on public.guardian_link_requests(guardian_user_id);
 create index if not exists student_guardians_guardian_id_idx
   on public.student_guardians(guardian_id);
+create index if not exists guardian_link_requests_guardian_id_idx
+  on public.guardian_link_requests(guardian_id);
+create index if not exists guardian_link_requests_student_id_idx
+  on public.guardian_link_requests(student_id);
+create index if not exists guardian_link_requests_reviewed_by_idx
+  on public.guardian_link_requests(reviewed_by);
+create index if not exists attendance_records_student_attended_idx
+  on public.attendance_records(student_id,attended_at desc);
+create index if not exists assignment_submissions_student_submitted_idx
+  on public.assignment_submissions(student_id,submitted_at desc);
+create index if not exists results_student_published_idx
+  on public.results(student_id,published_at desc);
 
 create or replace function private.request_guardian_link(
   p_student_email text, p_relationship text default 'Parent'
