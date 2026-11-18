@@ -1,5 +1,11 @@
 -- Student CBT assessment access.
 create schema if not exists private;
+-- Remove older RPC signatures before changing their named parameters.
+drop function if exists public.student_assessment_questions(uuid);
+drop function if exists private.student_assessment_questions(uuid);
+drop function if exists public.submit_student_assessment(uuid,jsonb);
+drop function if exists private.submit_student_assessment(uuid,jsonb);
+
 -- Questions and answer keys remain behind private SECURITY DEFINER functions.
 -- Public RPC wrappers are SECURITY INVOKER and expose only learner-scoped data.
 
