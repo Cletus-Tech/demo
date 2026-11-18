@@ -3128,12 +3128,20 @@ class _LearningTabState extends State<_LearningTab> {
         if (lessons.isEmpty) return const _InfoNotice(message: 'There are no published lessons available yet. New lessons will appear here when your tutorial centre publishes them.');
         return Column(children: lessons.map((lesson) {
           final subject = lesson['subjects']; final classInfo = lesson['classes'];
-          final meta = [if (subject is Map && subject['name'] != null) subject['name'], if (classInfo is Map && classInfo['name'] != null) classInfo['name']].join(' • ');
+          final scheduled = DateTime.tryParse(lesson['scheduled_at']?.toString() ?? '')?.toLocal();
+          final scheduledLabel = scheduled == null ? null :
+            '${scheduled.day.toString().padLeft(2,'0')}/${scheduled.month.toString().padLeft(2,'0')}/${scheduled.year} ${TimeOfDay.fromDateTime(scheduled).format(context)}';
+          final meta = [
+            if (subject is Map && subject['name'] != null) subject['name'],
+            if (classInfo is Map && classInfo['name'] != null) classInfo['name'],
+            if (scheduledLabel != null) scheduledLabel,
+            if (lesson['duration_minutes'] != null) '${lesson['duration_minutes']} min',
+          ].join(' • ');
           return Padding(padding: const EdgeInsets.only(bottom: 11), child: Card(child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.menu_book_rounded, color: AppColors.brown)),
             title: Text(lesson['title'] ?? 'Lesson', style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
-            subtitle: Padding(padding: const EdgeInsets.only(top: 5), child: Text([if (meta.isNotEmpty) meta, if (lesson['duration_minutes'] != null) '${lesson["duration_minutes"]} min'].join('  •  '), style: const TextStyle(color: AppColors.muted))),
+            subtitle: Padding(padding: const EdgeInsets.only(top: 5), child: Text(meta, style: const TextStyle(color: AppColors.muted))),
             trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
             onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LessonDetailPage(lesson: lesson))),
           )));
@@ -3172,6 +3180,11 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
           trailing: const Icon(Icons.open_in_new_rounded),
           onTap: () => launchUrl(Uri.parse(lesson['live_class_url'] as String), mode: LaunchMode.externalApplication),
         )),
+      ],
+      if (lesson['scheduled_at'] != null) ...[
+        const SizedBox(height: 8),
+        Text('Live class schedule: ${DateTime.tryParse(lesson['scheduled_at'].toString())?.toLocal().toString() ?? ''}',
+          style: const TextStyle(color: AppColors.muted)),
       ],
       const SizedBox(height: 22),
       const Text('LESSON NOTES', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
