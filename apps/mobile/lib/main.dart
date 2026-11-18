@@ -555,7 +555,7 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
   @override
   void initState() {
     super.initState();
-    _materials = Supabase.instance.client.from('learning_materials').select('id,title,description,file_path,external_url')
+    _materials = Supabase.instance.client.from('learning_materials').select('id,title,description,storage_path,external_url')
       .eq('lesson_id', widget.lesson['id']).then((rows) => List<Map<String, dynamic>>.from(rows));
   }
   @override
