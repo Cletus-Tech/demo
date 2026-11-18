@@ -835,8 +835,8 @@ class AdminAcademicPage extends StatefulWidget {
   State<AdminAcademicPage> createState() => _AdminAcademicPageState();
 }
 int _schoolLevelRank(dynamic value) {
-  final label = (value ?? '').toString().toUpperCase().replaceAll(RegExp(r'\\s+'), ' ').trim();
-  final match = RegExp(r'(PRIMARY|JSS|JS|SS)\\s*(\\d+)').firstMatch(label);
+  final label = (value ?? '').toString().toUpperCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+  final match = RegExp(r'(PRIMARY|JSS|JS|SS)\s*(\d+)').firstMatch(label);
   if (match == null) return 999;
   final stage = match.group(1)!;
   final level = int.tryParse(match.group(2)!) ?? 99;
@@ -4019,7 +4019,7 @@ class _ClassroomPageState extends State<ClassroomPage> {
         'post_type':type,'title':title.text.trim(),'body':body.text.trim().isEmpty?null:body.text.trim(),
         'media_path':mediaPath,'media_url':url.text.trim().isEmpty?null:url.text.trim(),'is_published':true,
       });
-      if(mounted){Navigator.of(context).pop();await _refresh();ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Classroom post published.')));}
+      if(mounted){await _refresh();ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Classroom post published.')));}
     }catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not publish: $e')));
     }finally{title.dispose();body.dispose();url.dispose();if(mounted)setState(()=>_busy=false);}
