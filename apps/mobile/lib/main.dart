@@ -3096,10 +3096,16 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
               const SizedBox(height: 3),
               Text(
                 title == 'Assignments'
-                  ? '${r['subject'] ?? 'Subject'} • ${r['status'] ?? 'Not submitted'} • ${r['score'] == null ? 'Not marked' : '${r['score']}/${r['max_score'] ?? '?'}'}'
+                  ? '${r['subject'] ?? 'Subject'} • ${r['status'] ?? 'Not submitted'} • ${r['score'] == null ? 'Not marked' : '${r['score']}/${r['max_score'] ?? '?'}'} • Due: ${_date(r['due_at'])}'
                   : title == 'Results'
                     ? 'Score: ${r['score'] ?? '-'} • Grade: ${r['grade'] ?? 'Not graded'} • ${_date(r['published_at'])}'
-                    : '${r['status'] ?? ''} • ${_date(r['date'])}',
+                    : title == 'Upcoming live and recorded lessons'
+                      ? '${r['subject'] ?? 'Lesson'} • ${r['scheduled_at'] == null ? 'Schedule to be announced' : _date(r['scheduled_at'])} • ${r['duration_minutes'] ?? '—'} minutes'
+                      : title == 'Learning materials'
+                        ? '${r['material_type'] ?? 'Resource'} • ${r['subject'] ?? 'Learning'} • ${r['lesson_title'] ?? 'Lesson material'}'
+                        : title == 'Assessments and CBT'
+                          ? '${r['subject'] ?? 'Subject'} • ${r['assessment_type'] ?? 'Assessment'} • ${r['starts_at'] == null ? 'Schedule to be announced' : _date(r['starts_at'])} • ${r['duration_minutes'] ?? '—'} minutes'
+                          : '${r['status'] ?? ''} • ${_date(r['date'])}',
                 style: const TextStyle(color: AppColors.muted, height: 1.4)),
               if (r['feedback'] != null && r['feedback'].toString().trim().isNotEmpty)
                 Padding(padding: const EdgeInsets.only(top: 4), child: Text('Tutor feedback: ${r['feedback']}', style: const TextStyle(height: 1.4))),
