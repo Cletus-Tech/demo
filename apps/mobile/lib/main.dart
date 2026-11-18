@@ -716,6 +716,8 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
     final desc=TextEditingController(text:row?['description']?.toString() ?? '');
     final content=TextEditingController(text:row?['content']?.toString() ?? '');
     final liveUrl=TextEditingController(text:row?['live_class_url']?.toString() ?? '');
+    final duration=TextEditingController(text:row?['duration_minutes']?.toString() ?? '60');
+    DateTime? scheduledAt = DateTime.tryParse(row?['scheduled_at']?.toString() ?? '')?.toLocal();
     try {
       final classes=await _classes; final subjects=await _subjects;
       if(classes.isEmpty || subjects.isEmpty) {
@@ -734,6 +736,27 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
           DropdownButtonFormField<String>(value:subjectId,decoration:const InputDecoration(labelText:'Subject'),
             items:subjects.map((v)=>DropdownMenuItem<String>(value:v['id'].toString(),child:Text(v['name'].toString()))).toList(),
             onChanged:(v)=>refreshDialog(()=>subjectId=v)),
+          TextButton.icon(
+            onPressed: () async {
+              final now = DateTime.now();
+              final date = await showDatePicker(
+                context: ctx,
+                initialDate: scheduledAt ?? now,
+                firstDate: DateTime(now.year - 1),
+                lastDate: DateTime(now.year + 5),
+              );
+              if (date == null || !ctx.mounted) return;
+              final time = await showTimePicker(
+                context: ctx,
+                initialTime: scheduledAt == null ? TimeOfDay.fromDateTime(now) : TimeOfDay.fromDateTime(scheduledAt!),
+              );
+              if (time == null) return;
+              refreshDialog(() => scheduledAt = DateTime(date.year,date.month,date.day,time.hour,time.minute));
+            },
+            icon: const Icon(Icons.calendar_month_outlined),
+            label: Text(scheduledAt == null ? 'Schedule live class (optional)' : 'Scheduled: ${scheduledAt!.day.toString().padLeft(2,'0')}/${scheduledAt!.month.toString().padLeft(2,'0')}/${scheduledAt!.year} ${TimeOfDay.fromDateTime(scheduledAt!).format(ctx)}'),
+          ),
+          TextField(controller:duration,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Class duration in minutes')),
           TextField(controller:desc,minLines:2,maxLines:3,decoration:const InputDecoration(labelText:'Short description')),
           TextField(controller:content,minLines:3,maxLines:5,decoration:const InputDecoration(labelText:'Lesson content')),
           TextField(controller:liveUrl,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'Live class link (optional)',hintText:'https://...')),
@@ -750,13 +773,15 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
             'description':desc.text.trim().isEmpty?null:desc.text.trim(),
             'content':content.text.trim().isEmpty?null:content.text.trim(),
             'live_class_url':meetingLink.isEmpty?null:meetingLink,
+            'scheduled_at':scheduledAt?.toUtc().toIso8601String(),
+            'duration_minutes':int.tryParse(duration.text.trim()),
             'is_published':row?['is_published'] ?? false,
           },id:row?['id']?.toString());
         }
       }
     } catch(e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Lesson form could not load: ' + e.toString())));
-    } finally { title.dispose(); desc.dispose(); content.dispose(); liveUrl.dispose(); }
+    } finally { title.dispose(); desc.dispose(); content.dispose(); liveUrl.dispose(); duration.dispose(); }
   }
 
   Future<void> _createAssessment() async {
