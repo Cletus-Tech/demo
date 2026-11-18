@@ -259,8 +259,16 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                 )),
                 const SizedBox(height: 8),
               ],
-              if (permissions.contains('academics.manage'))
-                const _InfoNotice(message: 'Academic management access is active. Class, subject and lesson management tools are being added next.'),
+              if (permissions.contains('academics.manage')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.menu_book_outlined, color: AppColors.brown),
+                  title: const Text('Academic management'),
+                  subtitle: const Text('Create and manage classes, subjects and lessons'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminAcademicPage()),
+                )),
+                const SizedBox(height: 8),
+              ],
               if (permissions.contains('staff.manage'))
                 const _InfoNotice(message: 'Staff management access is active. Tutor and staff management tools are being added next.'),
               if (permissions.contains('finance.manage'))
@@ -503,6 +511,176 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
     );
   }
 }
+
+
+class AdminAcademicPage extends StatefulWidget {
+  const AdminAcademicPage({super.key});
+  @override
+  State<AdminAcademicPage> createState() => _AdminAcademicPageState();
+}
+class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTickerProviderStateMixin {
+  late TabController _tabs;
+  late Future<List<Map<String, dynamic>>> _classes, _subjects, _lessons;
+  bool _busy = false;
+  @override
+  void initState() { super.initState(); _tabs = TabController(length: 3, vsync: this); _reload(); }
+  @override
+  void dispose() { _tabs.dispose(); super.dispose(); }
+  void _reload() {
+    final db = Supabase.instance.client;
+    _classes = db.from('classes').select('id,name,level,capacity,status').order('name');
+    _subjects = db.from('subjects').select('id,name,code,description,status').order('name');
+    _lessons = db.from('lessons').select('id,title,description,content,class_id,subject_id,is_published,classes(name),subjects(name)').order('created_at', ascending: false);
+  }
+  Future<void> _refresh() async { setState(_reload); await Future.wait([_classes,_subjects,_lessons]); }
+  Future<void> _save(String table, Map<String,dynamic> values, {String? id}) async {
+    setState(() => _busy = true);
+    try {
+      final db = Supabase.instance.client.from(table);
+      if (id == null) { await db.insert(values); } else { await db.update(values).eq('id',id); }
+      if (mounted) { await _refresh(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Changes saved.'))); }
+    } catch(e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not save: ' + e.toString())));
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+  Future<void> _editClass([Map<String,dynamic>? row]) async {
+    final name = TextEditingController(text: row?['name']?.toString() ?? '');
+    final level = TextEditingController(text: row?['level']?.toString() ?? '');
+    final capacity = TextEditingController(text: row?['capacity']?.toString() ?? '');
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: Text(row == null ? 'Create class' : 'Edit class'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller:name,decoration:const InputDecoration(labelText:'Class name')),
+        TextField(controller:level,decoration:const InputDecoration(labelText:'Level / year')),
+        TextField(controller:capacity,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Capacity (optional)')),
+      ]),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save'))],
+    ));
+    if(ok==true && name.text.trim().isNotEmpty) await _save('classes',{
+      'name':name.text.trim(),'level':level.text.trim().isEmpty?null:level.text.trim(),
+      'capacity':int.tryParse(capacity.text.trim()),'status':row?['status'] ?? 'active',
+    },id:row?['id']?.toString());
+    name.dispose(); level.dispose(); capacity.dispose();
+  }
+  Future<void> _editSubject([Map<String,dynamic>? row]) async {
+    final name=TextEditingController(text:row?['name']?.toString() ?? '');
+    final code=TextEditingController(text:row?['code']?.toString() ?? '');
+    final desc=TextEditingController(text:row?['description']?.toString() ?? '');
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:Text(row==null?'Create subject':'Edit subject'),
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        TextField(controller:name,decoration:const InputDecoration(labelText:'Subject name')),
+        TextField(controller:code,decoration:const InputDecoration(labelText:'Subject code')),
+        TextField(controller:desc,minLines:2,maxLines:3,decoration:const InputDecoration(labelText:'Description')),
+      ]),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save'))],
+    ));
+    if(ok==true && name.text.trim().isNotEmpty) await _save('subjects',{
+      'name':name.text.trim(),'code':code.text.trim().isEmpty?null:code.text.trim(),
+      'description':desc.text.trim().isEmpty?null:desc.text.trim(),'status':row?['status'] ?? 'active',
+    },id:row?['id']?.toString());
+    name.dispose(); code.dispose(); desc.dispose();
+  }
+  Future<void> _editLesson([Map<String,dynamic>? row]) async {
+    final title=TextEditingController(text:row?['title']?.toString() ?? '');
+    final desc=TextEditingController(text:row?['description']?.toString() ?? '');
+    final content=TextEditingController(text:row?['content']?.toString() ?? '');
+    try {
+      final classes=await _classes; final subjects=await _subjects;
+      if(classes.isEmpty || subjects.isEmpty) {
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Create a class and a subject before adding lessons.')));
+        return;
+      }
+      String? classId=row?['class_id']?.toString() ?? classes.first['id'].toString();
+      String? subjectId=row?['subject_id']?.toString() ?? subjects.first['id'].toString();
+      final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refreshDialog)=>AlertDialog(
+        title:Text(row==null?'Create lesson':'Edit lesson'),
+        content:SizedBox(width:430,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          TextField(controller:title,decoration:const InputDecoration(labelText:'Lesson title')),
+          DropdownButtonFormField<String>(value:classId,decoration:const InputDecoration(labelText:'Class'),
+            items:classes.map((c)=>DropdownMenuItem<String>(value:c['id'].toString(),child:Text(c['name'].toString()))).toList(),
+            onChanged:(v)=>refreshDialog(()=>classId=v)),
+          DropdownButtonFormField<String>(value:subjectId,decoration:const InputDecoration(labelText:'Subject'),
+            items:subjects.map((v)=>DropdownMenuItem<String>(value:v['id'].toString(),child:Text(v['name'].toString()))).toList(),
+            onChanged:(v)=>refreshDialog(()=>subjectId=v)),
+          TextField(controller:desc,minLines:2,maxLines:3,decoration:const InputDecoration(labelText:'Short description')),
+          TextField(controller:content,minLines:3,maxLines:5,decoration:const InputDecoration(labelText:'Lesson content')),
+        ]))),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save lesson'))],
+      )));
+      if(ok==true && title.text.trim().isNotEmpty && classId!=null && subjectId!=null) await _save('lessons',{
+        'title':title.text.trim(),'class_id':classId,'subject_id':subjectId,
+        'description':desc.text.trim().isEmpty?null:desc.text.trim(),
+        'content':content.text.trim().isEmpty?null:content.text.trim(),
+        'is_published':row?['is_published'] ?? false,
+      },id:row?['id']?.toString());
+    } catch(e) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Lesson form could not load: ' + e.toString())));
+    } finally { title.dispose(); desc.dispose(); content.dispose(); }
+  }
+  Widget _err(Object? e)=>Padding(padding:const EdgeInsets.all(16),child:_InfoNotice(message:'Could not load this section. Check access or connection, then retry. ' + e.toString()));
+  Widget _classesTab()=>FutureBuilder<List<Map<String,dynamic>>>(future:_classes,builder:(context,s){
+    if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+    if(s.hasError)return _err(s.error); final rows=s.data ?? [];
+    return ListView(padding:const EdgeInsets.all(16),children:[
+      Row(children:[const Expanded(child:Text('Classes',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink))),
+        FilledButton.icon(onPressed:_busy?null:()=>_editClass(),icon:const Icon(Icons.add),label:const Text('Add class'))]),
+      if(rows.isEmpty)const _InfoNotice(message:'No classes yet. Add the centre’s first class.'),
+      ...rows.map((r)=>Card(child:ListTile(title:Text(r['name'].toString()),
+        subtitle:Text((r['level'] ?? 'Level not set').toString() + ' • Capacity: ' + (r['capacity'] ?? 'Not set').toString() + ' • ' + r['status'].toString()),
+        trailing:PopupMenuButton<String>(onSelected:(v){
+          if(v=='edit')_editClass(r); if(v=='off')_save('classes',{'status':'inactive'},id:r['id'].toString());
+          if(v=='on')_save('classes',{'status':'active'},id:r['id'].toString());
+        },itemBuilder:(_)=>[const PopupMenuItem(value:'edit',child:Text('Edit')),
+          if(r['status']=='active')const PopupMenuItem(value:'off',child:Text('Deactivate')),
+          if(r['status']!='active')const PopupMenuItem(value:'on',child:Text('Activate'))])))),
+    ]);
+  });
+  Widget _subjectsTab()=>FutureBuilder<List<Map<String,dynamic>>>(future:_subjects,builder:(context,s){
+    if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+    if(s.hasError)return _err(s.error); final rows=s.data ?? [];
+    return ListView(padding:const EdgeInsets.all(16),children:[
+      Row(children:[const Expanded(child:Text('Subjects',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink))),
+        FilledButton.icon(onPressed:_busy?null:()=>_editSubject(),icon:const Icon(Icons.add),label:const Text('Add subject'))]),
+      if(rows.isEmpty)const _InfoNotice(message:'No subjects yet. Add the subjects taught at the centre.'),
+      ...rows.map((r)=>Card(child:ListTile(title:Text(r['name'].toString()),
+        subtitle:Text((r['code'] ?? 'No code').toString() + ' • ' + r['status'].toString()),
+        trailing:PopupMenuButton<String>(onSelected:(v){
+          if(v=='edit')_editSubject(r); if(v=='off')_save('subjects',{'status':'inactive'},id:r['id'].toString());
+          if(v=='on')_save('subjects',{'status':'active'},id:r['id'].toString());
+        },itemBuilder:(_)=>[const PopupMenuItem(value:'edit',child:Text('Edit')),
+          if(r['status']=='active')const PopupMenuItem(value:'off',child:Text('Deactivate')),
+          if(r['status']!='active')const PopupMenuItem(value:'on',child:Text('Activate'))])))),
+    ]);
+  });
+  Widget _lessonsTab()=>FutureBuilder<List<Map<String,dynamic>>>(future:_lessons,builder:(context,s){
+    if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+    if(s.hasError)return _err(s.error); final rows=s.data ?? [];
+    return ListView(padding:const EdgeInsets.all(16),children:[
+      Row(children:[const Expanded(child:Text('Lessons',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink))),
+        FilledButton.icon(onPressed:_busy?null:()=>_editLesson(),icon:const Icon(Icons.add),label:const Text('Add lesson'))]),
+      if(rows.isEmpty)const _InfoNotice(message:'No lessons yet. Create classes and subjects, then add lessons.'),
+      ...rows.map((r)=>Card(child:ListTile(title:Text(r['title'].toString()),
+        subtitle:Text((r['classes']?['name'] ?? 'Class').toString() + ' • ' + (r['subjects']?['name'] ?? 'Subject').toString() + ' • ' + (r['is_published']==true?'Published':'Draft')),
+        trailing:PopupMenuButton<String>(onSelected:(v){
+          if(v=='edit')_editLesson(r);
+          if(v=='publish'||v=='draft')_save('lessons',{'is_published':v=='publish'},id:r['id'].toString());
+        },itemBuilder:(_)=>[const PopupMenuItem(value:'edit',child:Text('Edit')),
+          if(r['is_published']==true)const PopupMenuItem(value:'draft',child:Text('Move to draft')),
+          if(r['is_published']!=true)const PopupMenuItem(value:'publish',child:Text('Publish'))])))),
+    ]);
+  });
+  @override
+  Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Academic management'),bottom:TabBar(controller:_tabs,tabs:const[
+      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),
+    ])),
+    body:RefreshIndicator(onRefresh:_refresh,child:TabBarView(controller:_tabs,children:[
+      _classesTab(),_subjectsTab(),_lessonsTab(),
+    ])),
+  );
+}
+
 
 class AdminCommunicationsPage extends StatefulWidget {
   const AdminCommunicationsPage({super.key});
