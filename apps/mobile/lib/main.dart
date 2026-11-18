@@ -166,6 +166,173 @@ class _RoleRouterState extends State<RoleRouter> {
   );
 }
 
+
+class AdminReportsPage extends StatefulWidget {
+  const AdminReportsPage({super.key});
+  @override
+  State<AdminReportsPage> createState() => _AdminReportsPageState();
+}
+
+class _AdminReportsPageState extends State<AdminReportsPage> {
+  late Future<Map<String,dynamic>> _report;
+  @override
+  void initState() { super.initState(); _report = _load(); }
+  Future<Map<String,dynamic>> _load() async {
+    final raw = await Supabase.instance.client.rpc('admin_centre_reports');
+    return Map<String,dynamic>.from(raw as Map);
+  }
+  Future<void> _refresh() async { final next = _load(); setState(() => _report = next); await next; }
+  String _money(dynamic value) {
+    final n = num.tryParse(value?.toString() ?? '') ?? 0;
+    return '₦' + n.toStringAsFixed(2).replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+  }
+  Widget _metric(String label, dynamic value, {String? hint}) => Expanded(child: Card(
+    child: Padding(padding: const EdgeInsets.all(13), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(value?.toString() ?? '0', style: const TextStyle(
+          fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.brown)),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+        if (hint != null) Text(hint, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+      ],
+    )),
+  ));
+  Widget _section(String title, List<Widget> children) => Padding(
+    padding: const EdgeInsets.only(top: 18), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title.toUpperCase(), style: const TextStyle(fontSize: 11,
+          letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
+        const SizedBox(height: 8), ...children,
+      ],
+    ));
+  Widget _line(String label, dynamic value, {String? trailing}) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 7), child: Row(children: [
+      Expanded(child: Text(label, style: const TextStyle(color: AppColors.ink))),
+      Text(trailing ?? (value?.toString() ?? '0'),
+        style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.brown)),
+    ]),
+  );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Centre reports & analytics')),
+    body: RefreshIndicator(color: AppColors.brown, onRefresh: _refresh,
+      child: FutureBuilder<Map<String,dynamic>>(future: _report, builder: (context,s) {
+        if (s.connectionState != ConnectionState.done)
+          return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+        if (s.hasError) return ListView(padding: const EdgeInsets.all(20), children: [
+          _InfoNotice(message: 'Centre reports could not be loaded: ${s.error}')
+        ]);
+        final data=s.data!;
+        final overview=Map<String,dynamic>.from(data['overview'] as Map);
+        final requests=Map<String,dynamic>.from(data['requests'] as Map);
+        final finance=Map<String,dynamic>.from(data['finance'] as Map);
+        final attendance=Map<String,dynamic>.from(data['attendance'] as Map);
+        final assignments=Map<String,dynamic>.from(data['assignments'] as Map);
+        final assessments=Map<String,dynamic>.from(data['assessments'] as Map);
+        final classes=List<Map<String,dynamic>>.from(data['class_summary'] as List);
+        final recent=List<Map<String,dynamic>>.from(data['recent_requests'] as List);
+        return ListView(padding: const EdgeInsets.fromLTRB(16,16,16,32), children: [
+          const Text('A live view of centre activity', style: TextStyle(
+            fontSize: 23,fontWeight: FontWeight.w800,color: AppColors.ink)),
+          const SizedBox(height: 5),
+          const Text('Figures are calculated from saved records. Refresh to see the latest activity.',
+            style: TextStyle(color: AppColors.muted)),
+          _section('People & programmes', [
+            Row(children:[
+              _metric('Accounts',overview['registered_accounts']),
+              _metric('Students',overview['student_accounts']),
+            ]),
+            Row(children:[
+              _metric('Parents',overview['parent_accounts']),
+              _metric('Active tutors',overview['active_tutors']),
+            ]),
+            Row(children:[
+              _metric('Approved learners',overview['approved_learners']),
+              _metric('Active programmes',overview['active_programmes']),
+            ]),
+          ]),
+          _section('Learning access requests', [
+            Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal:14,vertical:8),child:Column(children:[
+              _line('Awaiting payment',requests['awaiting_payment']),
+              const Divider(height:1),
+              _line('Payment submitted',requests['payment_submitted']),
+              const Divider(height:1),
+              _line('Approved',requests['approved']),
+              const Divider(height:1),
+              _line('Rejected / needs attention',requests['rejected']),
+            ]))),
+          ]),
+          _section('Payment overview', [
+            Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal:14,vertical:8),child:Column(children:[
+              _line('Awaiting payment verification',null,trailing:_money(finance['awaiting_verification'])),
+              const Divider(height:1),
+              _line('Verified payments',null,trailing:_money(finance['verified_payments'])),
+              const Divider(height:1),
+              _line('Approved programme value',null,trailing:_money(finance['approved_programme_value'])),
+            ]))),
+            const Padding(padding: EdgeInsets.only(top:5),child:Text(
+              'Amounts awaiting verification are learner-submitted claims, not confirmed revenue.',
+              style:TextStyle(fontSize:11,color:AppColors.muted))),
+          ]),
+          _section('Attendance', [
+            Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal:14,vertical:8),child:Column(children:[
+              _line('Total attendance records',attendance['total_records']),
+              const Divider(height:1),
+              _line('Present',attendance['present']),
+              const Divider(height:1),
+              _line('Late',attendance['late']),
+              const Divider(height:1),
+              _line('Absent',attendance['absent']),
+              const Divider(height:1),
+              _line('Excused',attendance['excused']),
+            ]))),
+          ]),
+          _section('Assignments & assessments', [
+            Row(children:[
+              _metric('Published assignments',assignments['published']),
+              _metric('Submissions',assignments['submissions']),
+            ]),
+            Row(children:[
+              _metric('Graded',assignments['graded']),
+              _metric('Awaiting review',assignments['awaiting_review']),
+            ]),
+            Row(children:[
+              _metric('Published tests',assessments['published']),
+              _metric('Past-question sets',assessments['past_question_sets']),
+            ]),
+            Row(children:[
+              _metric('Completed CBT attempts',assessments['completed_attempts']),
+              _metric('Average CBT score',assessments['average_percentage']==null?'—':'${assessments['average_percentage']}%'),
+            ]),
+          ]),
+          _section('Programme / class activity', [
+            if(classes.isEmpty) const _InfoNotice(message:'No learning programmes have been configured yet.'),
+            ...classes.map((c)=>Card(child:ListTile(
+              title:Text((c['class_name']??'Class').toString(),
+                style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+              subtitle:Text('${c['stage']??''} • ${c['level']??''} • ${c['active']==true?'Active':'Inactive'}'),
+              trailing:Text('${c['approved_learners']??0} learners',
+                style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.brown)),
+            ))),
+          ]),
+          _section('Recent learning requests', [
+            if(recent.isEmpty) const _InfoNotice(message:'No learning access requests have been submitted yet.'),
+            ...recent.map((r)=>Card(child:ListTile(
+              title:Text((r['learner_name']??'Learner').toString(),
+                style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+              subtitle:Text('${r['programme_title']??'Programme'} • ${r['level']??''} • ${r['status']??''}'),
+              trailing:Text(_money(r['amount_due']),
+                style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.brown)),
+            ))),
+          ]),
+        ]);
+      }),
+    ),
+  );
+}
+
 class AdminPortalPage extends StatefulWidget {
   final bool owner;
   const AdminPortalPage({super.key, required this.owner});
@@ -333,8 +500,16 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
               ],
               if (permissions.contains('finance.manage'))
                 const _InfoNotice(message: 'Finance permissions are active. Use Learning access & payments to manage bank details and verify learner payments.'),
-              if (permissions.contains('reports.view'))
-                const _InfoNotice(message: 'Reports access is active. Detailed centre reporting is being added next.'),
+              if (permissions.contains('reports.view')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.insights_outlined, color: AppColors.brown),
+                  title: const Text('Centre reports & analytics'),
+                  subtitle: const Text('Review learner access, payments, attendance, assignments and CBT activity'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminReportsPage()),
+                )),
+                const SizedBox(height: 8),
+              ],
               if (permissions.isEmpty && !widget.owner)
                 const _InfoNotice(message: 'Your account has administrator status but no management permissions have been assigned. Ask the owner to configure your access.'),
             ]);
