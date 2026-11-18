@@ -833,6 +833,27 @@ class AdminAcademicPage extends StatefulWidget {
   @override
   State<AdminAcademicPage> createState() => _AdminAcademicPageState();
 }
+int _schoolLevelRank(dynamic value) {
+  final label = (value ?? '').toString().toUpperCase().replaceAll(RegExp(r'\\s+'), ' ').trim();
+  final match = RegExp(r'(PRIMARY|JSS|JS|SS)\\s*(\\d+)').firstMatch(label);
+  if (match == null) return 999;
+  final stage = match.group(1)!;
+  final level = int.tryParse(match.group(2)!) ?? 99;
+  final stageRank = stage == 'PRIMARY' ? 0 : (stage == 'JSS' || stage == 'JS') ? 1 : 2;
+  return stageRank * 100 + level;
+}
+
+List<Map<String, dynamic>> _sortSchoolClasses(List<Map<String, dynamic>> rows) {
+  final sorted = List<Map<String, dynamic>>.from(rows);
+  sorted.sort((a, b) {
+    final aRank = _schoolLevelRank(a['level'] ?? a['name']);
+    final bRank = _schoolLevelRank(b['level'] ?? b['name']);
+    if (aRank != bRank) return aRank.compareTo(bRank);
+    return (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString());
+  });
+  return sorted;
+}
+
 class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTickerProviderStateMixin {
   late TabController _tabs;
   late Future<List<Map<String, dynamic>>> _classes, _subjects, _lessons, _assessments;
@@ -843,7 +864,7 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   void dispose() { _tabs.dispose(); super.dispose(); }
   void _reload() {
     final db = Supabase.instance.client;
-    _classes = db.from('classes').select('id,name,level,capacity,status').order('name');
+    _classes = db.from('classes').select('id,name,level,capacity,status').then((rows) => _sortSchoolClasses(List<Map<String, dynamic>>.from(rows)));
     _subjects = db.from('subjects').select('id,name,code,description,status').order('name');
     _lessons = db.from('lessons').select('id,title,description,content,live_class_url,class_id,subject_id,is_published,classes(name),subjects(name)').order('created_at', ascending: false);
     _assessments = db.from('assessments').select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published,starts_at,is_past_question,exam_body,exam_year,exam_name,topic,classes(name),subjects(name),questions(id)').order('created_at', ascending: false);
@@ -4191,6 +4212,7 @@ class StudentAssignmentsPage extends StatefulWidget {
 }
 class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
   late Future<List<Map<String,dynamic>>> _items;
+  String _filter = 'All';
   @override
   void initState(){super.initState();_items=_load();}
   Future<List<Map<String,dynamic>>> _load() async {
@@ -4205,6 +4227,15 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
     final local=d.toLocal();
     return 'Due '+local.day.toString().padLeft(2,'0')+'/'+local.month.toString().padLeft(2,'0')+'/'+local.year.toString();
   }
+  String _status(Map<String,dynamic> row) {
+    final status=(row['submission_status']??'not submitted').toString();
+    if(status=='graded')return 'Graded';
+    if(status=='submitted')return 'Submitted';
+    if(status=='returned')return 'Returned';
+    final due=DateTime.tryParse(row['due_at']?.toString()??'');
+    if(due!=null&&due.isBefore(DateTime.now().toUtc()))return 'Overdue';
+    return 'To do';
+  }
   @override
   Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('My assignments')),
@@ -4212,32 +4243,48 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
       child:FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,s){
         if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
         if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[_InfoNotice(message:'Assignments could not be loaded. '+s.error.toString())]);
-        final rows=s.data??[];
-        if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(20),children:const [
-          _InfoNotice(message:'No assignments have been published for your active class yet. New homework will appear here when your tutor publishes it.')
-        ]);
+        final all=s.data??[];
+        final rows=all.where((r)=>_filter=='All'||_status(r)==_filter).toList();
+        final pending=all.where((r)=>_status(r)=='To do'||_status(r)=='Overdue'||_status(r)=='Returned').length;
+        final grouped=<String,List<Map<String,dynamic>>>{};
+        for(final row in rows){
+          final subject=(row['subject_name']??'Other subjects').toString();
+          grouped.putIfAbsent(subject,()=>[]).add(row);
+        }
+        final subjects=grouped.keys.toList()..sort();
         return ListView(padding:const EdgeInsets.all(18),children:[
-          const Text('Homework and class tasks',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
-          const SizedBox(height:6),
-          const Text('Open an assignment to read the instructions and submit your work.',style:TextStyle(color:AppColors.muted)),
-          const SizedBox(height:14),
-          ...rows.map((r){
-            final status=(r['submission_status']??'not submitted').toString();
-            final done=status=='graded';
-            final isOverdue=r['due_at']!=null&&DateTime.tryParse(r['due_at'].toString())?.isBefore(DateTime.now().toUtc())==true&&status!='submitted'&&status!='graded';
-            return Card(margin:const EdgeInsets.only(bottom:10),child:ListTile(
-              contentPadding:const EdgeInsets.symmetric(horizontal:15,vertical:9),
-              leading:Container(width:43,height:43,decoration:BoxDecoration(color:AppColors.paleGold,borderRadius:BorderRadius.circular(11)),
-                child:const Icon(Icons.assignment_outlined,color:AppColors.brown)),
-              title:Text(r['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
-              subtitle:Padding(padding:const EdgeInsets.only(top:5),child:Text(
-                (r['subject_name']??'Subject').toString()+' • '+_date(r['due_at'])+'\n'+
-                (done?'Graded • '+(r['score']??'—').toString()+' marks':status=='submitted'?'Submitted • Awaiting marking':status=='returned'?'Returned for correction' :isOverdue?'Overdue • Not submitted':'Not submitted'),
-                style:const TextStyle(color:AppColors.muted,height:1.45))),
-              trailing:const Icon(Icons.chevron_right_rounded,color:AppColors.brown),
-              onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentAssignmentDetailPage(assignment:r))).then((_)=>_refresh()),
-            ));
-          }),
+          const Text('Class assignments',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
+          const SizedBox(height:5),
+          const Text('Your published homework is arranged by subject. Check the due date and submission status before opening each task.',style:TextStyle(color:AppColors.muted,height:1.4)),
+          const SizedBox(height:13),
+          Wrap(spacing:7,runSpacing:7,children:[
+            for(final filter in ['All','To do','Overdue','Submitted','Returned','Graded'])
+              ChoiceChip(label:Text(filter=='To do'?'To do ($pending)':filter),selected:_filter==filter,
+                onSelected:(_)=>setState(()=>_filter=filter),selectedColor:AppColors.paleGold),
+          ]),
+          const SizedBox(height:13),
+          if(all.isEmpty) const _InfoNotice(message:'No assignments have been published for your approved class yet. When your tutor publishes homework, it will appear here under its subject.'),
+          if(all.isNotEmpty&&rows.isEmpty) _InfoNotice(message:'There are no assignments in the '+_filter.toLowerCase()+' category.'),
+          for(final subject in subjects)...[
+            Padding(padding:const EdgeInsets.only(top:8,bottom:7),child:Text(subject.toUpperCase(),
+              style:const TextStyle(fontSize:12,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.brown))),
+            ...grouped[subject]!.map((r){
+              final status=_status(r);
+              final isOverdue=status=='Overdue';
+              final done=status=='Graded';
+              return Card(margin:const EdgeInsets.only(bottom:9),child:ListTile(
+                contentPadding:const EdgeInsets.symmetric(horizontal:15,vertical:8),
+                leading:Container(width:42,height:42,decoration:BoxDecoration(color:AppColors.paleGold,borderRadius:BorderRadius.circular(11)),
+                  child:const Icon(Icons.assignment_outlined,color:AppColors.brown)),
+                title:Text(r['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+                subtitle:Padding(padding:const EdgeInsets.only(top:5),child:Text(
+                  _date(r['due_at'])+'\\n'+(done?'Graded • '+(r['score']??'—').toString()+' marks':status=='Submitted'?'Submitted • Awaiting marking':status=='Returned'?'Returned for correction':isOverdue?'Overdue • Not submitted':'Not submitted'),
+                  style:const TextStyle(color:AppColors.muted,height:1.45))),
+                trailing:const Icon(Icons.chevron_right_rounded,color:AppColors.brown),
+                onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentAssignmentDetailPage(assignment:r))).then((_)=>_refresh()),
+              ));
+            }),
+          ],
         ]);
       })),
   );
