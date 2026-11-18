@@ -155,7 +155,7 @@ class _RoleRouterState extends State<RoleRouter> {
         owner: roles.contains('super_admin'),
         admin: roles.contains('admin') || roles.contains('super_admin'),
         tutor: roles.contains('tutor'),
-        parent: user.userMetadata?['account_type'] == 'parent',
+        parent: Supabase.instance.client.auth.currentUser?.userMetadata?['account_type'] == 'parent',
       );
     },
   );
