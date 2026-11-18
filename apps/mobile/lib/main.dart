@@ -413,7 +413,7 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
     final id = widget.student['id'];
     final values = await Future.wait([
       _safeRows(() => db.from('enrolments').select('id,status,classes(name,level)').eq('student_id', id)),
-      _safeRows(() => db.from('attendance_records').select('id,status,attended_at,note').eq('student_id', id).order('attended_at', ascending: false).limit(20)),
+      _safeRows(() => db.from('attendance_records').select('id,status,attended_at,attendance_date,note').eq('student_id', id).order('attended_at', ascending: false).limit(20)),
       _safeRows(() => db.from('assignment_submissions').select('id,status,score,submitted_at,assignments(title)').eq('student_id', id).order('submitted_at', ascending: false).limit(20)),
       _safeRows(() => db.from('assessment_attempts').select('id,score,submitted_at,assessments(title)').eq('student_id', id).order('started_at', ascending: false).limit(20)),
       _safeRows(() => db.from('results').select('id,score,grade,published_at,tutor_comment,subjects(name)').eq('student_id', id).order('created_at', ascending: false).limit(20)),
@@ -564,7 +564,7 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
               _section('Attendance history', data['attendance'] ?? [],
                 'No attendance records available.',
                 (r) => (r['status'] ?? 'Attendance').toString(),
-                (r) => _date(r['attended_at']) + (r['note'] == null ? '' : ' • ${r['note']}')),
+                (r) => _date(r['attendance_date'] ?? r['attended_at']) + (r['note'] == null ? '' : ' • ${r['note']}')),
               _section('Assignments', data['submissions'] ?? [],
                 'No assignment submissions recorded.',
                 (r) => (r['assignments']?['title'] ?? 'Assignment').toString(),
@@ -922,6 +922,77 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
 
 
 
+
+
+class StudentAttendancePage extends StatefulWidget {
+  const StudentAttendancePage({super.key});
+  @override
+  State<StudentAttendancePage> createState() => _StudentAttendancePageState();
+}
+
+class _StudentAttendancePageState extends State<StudentAttendancePage> {
+  late Future<List<Map<String, dynamic>>> _records;
+  @override
+  void initState() { super.initState(); _records = _load(); }
+  Future<List<Map<String, dynamic>>> _load() async {
+    final rows = await Supabase.instance.client.from('attendance_records')
+      .select('id,status,attendance_date,attended_at,note,classes(name)')
+      .order('attendance_date', ascending: false);
+    return List<Map<String, dynamic>>.from(rows);
+  }
+  Future<void> _refresh() async { final next = _load(); setState(() => _records = next); await next; }
+  String _date(dynamic value) {
+    if (value == null) return 'Date not recorded';
+    final parsed = DateTime.tryParse(value.toString());
+    if (parsed == null) return value.toString();
+    return parsed.day.toString().padLeft(2, '0') + '/' +
+      parsed.month.toString().padLeft(2, '0') + '/' + parsed.year.toString();
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('My attendance')),
+    body: RefreshIndicator(color: AppColors.brown, onRefresh: _refresh,
+      child: FutureBuilder<List<Map<String, dynamic>>>(future: _records, builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+        if (snapshot.hasError) return ListView(padding: const EdgeInsets.all(20), children: const [
+          _InfoNotice(message: 'Your attendance history could not be loaded. Pull down to retry.')]);
+        final rows = snapshot.data ?? [];
+        final present = rows.where((r) => r['status'] == 'present').length;
+        final late = rows.where((r) => r['status'] == 'late').length;
+        final absent = rows.where((r) => r['status'] == 'absent').length;
+        final excused = rows.where((r) => r['status'] == 'excused').length;
+        final denominator = present + late + absent;
+        final rate = denominator == 0 ? null : (present + late) * 100 / denominator;
+        return ListView(padding: const EdgeInsets.all(20), children: [
+          const Text('Your attendance record', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 6),
+          const Text('Attendance recorded by your centre for your enrolled classes.', style: TextStyle(color: AppColors.muted, height: 1.4)),
+          const SizedBox(height: 16),
+          Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('ATTENDANCE RATE', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
+            const SizedBox(height: 6),
+            Text(rate == null ? '—' : rate.toStringAsFixed(1) + '%', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.brown)),
+            const SizedBox(height: 10),
+            Wrap(spacing: 14, runSpacing: 8, children: [
+              Text('Present: ' + present.toString()),
+              Text('Late: ' + late.toString()),
+              Text('Absent: ' + absent.toString()),
+              Text('Excused: ' + excused.toString()),
+            ]),
+          ]))),
+          const SizedBox(height: 18),
+          const Text('ATTENDANCE HISTORY', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
+          const SizedBox(height: 8),
+          if (rows.isEmpty) const _InfoNotice(message: 'No attendance has been recorded for your account yet. Your register will appear here after your tutor marks it.'),
+          ...rows.map((r) => Card(margin: const EdgeInsets.only(bottom: 8), child: ListTile(
+            title: Text((r['classes']?['name'] ?? 'Class').toString(), style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(_date(r['attendance_date'] ?? r['attended_at']) + (r['note'] == null ? '' : ' • ' + r['note'].toString())),
+            trailing: Text((r['status'] ?? '').toString().toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.brown)),
+          ))),
+        ]);
+      })),
+  );
+}
 
 class AdminAttendancePage extends StatefulWidget {
   const AdminAttendancePage({super.key});
@@ -2531,6 +2602,17 @@ class _LearningTabState extends State<_LearningTab> {
       if (!widget.owner && !widget.admin && !widget.tutor) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.event_available_outlined, color: AppColors.brown)),
+          title: const Text('My attendance', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+          subtitle: const Text('View your attendance history and attendance rate'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const StudentAttendancePage())),
+        ),
+      ),
+      if (!widget.owner && !widget.admin && !widget.tutor) const SizedBox(height: 10),
+      if (!widget.owner && !widget.admin && !widget.tutor) Card(
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Container(width: 44, height: 44,
             decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)),
             child: const Icon(Icons.assignment_outlined, color: AppColors.brown)),
@@ -2657,6 +2739,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
       client.from('assignment_submissions').select('id,status,score,assignments(max_score)').eq('student_id', studentId),
       client.from('assessment_attempts').select('id').eq('student_id', studentId),
       client.from('results').select('id').eq('student_id', studentId).not('published_at', 'is', null),
+      client.from('attendance_records').select('id,status').eq('student_id', studentId),
     ]);
     final submissions = List<Map<String,dynamic>>.from(values[1]);
     final graded = submissions.where((r) => r['status'] == 'graded' && r['score'] is num).toList();
@@ -2668,6 +2751,10 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
     }).whereType<num>().toList();
     final average = percentages.isEmpty ? null :
       percentages.reduce((a,b) => a+b) / percentages.length;
+    final attendance = List<Map<String,dynamic>>.from(values[4]);
+    final attendanceDays = attendance.where((r) => r['status'] != 'excused').length;
+    final attendedDays = attendance.where((r) => r['status'] == 'present' || r['status'] == 'late').length;
+    final attendanceRate = attendanceDays == 0 ? null : attendedDays * 100 / attendanceDays;
     return {
       'linked': true,
       'enrolments': values[0].length,
@@ -2676,6 +2763,8 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
       'assignment_average': average,
       'attempts': values[2].length,
       'results': values[3].length,
+      'attendance_days': attendance.length,
+      'attendance_rate': attendanceRate,
     };
   }
 
@@ -2755,6 +2844,14 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
                   detail: stats['graded'].toString() + ' graded' +
                     (stats['assignment_average'] == null ? '' :
                       ' • average ' + (stats['assignment_average'] as num).toStringAsFixed(1) + '%'),
+                ),
+                const SizedBox(height: 10),
+                _FeatureRow(
+                  icon: Icons.event_available_outlined,
+                  title: 'Attendance rate',
+                  detail: stats['attendance_rate'] == null
+                    ? stats['attendance_days'].toString() + ' recorded attendance entries'
+                    : (stats['attendance_rate'] as num).toStringAsFixed(1) + '% across ' + stats['attendance_days'].toString() + ' recorded days',
                 ),
                 const SizedBox(height: 10),
                 _FeatureRow(
