@@ -2440,14 +2440,26 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
     final studentId = student['id'];
     final values = await Future.wait([
       client.from('enrolments').select('id').eq('student_id', studentId),
-      client.from('assignment_submissions').select('id').eq('student_id', studentId),
+      client.from('assignment_submissions').select('id,status,score,assignments(max_score)').eq('student_id', studentId),
       client.from('assessment_attempts').select('id').eq('student_id', studentId),
       client.from('results').select('id').eq('student_id', studentId).not('published_at', 'is', null),
     ]);
+    final submissions = List<Map<String,dynamic>>.from(values[1]);
+    final graded = submissions.where((r) => r['status'] == 'graded' && r['score'] is num).toList();
+    final percentages = graded.map((r) {
+      final assignment = r['assignments'];
+      final maxScore = assignment is Map ? assignment['max_score'] : null;
+      final score = r['score'] as num;
+      return maxScore is num && maxScore > 0 ? (score / maxScore) * 100 : null;
+    }).whereType<num>().toList();
+    final average = percentages.isEmpty ? null :
+      percentages.reduce((a,b) => a+b) / percentages.length;
     return {
       'linked': true,
       'enrolments': values[0].length,
-      'submissions': values[1].length,
+      'submissions': submissions.length,
+      'graded': graded.length,
+      'assignment_average': average,
       'attempts': values[2].length,
       'results': values[3].length,
     };
@@ -2521,6 +2533,14 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
                   icon: Icons.assignment_turned_in_outlined,
                   title: 'Assignments submitted',
                   detail: stats['submissions'].toString() + ' submissions recorded',
+                ),
+                const SizedBox(height: 10),
+                _FeatureRow(
+                  icon: Icons.grading_outlined,
+                  title: 'Assignments marked',
+                  detail: stats['graded'].toString() + ' graded' +
+                    (stats['assignment_average'] == null ? '' :
+                      ' • average ' + (stats['assignment_average'] as num).toStringAsFixed(1) + '%'),
                 ),
                 const SizedBox(height: 10),
                 _FeatureRow(
