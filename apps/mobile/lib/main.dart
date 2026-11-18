@@ -1138,7 +1138,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
             admin: widget.admin,
             onOpenCentre: () => _openCentrePortal(),
           ),
-          const _LearningTab(),
+          _LearningTab(owner: widget.owner, admin: widget.admin),
           _AnalyticsTab(owner: widget.owner, admin: widget.admin),
           _ProfileTab(account: _account, onRetry: () => setState(() => _account = _loadAccount()), onSignOut: _signOut),
         ],
@@ -1549,7 +1549,9 @@ class _CentreOverviewState extends State<_CentreOverview> {
 }
 
 class _LearningTab extends StatefulWidget {
-  const _LearningTab();
+  final bool owner;
+  final bool admin;
+  const _LearningTab({this.owner = false, this.admin = false});
   @override
   State<_LearningTab> createState() => _LearningTabState();
 }
@@ -1558,9 +1560,20 @@ class _LearningTabState extends State<_LearningTab> {
   @override
   void initState() { super.initState(); _lessons = _loadLessons(); }
   Future<List<Map<String, dynamic>>> _loadLessons() async {
-    final rows = await Supabase.instance.client.from('lessons')
+    final db = Supabase.instance.client;
+    var query = db.from('lessons')
       .select('id,title,description,content,scheduled_at,duration_minutes,subjects(name),classes(name)')
-      .eq('is_published', true).order('scheduled_at', ascending: true);
+      .eq('is_published', true);
+    // Owners and authorised administrators can inspect the centre's published
+    // catalogue. Learners only receive lessons for their active enrolments.
+    if (!widget.owner && !widget.admin) {
+      final enrolments = await db.from('enrolments')
+        .select('class_id').eq('status', 'active');
+      final classIds = enrolments.map((row) => row['class_id'].toString()).toSet().toList();
+      if (classIds.isEmpty) return [];
+      query = query.inFilter('class_id', classIds);
+    }
+    final rows = await query.order('scheduled_at', ascending: true);
     return List<Map<String, dynamic>>.from(rows);
   }
   Future<void> _refresh() async { final next = _loadLessons(); setState(() => _lessons = next); await next; }
