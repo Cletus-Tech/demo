@@ -4123,7 +4123,7 @@ class _ClassroomPageState extends State<ClassroomPage> {
   @override
   Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:Text((widget.classroom['name']??'Classroom').toString()),
-      actions:[if(widget.canManage)IconButton(onPressed:_busy?null:_createAssignment,icon:const Icon(Icons.assignment_add_outlined),tooltip:'Create assignment'),
+      actions:[if(widget.canManage)IconButton(onPressed:_busy?null:_createAssignment,icon:const Icon(Icons.post_add_outlined),tooltip:'Create assignment'),
         if(widget.canManage)IconButton(onPressed:_busy?null:_createPost,icon:const Icon(Icons.add_circle_outline),tooltip:'Add classroom content')]),
     floatingActionButton:widget.canManage?FloatingActionButton.extended(onPressed:_busy?null:_createPost,backgroundColor:AppColors.brown,icon:const Icon(Icons.add,color:Colors.white),label:const Text('Add to board',style:TextStyle(color:Colors.white))):null,
     body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,child:FutureBuilder<Map<String,dynamic>>(future:_data,builder:(context,s){
