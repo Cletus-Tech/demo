@@ -3960,7 +3960,9 @@ class _ClassroomDirectoryPageState extends State<ClassroomDirectoryPage> {
       return _sortSchoolClasses(List<Map<String,dynamic>>.from(rows));
     }
     if(widget.tutor){
-      final rows=await db.from('class_tutors').select('class_id,classes(id,name,level,status)').eq('tutor_id',userId);
+      final tutor=await db.from('tutors').select('id').eq('user_id',userId).eq('status','active').maybeSingle();
+      if(tutor==null)return [];
+      final rows=await db.from('class_tutors').select('class_id,classes(id,name,level,status)').eq('tutor_id',tutor['id']);
       final unique=<String,Map<String,dynamic>>{};
       for(final row in rows){
         final c=row['classes'];
@@ -4099,8 +4101,10 @@ class _ClassroomPageState extends State<ClassroomPage> {
     }
     setState(()=>_busy=true);
     try{
+      final tutorRecord=await db.from('tutors').select('id')
+        .eq('user_id',db.auth.currentUser!.id).eq('status','active').maybeSingle();
       await db.from('assignments').insert({
-        'class_id':_classId,'subject_id':subjectId,'tutor_id':db.auth.currentUser!.id,
+        'class_id':_classId,'subject_id':subjectId,'tutor_id':tutorRecord?['id'],
         'title':title.text.trim(),'instructions':instructions.text.trim().isEmpty?null:instructions.text.trim(),
         'max_score':maxScore,'due_at':dueDate?.toUtc().toIso8601String(),
         'published_at':DateTime.now().toUtc().toIso8601String(),
