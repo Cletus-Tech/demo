@@ -2258,6 +2258,221 @@ class _FeatureRow extends StatelessWidget {
 }
 
 
+
+class StudentAssessmentsPage extends StatefulWidget {
+  const StudentAssessmentsPage({super.key});
+  @override
+  State<StudentAssessmentsPage> createState() => _StudentAssessmentsPageState();
+}
+class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
+  late Future<List<Map<String, dynamic>>> _items;
+  @override
+  void initState() { super.initState(); _items = _load(); }
+  Future<List<Map<String, dynamic>>> _load() async {
+    final raw = await Supabase.instance.client.rpc('student_available_assessments');
+    if (raw is! List) return [];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+  Future<void> _refresh() async { final next = _load(); setState(() => _items = next); await next; }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Practice and mock tests')),
+    body: RefreshIndicator(color: AppColors.brown, onRefresh: _refresh,
+      child: FutureBuilder<List<Map<String, dynamic>>>(future: _items, builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+        if (snap.hasError) return ListView(padding: const EdgeInsets.all(22), children: const [_InfoNotice(message: 'Practice tests could not be loaded. Check your connection and try again.')]);
+        final items = snap.data ?? [];
+        if (items.isEmpty) return ListView(padding: const EdgeInsets.all(22), children: const [_InfoNotice(message: 'There are no published practice tests for your current class yet. Your tutor will publish eligible tests here when they are ready.')]);
+        return ListView(padding: const EdgeInsets.all(20), children: [
+          const Text('Available for your class', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 6),
+          const Text('Only tests published for your active class enrolment appear here.', style: TextStyle(color: AppColors.muted)),
+          const SizedBox(height: 18),
+          ...items.map((item) {
+            final count = (item['question_count'] as num?)?.toInt() ?? 0;
+            final duration = (item['duration_minutes'] as num?)?.toInt();
+            return Padding(padding: const EdgeInsets.only(bottom: 11), child: Card(child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              title: Text(item['title']?.toString() ?? 'Practice test', style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+              subtitle: Padding(padding: const EdgeInsets.only(top: 6), child: Text(
+                (item['subject_name']?.toString() ?? 'Subject') + ' • ' +
+                (item['class_name']?.toString() ?? 'Class') + ' • ' +
+                count.toString() + ' questions' +
+                ((duration != null && duration > 0) ? ' • ' + duration.toString() + ' minutes' : ''),
+                style: const TextStyle(color: AppColors.muted))),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 17, color: AppColors.brown),
+              onTap: count == 0 ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => StudentAssessmentRunnerPage(assessment: item))),
+            )));
+          }),
+        ]);
+      })),
+  );
+}
+
+class StudentAssessmentRunnerPage extends StatefulWidget {
+  final Map<String, dynamic> assessment;
+  const StudentAssessmentRunnerPage({super.key, required this.assessment});
+  @override
+  State<StudentAssessmentRunnerPage> createState() => _StudentAssessmentRunnerPageState();
+}
+class _StudentAssessmentRunnerPageState extends State<StudentAssessmentRunnerPage> {
+  late Future<List<Map<String, dynamic>>> _questions;
+  final Map<String, dynamic> _answers = {};
+  Timer? _timer;
+  int _remaining = 0;
+  bool _submitting = false;
+  String? _loadError;
+  @override
+  void initState() {
+    super.initState();
+    final mins = (widget.assessment['duration_minutes'] as num?)?.toInt() ?? 0;
+    _remaining = mins > 0 ? mins * 60 : 0;
+    _questions = _loadQuestions();
+  }
+  Future<List<Map<String, dynamic>>> _loadQuestions() async {
+    try {
+      final raw = await Supabase.instance.client.rpc('student_assessment_questions',
+        params: {'p_assessment_id': widget.assessment['id']});
+      if (raw is! List) return [];
+      final rows = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (rows.isNotEmpty && _remaining > 0) _startTimer();
+      return rows;
+    } catch (e) { _loadError = e.toString(); rethrow; }
+  }
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _submitting) { timer.cancel(); return; }
+      if (_remaining <= 1) {
+        setState(() => _remaining = 0); timer.cancel(); _submit(autoSubmit: true);
+      } else { setState(() => _remaining--); }
+    });
+  }
+  List<Map<String, dynamic>> _options(Map<String, dynamic> q) {
+    final raw = q['options'];
+    if (raw is List) return raw.map((v) {
+      if (v is Map) {
+        final value = v['value'] ?? v['key'] ?? v['label'] ?? '';
+        return {'value': value, 'label': (v['label'] ?? v['text'] ?? value).toString()};
+      }
+      return {'value': v, 'label': v.toString()};
+    }).toList();
+    if (raw is Map) return raw.entries.map((e) {
+      final v = e.value;
+      return {'value': e.key, 'label': (v is Map ? (v['label'] ?? v['text'] ?? e.key) : v).toString()};
+    }).toList();
+    return [];
+  }
+  Future<void> _submit({bool autoSubmit = false}) async {
+    if (_submitting) return;
+    if (!autoSubmit) {
+      final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(
+        title: const Text('Submit your answers?'),
+        content: Text('You have answered ' + _answers.length.toString() + ' question(s). Unanswered questions will be marked incorrect.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Continue test')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Submit test')),
+        ]));
+      if (ok != true || !mounted) return;
+    }
+    setState(() => _submitting = true); _timer?.cancel();
+    try {
+      final raw = await Supabase.instance.client.rpc('submit_student_assessment',
+        params: {'p_assessment_id': widget.assessment['id'], 'p_answers': _answers});
+      final result = Map<String, dynamic>.from(raw as Map);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+        builder: (_) => StudentAssessmentResultPage(assessment: widget.assessment, result: result, autoSubmitted: autoSubmit)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Your test could not be submitted: ' + e.toString())));
+    }
+  }
+  String get _clock => (_remaining ~/ 60).toString().padLeft(2, '0') + ':' + (_remaining % 60).toString().padLeft(2, '0');
+  @override
+  void dispose() { _timer?.cancel(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(widget.assessment['title']?.toString() ?? 'Assessment'),
+      actions: [_remaining > 0 ? Padding(padding: const EdgeInsets.only(right: 16),
+        child: Center(child: Text(_clock, style: TextStyle(fontWeight: FontWeight.w800,
+          color: _remaining <= 60 ? Colors.red.shade700 : AppColors.brown)))) : const SizedBox.shrink()]),
+    body: FutureBuilder<List<Map<String, dynamic>>>(future: _questions, builder: (context, snap) {
+      if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator(color: AppColors.brown));
+      if (snap.hasError) return Padding(padding: const EdgeInsets.all(22), child: _InfoNotice(message: 'This assessment is unavailable. ' + (_loadError ?? '')));
+      final qs = snap.data ?? [];
+      if (qs.isEmpty) return const Padding(padding: EdgeInsets.all(22), child: _InfoNotice(message: 'This assessment does not contain questions yet.'));
+      return Column(children: [
+        Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(18, 16, 18, 24), children: [
+          Text(qs.length.toString() + ' questions • ' + (widget.assessment['subject_name']?.toString() ?? ''),
+            style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 14),
+          ...List.generate(qs.length, (index) {
+            final q = qs[index]; final id = q['id'].toString(); final options = _options(q);
+            return Padding(padding: const EdgeInsets.only(bottom: 14), child: Card(child: Padding(
+              padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('QUESTION ' + (index + 1).toString(), style: const TextStyle(fontSize: 11, letterSpacing: 1, fontWeight: FontWeight.w800, color: AppColors.gold)),
+                const SizedBox(height: 9),
+                Text(q['question_text']?.toString() ?? '', style: const TextStyle(fontSize: 16, height: 1.45, fontWeight: FontWeight.w600, color: AppColors.ink)),
+                if (options.isEmpty) const Padding(padding: EdgeInsets.only(top: 12), child: Text('No answer options configured for this question.', style: TextStyle(color: AppColors.muted))),
+                ...options.map((o) => RadioListTile<dynamic>(
+                  contentPadding: EdgeInsets.zero, dense: true, activeColor: AppColors.brown,
+                  value: o['value'], groupValue: _answers[id],
+                  onChanged: _submitting ? null : (v) => setState(() => _answers[id] = v),
+                  title: Text(o['label'].toString(), style: const TextStyle(color: AppColors.ink)),
+                )),
+              ]))));
+          }),
+        ])),
+        SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+          child: SizedBox(width: double.infinity, child: FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.brown, padding: const EdgeInsets.symmetric(vertical: 15)),
+            onPressed: _submitting ? null : () => _submit(),
+            child: Text(_submitting ? 'Submitting…' : 'Submit assessment'),
+          )))),
+      ]);
+    }),
+  );
+}
+
+class StudentAssessmentResultPage extends StatelessWidget {
+  final Map<String, dynamic> assessment;
+  final Map<String, dynamic> result;
+  final bool autoSubmitted;
+  const StudentAssessmentResultPage({super.key, required this.assessment, required this.result, required this.autoSubmitted});
+  @override
+  Widget build(BuildContext context) {
+    final score = (result['score'] as num?) ?? 0;
+    final total = (result['total_marks'] as num?) ?? 0;
+    final percent = (result['percentage'] as num?) ?? 0;
+    return Scaffold(appBar: AppBar(title: const Text('Assessment result'), automaticallyImplyLeading: false),
+      body: ListView(padding: const EdgeInsets.all(22), children: [
+        const SizedBox(height: 24),
+        const Icon(Icons.assignment_turned_in_outlined, size: 58, color: AppColors.gold),
+        const SizedBox(height: 16),
+        Text(autoSubmitted ? 'Time is up' : 'Assessment submitted', textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        const SizedBox(height: 8),
+        Text(assessment['title']?.toString() ?? 'Practice test', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
+        const SizedBox(height: 26),
+        Card(child: Padding(padding: const EdgeInsets.all(22), child: Column(children: [
+          Text(percent.toStringAsFixed(1) + '%', style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w800, color: AppColors.brown)),
+          const SizedBox(height: 5),
+          Text(score.toString() + ' / ' + total.toString() + ' marks', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+          const SizedBox(height: 8),
+          Text((result['answered'] ?? 0).toString() + ' of ' + (result['question_count'] ?? 0).toString() + ' questions answered', style: const TextStyle(color: AppColors.muted)),
+        ]))),
+        const SizedBox(height: 18),
+        const _InfoNotice(message: 'Your score has been saved to your assessment history. Your tutor or school may review and publish formal results separately.'),
+        const SizedBox(height: 22),
+        FilledButton(style: FilledButton.styleFrom(backgroundColor: AppColors.brown, padding: const EdgeInsets.symmetric(vertical: 15)),
+          onPressed: () => Navigator.of(context).pop(), child: const Text('Back to practice tests')),
+      ]));
+  }
+}
+
 class ExamPreparationPage extends StatelessWidget {
   const ExamPreparationPage({super.key});
 
@@ -2330,8 +2545,21 @@ class ExamPreparationPage extends StatelessWidget {
         const Text('Prepare with recognised Nigerian examination bodies',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
         const SizedBox(height: 8),
-        const Text('Choose an examination pathway to view its official website. Practice tests and mock examinations will be organised by the learner’s class and eligible examination.',
+        const Text('Choose an examination pathway for official information, or open the practice centre to take tests published for your current class.',
           style: TextStyle(color: AppColors.muted, height: 1.5)),
+        const SizedBox(height: 18),
+        Card(child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          leading: Container(width: 46, height: 46,
+            decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)),
+            child: const Icon(Icons.quiz_outlined, color: AppColors.brown)),
+          title: const Text('Practice tests and mock examinations',
+            style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
+          subtitle: const Text('Take timed tests published for your class and review your score.'),
+          trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 17),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => const StudentAssessmentsPage())),
+        )),
         const SizedBox(height: 18),
         ...bodies.map((body) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -2381,7 +2609,7 @@ class ExamPreparationPage extends StatelessWidget {
             ),
           ),
         )),
-        const _InfoNotice(message: 'Examination-body logos are loaded as site icons from their official website domains. They are not recreated or presented as partnership badges. Young Learners Tutorial is an independent preparation platform, not an examination-body registration or certification portal.'),
+        const _InfoNotice(message: 'Examination-body emblems are displayed for identification and are not partnership badges. Young Learners Tutorial is an independent preparation platform, not an examination-body registration or certification portal.'),
       ],
     ),
   );
