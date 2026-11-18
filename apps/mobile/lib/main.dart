@@ -314,7 +314,11 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
     await Supabase.instance.client.auth.signOut();
   }
 
-  void _openNotifications() => setState(() => _selectedIndex = 2);
+  void _openNotifications() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const NotificationsPage(),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -366,8 +370,8 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
             label: 'Learning',
           ),
           NavigationDestination(
-            icon: Icon(Icons.notifications_none_rounded),
-            selectedIcon: Icon(Icons.notifications_rounded),
+            icon: Icon(Icons.query_stats_outlined),
+            selectedIcon: Icon(Icons.query_stats_rounded),
             label: 'Analytics',
           ),
           NavigationDestination(
@@ -379,6 +383,37 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
       ),
     );
   }
+}
+
+class NotificationsPage extends StatelessWidget {
+  const NotificationsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Notifications',
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: Divider(height: 1, color: AppColors.line),
+      ),
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: const [
+        Text('Centre updates',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+            color: AppColors.ink)),
+        SizedBox(height: 7),
+        Text('Important notices and learning reminders will appear here.',
+          style: TextStyle(color: AppColors.muted, height: 1.45)),
+        SizedBox(height: 22),
+        _InfoNotice(
+          message: 'You have no notifications yet. When the centre publishes announcements or sends learning reminders to your account, they will appear here.',
+        ),
+      ],
+    ),
+  );
 }
 
 class _HomeTab extends StatelessWidget {
