@@ -252,7 +252,10 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                   title: const Text('Learning access & payments'),
                   subtitle: const Text('Manage programme fees, bank details and payment approvals'),
                   trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _open(OwnerLearningAccessPage(owner: widget.owner)),
+                  onTap: () => _open(OwnerLearningAccessPage(
+                    owner: widget.owner,
+                    canManageFinance: widget.owner || permissions.contains('finance.manage'),
+                  )),
                 )),
                 const SizedBox(height: 8),
               ],
