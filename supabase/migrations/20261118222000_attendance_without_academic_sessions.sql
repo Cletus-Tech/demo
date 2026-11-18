@@ -20,7 +20,7 @@ begin
     join public.learning_programmes p on p.id=r.programme_id
     join public.students st on st.user_id=r.user_id and st.status='active'
     left join public.profiles pr on pr.id=st.user_id
-    where r.status='approved' and p.class_id=p_class_id and p.is_active=true
+    where r.status='approved' and p.class_id=p_class_id
   )
   select coalesce(jsonb_agg(jsonb_build_object(
     'student_id',e.student_id,'full_name',e.full_name,
@@ -67,7 +67,7 @@ begin
       join public.learning_access_requests r on r.user_id=st.user_id and r.status='approved'
       join public.learning_programmes p on p.id=r.programme_id
       where st.id=v_student_id and st.status='active'
-        and p.class_id=p_class_id and p.is_active=true
+        and p.class_id=p_class_id
     ) then
       raise exception 'This learner does not have approved access to the selected class';
     end if;
