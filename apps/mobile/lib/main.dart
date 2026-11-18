@@ -943,6 +943,7 @@ class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsP
     final a = TextEditingController(); final b = TextEditingController();
     final c = TextEditingController(); final d = TextEditingController();
     final marks = TextEditingController(text: '1');
+    final explanation = TextEditingController();
     String correct = 'A';
     try {
       final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx,refreshDialog) => AlertDialog(
@@ -957,6 +958,8 @@ class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsP
             items: ['A','B','C','D'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
             onChanged: (v) => refreshDialog(() => correct = v ?? 'A')),
           TextField(controller: marks, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Marks')),
+          TextField(controller: explanation, minLines: 2, maxLines: 4,
+            decoration: const InputDecoration(labelText: 'Explanation (optional)', alignLabelWithHint: true)),
         ]))),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx,false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx,true), child: const Text('Save question'))],
@@ -972,6 +975,7 @@ class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsP
         await Supabase.instance.client.from('questions').insert({
           'assessment_id': widget.assessment['id'], 'question_text': question.text.trim(),
           'options': opts, 'correct_answer': correct, 'marks': markValue,
+          'explanation': explanation.text.trim().isEmpty ? null : explanation.text.trim(),
           'position': (await _load()).length + 1,
         });
         await _refresh();
@@ -982,7 +986,7 @@ class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsP
       }
     } catch (e) {
       if (mounted) { setState(() => _busy = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Question could not be saved: ' + e.toString()))); }
-    } finally { question.dispose(); a.dispose(); b.dispose(); c.dispose(); d.dispose(); marks.dispose(); }
+    } finally { question.dispose(); a.dispose(); b.dispose(); c.dispose(); d.dispose(); marks.dispose(); explanation.dispose(); }
   }
   Future<void> _deleteQuestion(Map<String,dynamic> q) async {
     try {
@@ -2549,7 +2553,7 @@ class _StudentAssessmentRunnerPageState extends State<StudentAssessmentRunnerPag
       final startData = Map<String, dynamic>.from(started as Map);
       _attemptId = startData['attempt_id']?.toString();
       final mins = (startData['duration_minutes'] as num?)?.toInt() ?? 0;
-      _remaining = mins > 0 ? mins * 60 : 0;
+      _remaining = (startData['remaining_seconds'] as num?)?.toInt() ?? (mins > 0 ? mins * 60 : 0);
       final raw = await Supabase.instance.client.rpc('student_assessment_questions',
         params: {'p_attempt_id': _attemptId});
       if (raw is! List) return [];
