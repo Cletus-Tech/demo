@@ -212,8 +212,8 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
 
   Future<Map<String, dynamic>> _load() async {
     final db = Supabase.instance.client;
-    final results = await Future.wait([
-      db.from('learning_access_requests').select('id,user_id,learner_name,level,programme_title,amount_due,status,payment_amount,payment_reference,payment_note,admin_note,created_at,profiles(full_name,email)').order('created_at', ascending: false),
+    final results = await Future.wait<dynamic>([
+      db.from('learning_access_requests').select('id,user_id,learner_name,level,programme_title,amount_due,status,payment_amount,payment_reference,payment_note,admin_note,created_at').order('created_at', ascending: false),
       db.from('learning_payment_settings').select('bank_name,account_name,account_number,payment_instructions').eq('id', 1).maybeSingle(),
       widget.owner ? db.from('learning_programmes').select('id,title,stage,level,duration_label,fee,is_active,class_id').order('created_at', ascending: false) : Future.value([]),
       widget.owner ? db.from('classes').select('id,name,level').eq('status', 'active').order('name') : Future.value([]),
@@ -355,11 +355,10 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
         const SizedBox(height: 8),
         if (requests.isEmpty) const Text('No learning requests have been submitted yet.', style: TextStyle(color: _laMuted)),
         ...requests.map((r) {
-          final profile = r['profiles'] as Map<String, dynamic>?;
           final status = r['status'].toString();
           return Card(margin: const EdgeInsets.only(bottom: 10), child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(r['learner_name'].toString(), style: const TextStyle(fontWeight: FontWeight.w800, color: _laBrown, fontSize: 16)),
-            Text('${profile?['email'] ?? 'No email'} • ${r['programme_title']}'),
+            Text('Account: ${r['user_id']} • ${r['programme_title']}'),
             const SizedBox(height: 5), Text('Fee: ${_naira(r['amount_due'])} • Reported: ${_naira(r['payment_amount'])}'),
             Text('Status: ${_requestStatus(status)}', style: const TextStyle(fontWeight: FontWeight.w700)),
             if ((r['payment_reference'] ?? '').toString().isNotEmpty) SelectableText('Transfer reference: ${r['payment_reference']}'),
