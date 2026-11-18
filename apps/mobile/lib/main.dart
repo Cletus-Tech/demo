@@ -1406,9 +1406,9 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
         content:SizedBox(width:460,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
           TextField(controller:title,decoration:const InputDecoration(labelText:'Assignment title')),
           DropdownButtonFormField<String>(value:classId,decoration:const InputDecoration(labelText:'Class'),
-            items:classes.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(()=>{classId=v;final options=eligibleTutors(classId,subjectId);tutorId=options.isEmpty?'':options.first['tutor_id'].toString();})),
+            items:classes.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(() { classId=v; final options=eligibleTutors(classId,subjectId); tutorId=options.isEmpty?'':options.first['tutor_id'].toString(); })),
           DropdownButtonFormField<String>(value:subjectId,decoration:const InputDecoration(labelText:'Subject'),
-            items:subjects.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(()=>{subjectId=v;final options=eligibleTutors(classId,subjectId);tutorId=options.isEmpty?'':options.first['tutor_id'].toString();})),
+            items:subjects.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(() { subjectId=v; final options=eligibleTutors(classId,subjectId); tutorId=options.isEmpty?'':options.first['tutor_id'].toString(); })),
           DropdownButtonFormField<String>(value:tutorId,decoration:const InputDecoration(labelText:'Assigned tutor (optional)'),
             items:[const DropdownMenuItem<String>(value:'',child:Text('No tutor assigned')),...eligibleTutors(classId,subjectId).map((t)=>DropdownMenuItem<String>(value:t['tutor_id'].toString(),child:Text(t['tutor_name'].toString())))],
             onChanged:(v)=>refreshDialog(()=>tutorId=v??'')),
