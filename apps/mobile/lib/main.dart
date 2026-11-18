@@ -310,7 +310,7 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                 const SizedBox(height: 8),
               ],
               if (permissions.contains('finance.manage'))
-                const _InfoNotice(message: 'Finance management access is active. Fee and payment management tools are being added next.'),
+                const _InfoNotice(message: 'Finance permissions are active. Use Learning access & payments to manage bank details and verify learner payments.'),
               if (permissions.contains('reports.view'))
                 const _InfoNotice(message: 'Reports access is active. Detailed centre reporting is being added next.'),
               if (permissions.isEmpty && !widget.owner)
