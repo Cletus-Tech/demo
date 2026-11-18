@@ -110,7 +110,365 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) =>
-      _session == null ? const SignInPage() : const LearnerHomePage();
+      _session == null ? const SignInPage() : const RoleRouter();
+}
+
+
+class RoleRouter extends StatefulWidget {
+  const RoleRouter({super.key});
+  @override
+  State<RoleRouter> createState() => _RoleRouterState();
+}
+class _RoleRouterState extends State<RoleRouter> {
+  late Future<List<String>> _roles;
+  @override
+  void initState() { super.initState(); _roles = _load(); }
+  Future<List<String>> _load() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return [];
+    final rows = await Supabase.instance.client.from('user_roles')
+        .select('role').eq('user_id', user.id);
+    return List<Map<String, dynamic>>.from(rows)
+        .map((e) => e['role'] as String).toList();
+  }
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<String>>(
+    future: _roles,
+    builder: (context, s) {
+      if (s.connectionState != ConnectionState.done) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.brown)));
+      }
+      if (s.hasError) {
+        return Scaffold(body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Account permissions could not be checked.'),
+          TextButton(onPressed: () => setState(() => _roles = _load()), child: const Text('Retry')),
+          TextButton(onPressed: () => Supabase.instance.client.auth.signOut(), child: const Text('Sign out')),
+        ])));
+      }
+      final roles = s.data ?? [];
+      if (roles.contains('super_admin')) return const AdminPortalPage(owner: true);
+      if (roles.contains('admin')) return const AdminPortalPage(owner: false);
+      return const LearnerHomePage();
+    },
+  );
+}
+
+class AdminPortalPage extends StatefulWidget {
+  final bool owner;
+  const AdminPortalPage({super.key, required this.owner});
+  @override
+  State<AdminPortalPage> createState() => _AdminPortalPageState();
+}
+class _AdminPortalPageState extends State<AdminPortalPage> {
+  late Future<Map<String, int>> _stats;
+  @override
+  void initState() { super.initState(); _stats = _loadStats(); }
+  Future<Map<String, int>> _loadStats() async {
+    const tables = {'Students':'students','Tutors':'tutors','Classes':'classes','Lessons':'lessons','Announcements':'announcements'};
+    final result = <String, int>{};
+    for (final e in tables.entries) {
+      try {
+        final rows = await Supabase.instance.client.from(e.value).select('id');
+        result[e.key] = rows.length;
+      } catch (_) { result[e.key] = -1; }
+    }
+    return result;
+  }
+  void _open(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(widget.owner ? 'Owner Portal' : 'Admin Portal'),
+      actions: [IconButton(onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout_rounded))],
+    ),
+    body: RefreshIndicator(
+      onRefresh: () async => setState(() => _stats = _loadStats()),
+      child: ListView(padding: const EdgeInsets.all(20), children: [
+        Text(widget.owner ? 'Centre control' : 'Centre administration',
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        const SizedBox(height: 6),
+        Text(widget.owner ? 'Oversee centre operations and control administrator access.' : 'Manage centre records and communications assigned to your account.',
+          style: const TextStyle(color: AppColors.muted)),
+        const SizedBox(height: 18),
+        FutureBuilder<Map<String, int>>(future: _stats, builder: (context, s) {
+          if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+          final data = s.data ?? {};
+          return GridView.count(
+            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: MediaQuery.sizeOf(context).width > 650 ? 3 : 2,
+            childAspectRatio: 1.8, crossAxisSpacing: 10, mainAxisSpacing: 10,
+            children: data.entries.map((e) => Card(child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(e.value < 0 ? '—' : e.value.toString(), style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800, color: AppColors.brown)),
+                Text(e.key, style: const TextStyle(color: AppColors.muted)),
+              ]),
+            ))).toList(),
+          );
+        }),
+        const SizedBox(height: 22),
+        const Text('MANAGEMENT', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
+        const SizedBox(height: 8),
+        Card(child: ListTile(
+          leading: const Icon(Icons.people_alt_outlined, color: AppColors.brown),
+          title: const Text('Student records'),
+          subtitle: const Text('View and create student records'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => _open(const AdminStudentsPage()),
+        )),
+        const SizedBox(height: 8),
+        Card(child: ListTile(
+          leading: const Icon(Icons.campaign_outlined, color: AppColors.brown),
+          title: const Text('Centre communications'),
+          subtitle: const Text('Publish general messages and notify linked students'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => _open(const AdminCommunicationsPage()),
+        )),
+        if (widget.owner) ...[
+          const SizedBox(height: 8),
+          Card(child: ListTile(
+            leading: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.brown),
+            title: const Text('Administrator access'),
+            subtitle: const Text('Authorise accounts and configure permissions'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _open(const OwnerAdminManagementPage()),
+          )),
+        ],
+        const SizedBox(height: 16),
+        const _InfoNotice(message: 'Dashboard figures are loaded from live database records. A dash means the current account does not have permission to read that section.'),
+      ]),
+    ),
+  );
+}
+
+class AdminStudentsPage extends StatefulWidget {
+  const AdminStudentsPage({super.key});
+  @override
+  State<AdminStudentsPage> createState() => _AdminStudentsPageState();
+}
+class _AdminStudentsPageState extends State<AdminStudentsPage> {
+  late Future<List<Map<String, dynamic>>> _rows;
+  @override
+  void initState() { super.initState(); _rows = _load(); }
+  Future<List<Map<String, dynamic>>> _load() async {
+    final data = await Supabase.instance.client.from('students')
+      .select('id,admission_number,level,status,user_id,profiles(full_name,email)')
+      .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(data);
+  }
+  Future<void> _add() async {
+    final admission = TextEditingController();
+    final level = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Add student record'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: admission, decoration: const InputDecoration(labelText: 'Admission number')),
+        const SizedBox(height: 10),
+        TextField(controller: level, decoration: const InputDecoration(labelText: 'Class / level')),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
+      ],
+    ));
+    if (ok == true && admission.text.trim().isNotEmpty) {
+      try {
+        await Supabase.instance.client.from('students').insert({
+          'admission_number': admission.text.trim(),
+          'level': level.text.trim().isEmpty ? null : level.text.trim(),
+        });
+        setState(() => _rows = _load());
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create student: $e')));
+      }
+    }
+    admission.dispose(); level.dispose();
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Student records')),
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: _add, backgroundColor: AppColors.brown, foregroundColor: Colors.white,
+      icon: const Icon(Icons.person_add_alt_1), label: const Text('Add student')),
+    body: RefreshIndicator(onRefresh: () async => setState(() => _rows = _load()),
+      child: FutureBuilder<List<Map<String, dynamic>>>(future: _rows, builder: (context, s) {
+        if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+        if (s.hasError) return ListView(padding: const EdgeInsets.all(20), children: const [
+          _InfoNotice(message: 'Student records could not be loaded. Check that student-management permission has been assigned.'),
+        ]);
+        final rows = s.data ?? [];
+        if (rows.isEmpty) return ListView(padding: const EdgeInsets.all(20), children: const [
+          _InfoNotice(message: 'No student records yet. Use Add student to create the first centre record.'),
+        ]);
+        return ListView.separated(padding: const EdgeInsets.fromLTRB(16,16,16,90), itemCount: rows.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (context, i) {
+            final r = rows[i];
+            final p = r['profiles'] as Map<String, dynamic>?;
+            return Card(child: ListTile(
+              title: Text(p?['full_name'] as String? ?? 'Account not linked'),
+              subtitle: Text('Admission: ' + (r['admission_number'] ?? 'Not assigned').toString() +
+                '  •  Level: ' + (r['level'] ?? 'Not set').toString() +
+                '  •  Status: ' + (r['status'] ?? '').toString()),
+            ));
+          });
+      }),
+    ),
+  );
+}
+
+class AdminCommunicationsPage extends StatefulWidget {
+  const AdminCommunicationsPage({super.key});
+  @override
+  State<AdminCommunicationsPage> createState() => _AdminCommunicationsPageState();
+}
+class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  bool _notify = true;
+  bool _busy = false;
+  @override
+  void dispose() { _title.dispose(); _body.dispose(); super.dispose(); }
+  Future<void> _publish() async {
+    if (_title.text.trim().isEmpty || _body.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a title and message.'))); return;
+    }
+    setState(() => _busy = true);
+    try {
+      final db = Supabase.instance.client;
+      await db.from('announcements').insert({
+        'title': _title.text.trim(), 'body': _body.text.trim(), 'audience': null,
+        'published_at': DateTime.now().toUtc().toIso8601String(),
+        'created_by': db.auth.currentUser!.id,
+      });
+      var sent = 0;
+      if (_notify) {
+        final linked = await db.from('students').select('user_id').not('user_id','is',null);
+        final ids = List<Map<String,dynamic>>.from(linked)
+          .map((e) => e['user_id'] as String?).whereType<String>().toSet().toList();
+        if (ids.isNotEmpty) {
+          await db.from('notifications').insert(ids.map((id) => {
+            'user_id': id, 'title': _title.text.trim(), 'body': _body.text.trim(),
+          }).toList());
+          sent = ids.length;
+        }
+      }
+      _title.clear(); _body.clear();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Published. Personal notifications sent to ' + sent.toString() + ' linked student account(s).')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message could not be sent: $e')));
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Centre communications')),
+    body: ListView(padding: const EdgeInsets.all(20), children: [
+      const Text('Send a centre-wide message', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      const SizedBox(height: 8),
+      const Text('Publish a general announcement and optionally send a personal notification to every linked student account.',
+        style: TextStyle(color: AppColors.muted, height: 1.45)),
+      const SizedBox(height: 18),
+      TextField(controller: _title, decoration: const InputDecoration(labelText: 'Message title')),
+      const SizedBox(height: 12),
+      TextField(controller: _body, minLines: 5, maxLines: 9, decoration: const InputDecoration(labelText: 'Message')),
+      SwitchListTile(contentPadding: EdgeInsets.zero, value: _notify, onChanged: _busy ? null : (v) => setState(() => _notify = v),
+        title: const Text('Also notify linked student accounts')),
+      const SizedBox(height: 12),
+      FilledButton.icon(onPressed: _busy ? null : _publish, icon: const Icon(Icons.send_rounded),
+        label: Text(_busy ? 'Publishing...' : 'Publish message'),
+        style: FilledButton.styleFrom(backgroundColor: AppColors.brown, padding: const EdgeInsets.symmetric(vertical: 15))),
+    ]),
+  );
+}
+
+class OwnerAdminManagementPage extends StatefulWidget {
+  const OwnerAdminManagementPage({super.key});
+  @override
+  State<OwnerAdminManagementPage> createState() => _OwnerAdminManagementPageState();
+}
+class _OwnerAdminManagementPageState extends State<OwnerAdminManagementPage> {
+  final _email = TextEditingController();
+  final Set<String> _permissions = {};
+  bool _busy = false;
+  late Future<List<Map<String, dynamic>>> _admins;
+  static const labels = {
+    'students.manage':'Manage students and learner records',
+    'academics.manage':'Manage classes, subjects, lessons and assessments',
+    'staff.manage':'Manage tutors and staff',
+    'communications.send':'Publish announcements and send notifications',
+    'finance.manage':'Manage invoices and payments',
+    'reports.view':'View audit and centre reports',
+  };
+  @override
+  void initState() { super.initState(); _admins = _load(); }
+  @override
+  void dispose() { _email.dispose(); super.dispose(); }
+  Future<List<Map<String,dynamic>>> _load() async {
+    final data = await Supabase.instance.client.rpc('owner_list_admins');
+    return List<Map<String,dynamic>>.from(data);
+  }
+  Future<void> _refresh() async { final next = _load(); setState(() => _admins = next); await next; }
+  Future<void> _grant() async {
+    final email = _email.text.trim();
+    if (!email.contains('@')) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter an existing account email.'))); return; }
+    setState(() => _busy = true);
+    try {
+      final db = Supabase.instance.client;
+      await db.rpc('owner_grant_admin', params: {'_email':email});
+      await db.rpc('owner_set_admin_permissions', params: {'_email':email,'_permissions':_permissions.toList()});
+      _email.clear(); _permissions.clear(); await _refresh();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Administrator access granted and permissions saved.')));
+    } catch(e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not grant access: $e')));
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+  Future<void> _revoke(String email) async {
+    setState(() => _busy = true);
+    try { await Supabase.instance.client.rpc('owner_revoke_admin', params: {'_email':email}); await _refresh(); }
+    catch(e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not revoke access: $e'))); }
+    finally { if (mounted) setState(() => _busy = false); }
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Administrator access')),
+    body: RefreshIndicator(onRefresh: _refresh, child: ListView(padding: const EdgeInsets.all(20), children: [
+      const Text('Authorise an administrator', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      const SizedBox(height: 6),
+      const Text('Only the owner can grant or revoke administrator access. The account must already be registered.',
+        style: TextStyle(color: AppColors.muted)),
+      const SizedBox(height: 16),
+      TextField(controller: _email, keyboardType: TextInputType.emailAddress,
+        decoration: const InputDecoration(labelText: 'Registered account email')),
+      const SizedBox(height: 12),
+      const Text('Assign permissions', style: TextStyle(fontWeight: FontWeight.w700)),
+      ...labels.entries.map((e) => CheckboxListTile(contentPadding: EdgeInsets.zero,
+        value: _permissions.contains(e.key), title: Text(e.value),
+        onChanged: _busy ? null : (v) => setState(() { if(v == true) {_permissions.add(e.key);} else {_permissions.remove(e.key);} }))),
+      FilledButton(onPressed: _busy ? null : _grant, style: FilledButton.styleFrom(backgroundColor: AppColors.brown),
+        child: Text(_busy ? 'Saving...' : 'Grant administrator access')),
+      const SizedBox(height: 26),
+      const Text('CURRENT ADMINISTRATORS', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
+      const SizedBox(height: 10),
+      FutureBuilder<List<Map<String,dynamic>>>(future: _admins, builder: (context,s) {
+        if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+        if (s.hasError) return const _InfoNotice(message: 'Administrator list is available only to the authorised owner account.');
+        final rows = s.data ?? [];
+        if (rows.isEmpty) return const _InfoNotice(message: 'No administrators have been authorised yet.');
+        return Column(children: rows.map((a) {
+          final email = a['email'] as String? ?? '';
+          final permissions = List<String>.from(a['permissions'] ?? []);
+          return Card(margin: const EdgeInsets.only(bottom: 8), child: ListTile(
+            title: Text(a['full_name'] as String? ?? email),
+            subtitle: Text(email + '\n' + (permissions.isEmpty ? 'No permissions assigned' : permissions.map((p) => labels[p] ?? p).join(' • '))),
+            isThreeLine: true,
+            trailing: IconButton(tooltip: 'Revoke access', onPressed: _busy ? null : () => _revoke(email),
+              icon: const Icon(Icons.person_remove_outlined, color: Colors.red)),
+          ));
+        }).toList());
+      }),
+    ])),
+  );
 }
 
 class SignInPage extends StatefulWidget {
