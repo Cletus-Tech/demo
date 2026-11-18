@@ -1640,6 +1640,99 @@ class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsP
       if (mounted) { setState(() => _busy = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Question could not be saved: ' + e.toString()))); }
     } finally { question.dispose(); a.dispose(); b.dispose(); c.dispose(); d.dispose(); marks.dispose(); explanation.dispose(); }
   }
+
+  Future<void> _bulkImport() async {
+    final raw = TextEditingController();
+    try {
+      final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Bulk import questions'),
+        content: SizedBox(width: 560, child: SingleChildScrollView(child: Column(
+          mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Paste rows copied from Excel or Google Sheets. Use one question per row and separate each column with a TAB.'),
+            const SizedBox(height: 8),
+            const Text('Column order: Question | Option A | Option B | Option C | Option D | Correct answer (A-D) | Marks | Explanation (optional)',
+              style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            const SizedBox(height: 8),
+            const SelectableText('What is 2 + 2?\t3\t4\t5\t6\tB\t1\tAdd two and two.',
+              style: TextStyle(fontSize: 11, color: AppColors.brown)),
+            const SizedBox(height: 10),
+            TextField(controller: raw, minLines: 8, maxLines: 14,
+              keyboardType: TextInputType.multiline,
+              decoration: const InputDecoration(
+                labelText: 'Paste question rows here',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(),
+              )),
+            const SizedBox(height: 6),
+            const Text('You can import up to 500 questions at a time. Each row must contain four options and a valid answer key.',
+              style: TextStyle(fontSize: 11, color: AppColors.muted)),
+          ],
+        ))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Validate and import')),
+        ],
+      ));
+      if (ok != true) return;
+      final lines = raw.text.split(RegExp(r'\r?\n')).where((line) => line.trim().isNotEmpty).toList();
+      if (lines.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paste at least one question row.')));
+        return;
+      }
+      if (lines.length > 500) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import is limited to 500 questions at a time.')));
+        return;
+      }
+      final existing = await _load();
+      final imported = <Map<String,dynamic>>[];
+      num importedMarks = 0;
+      for (var i = 0; i < lines.length; i++) {
+        final cells = lines[i].split('\t');
+        if (cells.length < 7 || cells.length > 8) {
+          throw FormatException('Line ${i + 1}: expected 7 or 8 TAB-separated columns.');
+        }
+        final question = cells[0].trim();
+        final options = {
+          'A': cells[1].trim(), 'B': cells[2].trim(),
+          'C': cells[3].trim(), 'D': cells[4].trim(),
+        };
+        final correct = cells[5].trim().toUpperCase();
+        final marks = num.tryParse(cells[6].trim());
+        if (question.isEmpty || options.values.any((v) => v.isEmpty) ||
+            !['A','B','C','D'].contains(correct) || marks == null || marks <= 0) {
+          throw FormatException('Line ${i + 1}: check the question, four options, correct answer and positive marks.');
+        }
+        importedMarks += marks;
+        imported.add({
+          'assessment_id': widget.assessment['id'],
+          'question_text': question,
+          'options': options,
+          'correct_answer': correct,
+          'marks': marks,
+          'explanation': cells.length == 8 && cells[7].trim().isNotEmpty ? cells[7].trim() : null,
+          'position': existing.length + i + 1,
+        });
+      }
+      setState(() => _busy = true);
+      await Supabase.instance.client.from('questions').insert(imported);
+      final all = await Supabase.instance.client.from('questions')
+        .select('marks').eq('assessment_id', widget.assessment['id']);
+      final total = all.fold<num>(0, (sum, q) => sum + ((q['marks'] as num?) ?? 0));
+      await Supabase.instance.client.from('assessments').update({
+        'total_marks': total, 'is_published': false,
+      }).eq('id', widget.assessment['id']);
+      await _refresh();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${imported.length} questions imported. Assessment returned to draft.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bulk import could not be completed: $e')));
+    } finally {
+      raw.dispose();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _deleteQuestion(Map<String,dynamic> q) async {
     try {
       await Supabase.instance.client.from('questions').delete().eq('id',q['id']);
@@ -1651,7 +1744,10 @@ class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsP
   }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Manage questions')),
+    appBar: AppBar(title: const Text('Manage questions'), actions: [
+      TextButton.icon(onPressed: _busy ? null : _bulkImport,
+        icon: const Icon(Icons.playlist_add), label: const Text('Bulk import')),
+    ]),
     floatingActionButton: FloatingActionButton.extended(onPressed: _busy ? null : _addQuestion,
       backgroundColor: AppColors.brown, foregroundColor: Colors.white,
       icon: const Icon(Icons.add), label: const Text('Add question')),
