@@ -254,11 +254,9 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
 
   Future<void> _saveProgramme(List<Map<String, dynamic>> classes, [Map<String, dynamic>? existing]) async {
     final title = TextEditingController(text: existing?['title']?.toString() ?? '');
-    final level = TextEditingController(text: existing?['level']?.toString() ?? '');
     final description = TextEditingController(text: existing?['description']?.toString() ?? '');
     final fee = TextEditingController(text: existing?['fee']?.toString() ?? '');
     final duration = TextEditingController(text: existing?['duration_label']?.toString() ?? 'Monthly');
-    String stage = existing?['stage']?.toString() ?? 'Primary';
     final existingClassId = existing?['class_id']?.toString();
     String? selectedClassId = classes.any((c) => c['id'].toString() == existingClassId)
         ? existingClassId : (classes.isEmpty ? null : classes.first['id'].toString());
@@ -267,26 +265,46 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(controller: title, decoration: const InputDecoration(labelText: 'Programme name')),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(value: stage, decoration: const InputDecoration(labelText: 'Stage'), items: const [DropdownMenuItem(value: 'Primary', child: Text('Primary')),DropdownMenuItem(value: 'JSS', child: Text('Junior Secondary')),DropdownMenuItem(value: 'SS', child: Text('Senior Secondary'))], onChanged: (v) => refresh(() => stage = v ?? 'Primary')),
-        const SizedBox(height: 8), TextField(controller: level, decoration: const InputDecoration(labelText: 'Class level (e.g. Primary 4, JSS2)')),
-        const SizedBox(height: 8), TextField(controller: fee, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Fee in Naira')),
-        const SizedBox(height: 8), TextField(controller: duration, decoration: const InputDecoration(labelText: 'Duration / billing period')),
-        const SizedBox(height: 8), TextField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'What is included?')),
+        if (classes.isEmpty)
+          const Text('No active learning levels are available. Add a level under Learning setup first.')
+        else
+          DropdownButtonFormField<String>(
+            value: selectedClassId,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Learning level'),
+            items: classes.map((c) => DropdownMenuItem<String>(
+              value: c['id'].toString(),
+              child: Text((c['name'] ?? c['level']).toString()),
+            )).toList(),
+            onChanged: (v) => refresh(() => selectedClassId = v),
+          ),
         const SizedBox(height: 8),
-        if (classes.isEmpty) const Text('Create an active class in Academic Management before adding a programme.')
-        else DropdownButtonFormField<String>(value: selectedClassId, isExpanded: true, decoration: const InputDecoration(labelText: 'Connect to classroom'), items: classes.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text('${c['name']}'))).toList(), onChanged: (v) => refresh(() => selectedClassId = v)),
+        TextField(controller: fee, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Fee in Naira')),
+        const SizedBox(height: 8),
+        TextField(controller: duration, decoration: const InputDecoration(labelText: 'Duration / billing period')),
+        const SizedBox(height: 8),
+        TextField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'What is included?')),
       ])),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(existing == null ? 'Save programme' : 'Update programme'))],
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(existing == null ? 'Save programme' : 'Update programme')),
+      ],
     )));
     if (ok == true) {
       final amount = double.tryParse(fee.text.trim());
-      if (title.text.trim().isEmpty || level.text.trim().isEmpty || amount == null || amount <= 0 || selectedClassId == null) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a name, class level and valid fee.')));
+      final selectedRows = classes.where((c) => c['id'].toString() == selectedClassId).toList();
+      final selectedClass = selectedRows.isEmpty ? null : selectedRows.first;
+      final levelName = (selectedClass?['level'] ?? selectedClass?['name'] ?? '').toString();
+      final upperLevel = levelName.toUpperCase();
+      final stage = upperLevel.startsWith('PRIMARY') ? 'Primary'
+          : upperLevel.startsWith('JSS') ? 'JSS' : 'SS';
+      if (title.text.trim().isEmpty || levelName.isEmpty || amount == null || amount <= 0 || selectedClassId == null) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a programme name, select a learning level and enter a valid fee.')));
       } else {
         setState(() => _busy = true);
         try {
           final values = {
-            'title': title.text.trim(), 'stage': stage, 'level': level.text.trim(),
+            'title': title.text.trim(), 'stage': stage, 'level': levelName,
             'fee': amount, 'duration_label': duration.text.trim().isEmpty ? 'Monthly' : duration.text.trim(),
             'description': description.text.trim(), 'class_id': selectedClassId,
           };
@@ -296,11 +314,14 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
             await Supabase.instance.client.from('learning_programmes').update(values).eq('id', existing['id']);
           }
           await _refresh();
-        } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create programme: $e'))); }
-        finally { if (mounted) setState(() => _busy = false); }
+        } catch (e) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not save programme: $e')));
+        } finally {
+          if (mounted) setState(() => _busy = false);
+        }
       }
     }
-    title.dispose(); level.dispose(); description.dispose(); fee.dispose(); duration.dispose();
+    title.dispose(); description.dispose(); fee.dispose(); duration.dispose();
   }
 
   Future<void> _review(Map<String, dynamic> request, String decision) async {
