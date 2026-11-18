@@ -2637,10 +2637,21 @@ class _AdminAccountsPageState extends State<AdminAccountsPage> {
   void initState() { super.initState(); _accounts = _load(); }
 
   Future<List<Map<String, dynamic>>> _load() async {
-    final rows = await Supabase.instance.client.from('profiles')
-      .select('id,full_name,email,account_type,created_at,user_roles(role),students(id,level,status)')
-      .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows);
+    final db = Supabase.instance.client;
+    final results = await Future.wait<dynamic>([
+      db.from('profiles').select('id,full_name,email,account_type,created_at').order('created_at', ascending: false),
+      db.from('user_roles').select('user_id,role'),
+      db.from('students').select('id,user_id,level,status'),
+    ]);
+    final profiles = List<Map<String, dynamic>>.from(results[0]);
+    final roles = List<Map<String, dynamic>>.from(results[1]);
+    final students = List<Map<String, dynamic>>.from(results[2]);
+    for (final profile in profiles) {
+      final id = profile['id'].toString();
+      profile['roles'] = roles.where((r) => r['user_id'].toString() == id).toList();
+      profile['student'] = students.where((st) => st['user_id']?.toString() == id).cast<Map<String, dynamic>>().firstOrNull;
+    }
+    return profiles;
   }
 
   Future<void> _refresh() async {
@@ -2684,16 +2695,14 @@ class _AdminAccountsPageState extends State<AdminAccountsPage> {
             const SizedBox(height: 12),
             if (rows.isEmpty) const _InfoNotice(message: 'No matching accounts were found.'),
             ...rows.map((r) {
-              final roles = r['user_roles'] is List
-                ? List<Map<String, dynamic>>.from(r['user_roles'] as List)
+              final roles = r['roles'] is List
+                ? List<Map<String, dynamic>>.from(r['roles'] as List)
                 : <Map<String, dynamic>>[];
               final roleNames = roles.map((v) => v['role'].toString().replaceAll('_',' ')).join(', ');
-              final rawStudent = r['students'];
+              final rawStudent = r['student'];
               final student = rawStudent is Map
                 ? Map<String, dynamic>.from(rawStudent)
-                : rawStudent is List && rawStudent.isNotEmpty
-                  ? Map<String, dynamic>.from(rawStudent.first as Map)
-                  : <String, dynamic>{};
+                : <String, dynamic>{};
               final isStaff = roles.any((v) => ['admin','super_admin','tutor'].contains(v['role']));
               final accountType = isStaff ? 'Staff account'
                 : r['account_type'] == 'parent' ? 'Parent / guardian'
