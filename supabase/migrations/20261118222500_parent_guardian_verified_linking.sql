@@ -67,6 +67,13 @@ begin
   where lower(pr.email)=v_email and pr.id<>auth.uid()
   limit 1;
 
+  if v_student_id is not null and exists (
+    select 1 from public.student_guardians sg
+    where sg.guardian_id=v_guardian_id and sg.student_id=v_student_id
+  ) then
+    return jsonb_build_object('status','approved','message','This learner is already linked to your parent dashboard.');
+  end if;
+
   select q.id into v_request_id
   from public.guardian_link_requests q
   where q.guardian_user_id=auth.uid() and lower(q.requested_email)=v_email and q.status='pending'
