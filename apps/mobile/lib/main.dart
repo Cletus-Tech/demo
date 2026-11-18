@@ -328,8 +328,11 @@ class AdminStudentsPage extends StatefulWidget {
 }
 class _AdminStudentsPageState extends State<AdminStudentsPage> {
   late Future<List<Map<String, dynamic>>> _rows;
+  final TextEditingController _searchController = TextEditingController();
   @override
   void initState() { super.initState(); _rows = _load(); }
+  @override
+  void dispose() { _searchController.dispose(); super.dispose(); }
   Future<List<Map<String, dynamic>>> _load() async {
     final data = await Supabase.instance.client.from('students')
       .select('id,admission_number,level,status,user_id,profiles(full_name,email)')
@@ -377,25 +380,60 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
           _InfoNotice(message: 'Student records could not be loaded. Check that student-management permission has been assigned.'),
         ]);
         final rows = s.data ?? [];
+        final query = _searchController.text.trim().toLowerCase();
+        final filtered = rows.where((r) {
+          final p = r['profiles'] as Map<String, dynamic>?;
+          final searchable = [
+            p?['full_name'], p?['email'], r['admission_number'], r['level'],
+          ].whereType<Object>().join(' ').toLowerCase();
+          return query.isEmpty || searchable.contains(query);
+        }).toList();
         if (rows.isEmpty) return ListView(padding: const EdgeInsets.all(20), children: const [
-          _InfoNotice(message: 'No student records yet. Use Add student to create the first centre record.'),
+          _InfoNotice(message: 'No learner accounts have been registered yet. New student sign-ups will appear here automatically.'),
         ]);
-        return ListView.separated(padding: const EdgeInsets.fromLTRB(16,16,16,90), itemCount: rows.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, i) {
-            final r = rows[i];
-            final p = r['profiles'] as Map<String, dynamic>?;
-            return Card(child: ListTile(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => _StudentRecordDetailPage(student: r),
-              )),
-              title: Text(p?['full_name'] as String? ?? 'Account not linked'),
-              subtitle: Text('Admission: ' + (r['admission_number'] ?? 'Not assigned').toString() +
-                '  •  Level: ' + (r['level'] ?? 'Not set').toString() +
-                '  •  Status: ' + (r['status'] ?? '').toString()),
-              trailing: const Icon(Icons.chevron_right_rounded),
-            ));
-          });
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16,16,16,90),
+          children: [
+            Text('${rows.length} registered student${rows.length == 1 ? '' : 's'}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search name, email, admission number or class',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchController.text.isEmpty ? null : IconButton(
+                  onPressed: () { _searchController.clear(); setState(() {}); },
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (filtered.isEmpty)
+              const _InfoNotice(message: 'No student matches this search.')
+            else
+              ...filtered.map((r) {
+                final p = r['profiles'] as Map<String, dynamic>?;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Card(child: ListTile(
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => _StudentRecordDetailPage(student: r),
+                    )),
+                    title: Text(p?['full_name'] as String? ?? 'Account not linked'),
+                    subtitle: Text([
+                      p?['email'] ?? 'No email',
+                      'Admission: ' + (r['admission_number'] ?? 'Not assigned').toString(),
+                      'Level: ' + (r['level'] ?? 'Not set').toString(),
+                      'Status: ' + (r['status'] ?? '').toString(),
+                    ].join(' • ')),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                  )),
+                );
+              }),
+          ],
+        );
       }),
     ),
   );
