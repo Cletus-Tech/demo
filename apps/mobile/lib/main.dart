@@ -3159,6 +3159,206 @@ class _GuardianPortalPageState extends State<GuardianPortalPage> {
   );
 }
 
+
+class TutorWorkspacePage extends StatefulWidget {
+  const TutorWorkspacePage({super.key});
+  @override
+  State<TutorWorkspacePage> createState() => _TutorWorkspacePageState();
+}
+class _TutorWorkspacePageState extends State<TutorWorkspacePage> {
+  late Future<Map<String,dynamic>> _workspace;
+  @override
+  void initState() { super.initState(); _workspace = _load(); }
+  Future<Map<String,dynamic>> _load() async {
+    final raw = await Supabase.instance.client.rpc('tutor_workspace_summary');
+    return Map<String,dynamic>.from(raw as Map);
+  }
+  Future<void> _refresh() async { final next=_load(); setState(()=>_workspace=next); await next; }
+  String _date(dynamic raw) {
+    final value=DateTime.tryParse(raw?.toString()??'')?.toLocal();
+    if(value==null)return 'Time not scheduled';
+    return '${value.day.toString().padLeft(2,'0')}/${value.month.toString().padLeft(2,'0')}/${value.year} • ${TimeOfDay.fromDateTime(value).format(context)}';
+  }
+  @override
+  Widget build(BuildContext context)=>RefreshIndicator(
+    color:AppColors.brown,onRefresh:_refresh,
+    child:FutureBuilder<Map<String,dynamic>>(future:_workspace,builder:(context,s){
+      if(s.connectionState!=ConnectionState.done)
+        return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+      if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[
+        _InfoNotice(message:'Your tutor workspace could not be loaded: ${s.error}')
+      ]);
+      final data=s.data!;
+      final classes=List<Map<String,dynamic>>.from(data['classes'] as List);
+      final lessons=List<Map<String,dynamic>>.from(data['lessons'] as List);
+      final assignments=List<Map<String,dynamic>>.from(data['assignments'] as List);
+      return ListView(padding:const EdgeInsets.fromLTRB(18,18,18,32),children:[
+        const Text('Your teaching workspace',style:TextStyle(fontSize:23,fontWeight:FontWeight.w800,color:AppColors.ink)),
+        const SizedBox(height:5),
+        const Text('Your assigned classes, published lessons and homework are gathered here.',
+          style:TextStyle(color:AppColors.muted,height:1.4)),
+        const SizedBox(height:16),
+        Card(child:ListTile(
+          leading:const Icon(Icons.fact_check_outlined,color:AppColors.brown,size:28),
+          title:const Text('Class attendance',style:TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink)),
+          subtitle:const Text('Take or update attendance for your assigned classes'),
+          trailing:const Icon(Icons.chevron_right_rounded),
+          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+            builder:(_)=>Scaffold(appBar:AppBar(title:const Text('Class attendance')),body:const AdminAttendancePage()))),
+        )),
+        const SizedBox(height:18),
+        const Text('MY CLASSES & SUBJECTS',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+        const SizedBox(height:8),
+        if(classes.isEmpty)const _InfoNotice(message:'No classes or subjects have been assigned to your tutor account yet. Contact the centre administrator.'),
+        ...classes.map((c)=>Card(child:ListTile(
+          leading:const Icon(Icons.school_outlined,color:AppColors.brown),
+          title:Text((c['class_name']??'Class').toString(),style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+          subtitle:Text('${c['level']??''} • ${c['subject_name']??'Subject'}'),
+        ))),
+        const SizedBox(height:16),
+        const Text('PUBLISHED LESSONS',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+        const SizedBox(height:8),
+        if(lessons.isEmpty)const _InfoNotice(message:'Published lessons for your assigned classes will appear here.'),
+        ...lessons.map((l)=>Card(child:ListTile(
+          leading:const Icon(Icons.menu_book_outlined,color:AppColors.brown),
+          title:Text((l['title']??'Lesson').toString(),style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+          subtitle:Text('${l['class_name']??''} • ${l['subject_name']??''} • ${_date(l['scheduled_at'])}'),
+          trailing:const Icon(Icons.chevron_right_rounded),
+          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>LessonDetailPage(lesson:l))),
+        ))),
+        const SizedBox(height:16),
+        const Text('ASSIGNMENTS & STUDENT WORK',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+        const SizedBox(height:8),
+        if(assignments.isEmpty)const _InfoNotice(message:'Assignments specifically assigned to you will appear here. The centre administrator can assign a tutor when creating or managing class homework.'),
+        ...assignments.map((a)=>Card(child:ListTile(
+          leading:const Icon(Icons.assignment_outlined,color:AppColors.brown),
+          title:Text((a['title']??'Assignment').toString(),style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+          subtitle:Text('${a['class_name']??''} • ${a['subject_name']??''}\n${a['submission_count']??0} submissions • ${a['graded_count']??0} marked'),
+          isThreeLine:true,
+          trailing:const Icon(Icons.chevron_right_rounded),
+          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+            builder:(_)=>TutorAssignmentSubmissionsPage(assignment:a))).then((_)=>_refresh()),
+        ))),
+      ]);
+    }),
+  );
+}
+
+class TutorAssignmentSubmissionsPage extends StatefulWidget {
+  final Map<String,dynamic> assignment;
+  const TutorAssignmentSubmissionsPage({super.key,required this.assignment});
+  @override
+  State<TutorAssignmentSubmissionsPage> createState()=>_TutorAssignmentSubmissionsPageState();
+}
+class _TutorAssignmentSubmissionsPageState extends State<TutorAssignmentSubmissionsPage>{
+  late Future<List<Map<String,dynamic>>> _submissions;
+  bool _busy=false;
+  @override
+  void initState(){super.initState();_submissions=_load();}
+  Future<List<Map<String,dynamic>>> _load() async{
+    final raw=await Supabase.instance.client.rpc('tutor_assignment_submissions',
+      params:{'p_assignment_id':widget.assignment['id']});
+    if(raw is! List)return [];
+    return raw.map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+  }
+  Future<void> _refresh() async{final next=_load();setState(()=>_submissions=next);await next;}
+  Future<void> _grade(Map<String,dynamic> submission) async{
+    final score=TextEditingController(text:submission['score']?.toString()??'');
+    final feedback=TextEditingController(text:submission['tutor_feedback']?.toString()??'');
+    try{
+      final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+        title:const Text('Mark student work'),
+        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          Text('Maximum score: ${widget.assignment['max_score']??0}'),
+          const SizedBox(height:10),
+          TextField(controller:score,keyboardType:const TextInputType.numberWithOptions(decimal:true),
+            decoration:const InputDecoration(labelText:'Score awarded')),
+          const SizedBox(height:10),
+          TextField(controller:feedback,minLines:3,maxLines:6,
+            decoration:const InputDecoration(labelText:'Feedback for the learner')),
+        ])),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save mark'))],
+      ));
+      if(ok==true){
+        final value=num.tryParse(score.text.trim());
+        if(value==null||value<0){
+          if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid score.')));
+          return;
+        }
+        setState(()=>_busy=true);
+        await Supabase.instance.client.rpc('tutor_grade_assignment_submission',params:{
+          'p_submission_id':submission['id'],'p_score':value,'p_feedback':feedback.text.trim(),
+        });
+        await _refresh();
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Mark and feedback saved.')));
+      }
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not save the mark: $e')));
+    }finally{
+      score.dispose();feedback.dispose();
+      if(mounted)setState(()=>_busy=false);
+    }
+  }
+  @override
+  Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Student submissions')),
+    body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,
+      child:FutureBuilder<List<Map<String,dynamic>>>(future:_submissions,builder:(context,s){
+        if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+        if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[
+          _InfoNotice(message:'Student submissions could not be loaded: ${s.error}')
+        ]);
+        final rows=s.data??[];
+        if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(20),children:[
+          const _InfoNotice(message:'No learner has submitted this assignment yet.')
+        ]);
+        return ListView(padding:const EdgeInsets.all(16),children:[
+          Text((widget.assignment['title']??'Assignment').toString(),
+            style:const TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
+          const SizedBox(height:5),
+          Text('${widget.assignment['class_name']??''} • ${widget.assignment['subject_name']??''} • Maximum ${widget.assignment['max_score']??0} marks',
+            style:const TextStyle(color:AppColors.muted)),
+          const SizedBox(height:12),
+          ...rows.map((r){
+            final status=(r['status']??'submitted').toString();
+            return Card(margin:const EdgeInsets.only(bottom:10),child:Padding(
+              padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Row(children:[
+                  Expanded(child:Text((r['student_name']??'Learner').toString(),
+                    style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink))),
+                  Text(status=='graded'?'Marked':'Awaiting marking',
+                    style:TextStyle(fontWeight:FontWeight.w700,color:status=='graded'?Colors.green.shade700:AppColors.brown)),
+                ]),
+                if(r['student_level']!=null)Text(r['student_level'].toString(),style:const TextStyle(fontSize:12,color:AppColors.muted)),
+                const SizedBox(height:10),
+                const Text('STUDENT ANSWER',style:TextStyle(fontSize:10,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+                const SizedBox(height:5),
+                SelectableText((r['answer_text']??'No text answer').toString(),
+                  style:const TextStyle(height:1.5,color:AppColors.ink)),
+                if(r['score']!=null)...[
+                  const SizedBox(height:8),
+                  Text('Score: ${r['score']} / ${widget.assignment['max_score']??0}',
+                    style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.brown)),
+                ],
+                if((r['tutor_feedback']??'').toString().isNotEmpty)...[
+                  const SizedBox(height:6),Text('Feedback: ${r['tutor_feedback']}',
+                    style:const TextStyle(color:AppColors.muted)),
+                ],
+                const SizedBox(height:10),
+                Align(alignment:Alignment.centerRight,child:OutlinedButton.icon(
+                  onPressed:_busy?null:()=>_grade(r),
+                  icon:const Icon(Icons.edit_note),label:Text(status=='graded'?'Update mark':'Mark work'),
+                )),
+              ]),
+            ));
+          }),
+        ]);
+      }),
+    ),
+  );
+}
+
 class _LearningTab extends StatefulWidget {
   final bool owner;
   final bool admin;
@@ -3195,7 +3395,9 @@ class _LearningTabState extends State<_LearningTab> {
   }
   Future<void> _refresh() async { final next = _loadLessons(); setState(() => _lessons = next); await next; }
   @override
-  Widget build(BuildContext context) => RefreshIndicator(
+  Widget build(BuildContext context) {
+    if (widget.tutor) return const TutorWorkspacePage();
+    return RefreshIndicator(
     color: AppColors.brown, onRefresh: _refresh,
     child: ListView(padding: const EdgeInsets.all(20), children: [
       Text(widget.tutor ? 'Tutor workspace' : widget.parent ? 'Parent learning' : 'My learning', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700, color: AppColors.ink)),
@@ -3303,6 +3505,7 @@ class _LearningTabState extends State<_LearningTab> {
       }),
     ]),
   );
+  }
 }
 class LessonDetailPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
