@@ -1029,12 +1029,12 @@ class _AdminAttendancePageState extends State<AdminAttendancePage> {
 
   Future<Map<String, dynamic>> _loadOptions() async {
     final db = Supabase.instance.client;
-    final values = await Future.wait([
-      db.rpc('attendance_available_classes'),
-      db.from('academic_sessions').select('id,name,starts_on,ends_on,is_current').order('starts_on', ascending: false),
-    ]);
-    final classes = List<Map<String, dynamic>>.from(values[0] as List);
-    final sessions = List<Map<String, dynamic>>.from(values[1]);
+    final classData = await db.rpc('attendance_available_classes');
+    final sessionData = await db.from('academic_sessions')
+      .select('id,name,starts_on,ends_on,is_current')
+      .order('starts_on', ascending: false);
+    final classes = List<Map<String, dynamic>>.from(classData as List);
+    final sessions = List<Map<String, dynamic>>.from(sessionData);
     if (mounted) {
       setState(() {
         _classId = classes.isEmpty ? null : classes.first['id'].toString();
