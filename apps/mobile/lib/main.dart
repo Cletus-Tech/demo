@@ -1685,7 +1685,6 @@ class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsP
       }
       final existing = await _load();
       final imported = <Map<String,dynamic>>[];
-      num importedMarks = 0;
       for (var i = 0; i < lines.length; i++) {
         final cells = lines[i].split('\t');
         if (cells.length < 7 || cells.length > 8) {
@@ -1702,7 +1701,6 @@ class _AdminAssessmentQuestionsPageState extends State<AdminAssessmentQuestionsP
             !['A','B','C','D'].contains(correct) || marks == null || marks <= 0) {
           throw FormatException('Line ${i + 1}: check the question, four options, correct answer and positive marks.');
         }
-        importedMarks += marks;
         imported.add({
           'assessment_id': widget.assessment['id'],
           'question_text': question,
