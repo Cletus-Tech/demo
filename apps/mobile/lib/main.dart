@@ -5606,8 +5606,8 @@ class _TutorInterviewCentrePageState extends State<TutorInterviewCentrePage>{
         Supabase.instance.client.from('classes').select('id,name').eq('status','active').order('name'),
         Supabase.instance.client.from('tutor_applications').select().eq('user_id',Supabase.instance.client.auth.currentUser!.id).maybeSingle(),
       ]);
-      if(!mounted)return;setState(()=>_subjects=List<Map<String,dynamic>>.from(results[0])..sort((a,b)=>a['name'].toString().compareTo(b['name'].toString())));
-      setState(()=>_classes=List<Map<String,dynamic>>.from(results[1])..sort((a,b)=>a['name'].toString().compareTo(b['name'].toString())));
+      if(!mounted)return;setState(()=>_subjects=List<Map<String,dynamic>>.from(results[0] as List)..sort((a,b)=>a['name'].toString().compareTo(b['name'].toString())));
+      setState(()=>_classes=List<Map<String,dynamic>>.from(results[1] as List)..sort((a,b)=>a['name'].toString().compareTo(b['name'].toString())));
       _mine=results[2] as Map<String,dynamic>?;
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Application form could not load: $e')));}
     finally{if(mounted)setState(()=>_loading=false);}
