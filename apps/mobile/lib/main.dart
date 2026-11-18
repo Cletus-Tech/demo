@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
@@ -582,8 +583,12 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
           subtitle: item['description'] == null ? null : Text(item['description']),
           trailing: const Icon(Icons.open_in_new_rounded),
           onTap: () {
-            final url = item['external_url'] ?? item['file_path'];
-            if (url is String && url.startsWith('https://')) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Resource link selected. Link opening will be enabled in the next integration pass.')));
+            final url = item['external_url'];
+            if (url is String && url.startsWith('https://')) {
+              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This resource does not have an external link yet.')));
+            }
           },
         ))).toList());
       }),
