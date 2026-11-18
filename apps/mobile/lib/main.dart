@@ -649,10 +649,10 @@ class AdminAcademicPage extends StatefulWidget {
 }
 class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTickerProviderStateMixin {
   late TabController _tabs;
-  late Future<List<Map<String, dynamic>>> _classes, _subjects, _lessons, _sessions, _assessments;
+  late Future<List<Map<String, dynamic>>> _classes, _subjects, _lessons, _assessments;
   bool _busy = false;
   @override
-  void initState() { super.initState(); _tabs = TabController(length: 7, vsync: this); _reload(); }
+  void initState() { super.initState(); _tabs = TabController(length: 6, vsync: this); _reload(); }
   @override
   void dispose() { _tabs.dispose(); super.dispose(); }
   void _reload() {
@@ -660,10 +660,9 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
     _classes = db.from('classes').select('id,name,level,capacity,status').order('name');
     _subjects = db.from('subjects').select('id,name,code,description,status').order('name');
     _lessons = db.from('lessons').select('id,title,description,content,class_id,subject_id,is_published,classes(name),subjects(name)').order('created_at', ascending: false);
-    _sessions = db.from('academic_sessions').select('id,name,starts_on,ends_on,is_current').order('starts_on', ascending: false);
     _assessments = db.from('assessments').select('id,title,assessment_type,class_id,subject_id,duration_minutes,total_marks,is_published,starts_at,classes(name),subjects(name),questions(id)').order('created_at', ascending: false);
   }
-  Future<void> _refresh() async { setState(_reload); await Future.wait([_classes,_subjects,_lessons,_sessions,_assessments]); }
+  Future<void> _refresh() async { setState(_reload); await Future.wait([_classes,_subjects,_lessons,_assessments]); }
   Future<void> _save(String table, Map<String,dynamic> values, {String? id}) async {
     setState(() => _busy = true);
     try {
@@ -673,44 +672,6 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
     } catch(e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not save: ' + e.toString())));
     } finally { if (mounted) setState(() => _busy = false); }
-  }
-  Future<void> _editSession([Map<String,dynamic>? row]) async {
-    final name = TextEditingController(text: row?['name']?.toString() ?? '');
-    final starts = TextEditingController(text: row?['starts_on']?.toString() ?? '');
-    final ends = TextEditingController(text: row?['ends_on']?.toString() ?? '');
-    bool current = row?['is_current'] == true;
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, refreshDialog) => AlertDialog(
-      title: Text(row == null ? 'Create academic session' : 'Edit academic session'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: 'Session name (e.g. 2026/2027)')),
-        TextField(controller: starts, decoration: const InputDecoration(labelText: 'Start date (YYYY-MM-DD)')),
-        TextField(controller: ends, decoration: const InputDecoration(labelText: 'End date (YYYY-MM-DD)')),
-        CheckboxListTile(value: current, contentPadding: EdgeInsets.zero, title: const Text('Set as current session'),
-          onChanged: (v) => refreshDialog(() => current = v ?? false)),
-      ]),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save session'))],
-    )));
-    final startDate = DateTime.tryParse(starts.text.trim());
-    final endDate = DateTime.tryParse(ends.text.trim());
-    if (ok == true) {
-      if (name.text.trim().isEmpty || startDate == null || endDate == null || !endDate.isAfter(startDate)) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a session name and valid dates. The end date must be after the start date.')));
-      } else {
-        try {
-          final db = Supabase.instance.client;
-          if (current) await db.from('academic_sessions').update({'is_current': false}).neq('id', row?['id'] ?? '00000000-0000-0000-0000-000000000000');
-          final values = {'name': name.text.trim(), 'starts_on': starts.text.trim(),
-            'ends_on': ends.text.trim(), 'is_current': current};
-          if (row == null) { await db.from('academic_sessions').insert(values); }
-          else { await db.from('academic_sessions').update(values).eq('id', row['id']); }
-          await _refresh();
-        } catch (e) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not save session: ' + e.toString())));
-        }
-      }
-    }
-    name.dispose(); starts.dispose(); ends.dispose();
   }
   Future<void> _editClass([Map<String,dynamic>? row]) async {
     final name = TextEditingController(text: row?['name']?.toString() ?? '');
@@ -897,19 +858,6 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   });
 
   Widget _err(Object? e)=>Padding(padding:const EdgeInsets.all(16),child:_InfoNotice(message:'Could not load this section. Check access or connection, then retry. ' + e.toString()));
-  Widget _sessionsTab()=>FutureBuilder<List<Map<String,dynamic>>>(future:_sessions,builder:(context,s){
-    if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
-    if(s.hasError)return _err(s.error); final rows=s.data ?? [];
-    return ListView(padding:const EdgeInsets.all(16),children:[
-      Row(children:[const Expanded(child:Text('Academic sessions',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink))),
-        FilledButton.icon(onPressed:_busy?null:()=>_editSession(),icon:const Icon(Icons.add),label:const Text('Add session'))]),
-      const Padding(padding:EdgeInsets.only(top:8,bottom:12),child:Text('Create a session before enrolling students. Only one session should be current at a time.',style:TextStyle(color:AppColors.muted))),
-      if(rows.isEmpty)const _InfoNotice(message:'No academic session has been created yet. Add the centre current session to enable enrolment.'),
-      ...rows.map((r)=>Card(child:ListTile(title:Text(r['name'].toString()),
-        subtitle:Text(r['starts_on'].toString() + ' to ' + r['ends_on'].toString() + ' • ' + (r['is_current']==true?'Current':'Not current')),
-        trailing:IconButton(icon:const Icon(Icons.edit_outlined),onPressed:()=>_editSession(r))))),
-    ]);
-  });
   Widget _classesTab()=>FutureBuilder<List<Map<String,dynamic>>>(future:_classes,builder:(context,s){
     if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
     if(s.hasError)return _err(s.error); final rows=s.data ?? [];
@@ -963,11 +911,11 @@ class _AdminAcademicPageState extends State<AdminAcademicPage> with SingleTicker
   });
   @override
   Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('Academic management'),bottom:TabBar(isScrollable:true,controller:_tabs,tabs:const[
-      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Sessions'),Tab(text:'Assessments'),Tab(text:'Assignments'),Tab(text:'Attendance'),
+    appBar:AppBar(title:const Text('Learning setup'),bottom:TabBar(isScrollable:true,controller:_tabs,tabs:const[
+      Tab(text:'Classes'),Tab(text:'Subjects'),Tab(text:'Lessons'),Tab(text:'Assessments'),Tab(text:'Assignments'),Tab(text:'Attendance'),
     ])),
     body:RefreshIndicator(onRefresh:_refresh,child:TabBarView(controller:_tabs,children:[
-      _classesTab(),_subjectsTab(),_lessonsTab(),_sessionsTab(),_assessmentsTab(),const AdminAssignmentsPanel(),const AdminAttendancePage(),
+      _classesTab(),_subjectsTab(),_lessonsTab(),_assessmentsTab(),const AdminAssignmentsPanel(),const AdminAttendancePage(),
     ])),
   );
 }
