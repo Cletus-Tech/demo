@@ -1,4 +1,5 @@
 name: Young Learners Web Preview
+# Re-run after adding mocked SharedPreferences to the Supabase widget test.
 
 on:
   workflow_dispatch:
