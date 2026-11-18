@@ -2144,7 +2144,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
             parent: widget.parent,
             onOpenCentre: () => _openCentrePortal(),
           ),
-          _LearningTab(owner: widget.owner, admin: widget.admin, tutor: widget.tutor),
+          _LearningTab(owner: widget.owner, admin: widget.admin, tutor: widget.tutor, parent: widget.parent),
           _AnalyticsTab(owner: widget.owner, admin: widget.admin),
           _ProfileTab(account: _account, onRetry: () => setState(() => _account = _loadAccount()), onSignOut: _signOut),
         ],
@@ -2974,7 +2974,8 @@ class _LearningTab extends StatefulWidget {
   final bool owner;
   final bool admin;
   final bool tutor;
-  const _LearningTab({this.owner = false, this.admin = false, this.tutor = false});
+  final bool parent;
+  const _LearningTab({this.owner = false, this.admin = false, this.tutor = false, this.parent = false});
   @override
   State<_LearningTab> createState() => _LearningTabState();
 }
@@ -2983,7 +2984,7 @@ class _LearningTabState extends State<_LearningTab> {
   @override
   void initState() { super.initState(); _lessons = _loadLessons(); }
   Future<List<Map<String, dynamic>>> _loadLessons() async {
-    if (widget.tutor) return [];
+    if (widget.tutor || widget.parent) return [];
     final db = Supabase.instance.client;
     var query = db.from('lessons')
       .select('id,title,description,content,scheduled_at,duration_minutes,subjects(name),classes(name)')
@@ -3008,9 +3009,9 @@ class _LearningTabState extends State<_LearningTab> {
   Widget build(BuildContext context) => RefreshIndicator(
     color: AppColors.brown, onRefresh: _refresh,
     child: ListView(padding: const EdgeInsets.all(20), children: [
-      Text(widget.tutor ? 'Tutor workspace' : 'My learning', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      Text(widget.tutor ? 'Tutor workspace' : widget.parent ? 'Parent learning' : 'My learning', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700, color: AppColors.ink)),
       const SizedBox(height: 7),
-      Text(widget.tutor ? 'Take attendance for the classes assigned to you.' : 'Open a lesson to read its notes and learning materials.', style: const TextStyle(color: AppColors.muted, height: 1.45)),
+      Text(widget.tutor ? 'Take attendance for the classes assigned to you.' : widget.parent ? 'Follow your child’s learning progress, assignments and results.' : 'Open a lesson to read its notes and learning materials.', style: const TextStyle(color: AppColors.muted, height: 1.45)),
       const SizedBox(height: 20),
       if (widget.tutor) Card(
         child: ListTile(
@@ -3023,7 +3024,19 @@ class _LearningTabState extends State<_LearningTab> {
         ),
       ),
       if (widget.tutor) const SizedBox(height: 10),
-      if (!widget.owner && !widget.admin && !widget.tutor) Card(
+      if (widget.parent) Card(
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.family_restroom_outlined, color: AppColors.brown)),
+          title: const Text('Parent / guardian dashboard', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+          subtitle: const Text('Link your child and follow their learning activity'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const GuardianPortalPage())),
+        ),
+      ),
+      if (widget.parent) const SizedBox(height: 10),
+
+      if (!widget.owner && !widget.admin && !widget.tutor && !widget.parent) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.school_outlined, color: AppColors.brown)),
@@ -3033,8 +3046,8 @@ class _LearningTabState extends State<_LearningTab> {
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LearningAccessPage())),
         ),
       ),
-      if (!widget.owner && !widget.admin && !widget.tutor) const SizedBox(height: 10),
-      if (!widget.owner && !widget.admin && !widget.tutor) Card(
+      if (!widget.owner && !widget.admin && !widget.tutor && !widget.parent) const SizedBox(height: 10),
+      if (!widget.owner && !widget.admin && !widget.tutor && !widget.parent) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.event_available_outlined, color: AppColors.brown)),
@@ -3044,8 +3057,8 @@ class _LearningTabState extends State<_LearningTab> {
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const StudentAttendancePage())),
         ),
       ),
-      if (!widget.owner && !widget.admin && !widget.tutor) const SizedBox(height: 10),
-      if (!widget.owner && !widget.admin && !widget.tutor) Card(
+      if (!widget.owner && !widget.admin && !widget.tutor && !widget.parent) const SizedBox(height: 10),
+      if (!widget.owner && !widget.admin && !widget.tutor && !widget.parent) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Container(width: 44, height: 44,
@@ -3057,7 +3070,7 @@ class _LearningTabState extends State<_LearningTab> {
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const StudentAssignmentsPage())),
         ),
       ),
-      if (!widget.owner && !widget.admin && !widget.tutor) const SizedBox(height: 10),
+      if (!widget.owner && !widget.admin && !widget.tutor && !widget.parent) const SizedBox(height: 10),
       if (!widget.tutor) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
