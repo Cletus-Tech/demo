@@ -1379,7 +1379,7 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
   void initState(){super.initState();_items=_load();}
   Future<List<Map<String,dynamic>>> _load() async{
     final rows=await Supabase.instance.client.from('assignments')
-      .select('id,title,instructions,due_at,max_score,published_at,classes(name),subjects(name),assignment_submissions(id)')
+      .select('id,title,instructions,due_at,max_score,published_at,tutor_id,classes(name),subjects(name),assignment_submissions(id)')
       .order('created_at',ascending:false);
     return List<Map<String,dynamic>>.from(rows);
   }
@@ -1389,18 +1389,29 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
     final due=TextEditingController();final max=TextEditingController(text:'10');
     try{
       final db=Supabase.instance.client;
-      final classes=await db.from('classes').select('id,name').eq('status','active').order('name');
-      final subjects=await db.from('subjects').select('id,name').eq('status','active').order('name');
+      final setup=await Future.wait([
+        db.from('classes').select('id,name').eq('status','active').order('name'),
+        db.from('subjects').select('id,name').eq('status','active').order('name'),
+        db.rpc('admin_class_tutor_options'),
+      ]);
+      final classes=List<Map<String,dynamic>>.from(setup[0] as List);
+      final subjects=List<Map<String,dynamic>>.from(setup[1] as List);
+      final tutorOptions=List<Map<String,dynamic>>.from((setup[2] as List).map((e)=>Map<String,dynamic>.from(e as Map)));
       if(classes.isEmpty||subjects.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Create an active class and subject first.')));return;}
       String? classId=classes.first['id'].toString();String? subjectId=subjects.first['id'].toString();
+      String tutorId='';
+      List<Map<String,dynamic>> eligibleTutors(String? c,String? sub)=>tutorOptions.where((t)=>t['class_id']==c&&t['subject_id']==sub).toList();
       final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refreshDialog)=>AlertDialog(
         title:const Text('Create assignment'),
         content:SizedBox(width:460,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
           TextField(controller:title,decoration:const InputDecoration(labelText:'Assignment title')),
           DropdownButtonFormField<String>(value:classId,decoration:const InputDecoration(labelText:'Class'),
-            items:classes.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(()=>classId=v)),
+            items:classes.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(()=>{classId=v;final options=eligibleTutors(classId,subjectId);tutorId=options.isEmpty?'':options.first['tutor_id'].toString();})),
           DropdownButtonFormField<String>(value:subjectId,decoration:const InputDecoration(labelText:'Subject'),
-            items:subjects.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(()=>subjectId=v)),
+            items:subjects.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(()=>{subjectId=v;final options=eligibleTutors(classId,subjectId);tutorId=options.isEmpty?'':options.first['tutor_id'].toString();})),
+          DropdownButtonFormField<String>(value:tutorId,decoration:const InputDecoration(labelText:'Assigned tutor (optional)'),
+            items:[const DropdownMenuItem<String>(value:'',child:Text('No tutor assigned')),...eligibleTutors(classId,subjectId).map((t)=>DropdownMenuItem<String>(value:t['tutor_id'].toString(),child:Text(t['tutor_name'].toString())))],
+            onChanged:(v)=>refreshDialog(()=>tutorId=v??'')),
           TextField(controller:instructions,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'Instructions')),
           TextField(controller:due,decoration:const InputDecoration(labelText:'Due date/time (optional, e.g. 2026-12-01 16:00)')),
           TextField(controller:max,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Maximum marks (optional)')),
@@ -1419,6 +1430,7 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
       await db.from('assignments').insert({
         'title':title.text.trim(),'class_id':classId,'subject_id':subjectId,
         'instructions':instructions.text.trim().isEmpty?null:instructions.text.trim(),
+        'tutor_id':tutorId.isEmpty?null:tutorId,
         'due_at':dueDate?.toUtc().toIso8601String(),'max_score':maxScore,
       });
       await _refresh();
@@ -1452,7 +1464,7 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
           final published=r['published_at']!=null;
           return Card(margin:const EdgeInsets.only(bottom:10),child:ListTile(
             title:Text(r['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
-            subtitle:Text((r['classes']?['name']??'Class').toString()+' • '+(r['subjects']?['name']??'Subject').toString()+' • '+count.toString()+' submissions • '+(published?'Published':'Draft')),
+            subtitle:Text((r['classes']?['name']??'Class').toString()+' • '+(r['subjects']?['name']??'Subject').toString()+' • '+(r['tutor_id']==null?'No tutor assigned':'Tutor assigned')+' • '+count.toString()+' submissions • '+(published?'Published':'Draft')),
             trailing:PopupMenuButton<String>(onSelected:(v)async{
               if(v=='submissions')await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>AdminAssignmentSubmissionsPage(assignment:r)));
               if(v=='publish'||v=='draft')await _togglePublish(r);
