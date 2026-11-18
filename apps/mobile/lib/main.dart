@@ -3224,7 +3224,7 @@ class _TutorWorkspacePageState extends State<TutorWorkspacePage> {
           title:Text((l['title']??'Lesson').toString(),style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
           subtitle:Text('${l['class_name']??''} • ${l['subject_name']??''} • ${_date(l['scheduled_at'])}'),
           trailing:const Icon(Icons.chevron_right_rounded),
-          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>LessonDetailPage(lesson:l))),
+          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>LessonDetailPage(lesson:l,allowCompletion:false))),
         ))),
         const SizedBox(height:16),
         const Text('ASSIGNMENTS & STUDENT WORK',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
@@ -3509,17 +3509,40 @@ class _LearningTabState extends State<_LearningTab> {
 }
 class LessonDetailPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const LessonDetailPage({super.key, required this.lesson});
+  final bool allowCompletion;
+  const LessonDetailPage({super.key, required this.lesson, this.allowCompletion = true});
   @override
   State<LessonDetailPage> createState() => _LessonDetailPageState();
 }
 class _LessonDetailPageState extends State<LessonDetailPage> {
   late Future<List<Map<String, dynamic>>> _materials;
+  late Future<bool> _completed;
+  bool _markingComplete = false;
   @override
   void initState() {
     super.initState();
     _materials = Supabase.instance.client.from('learning_materials').select('id,title,material_type,storage_path,external_url')
       .eq('lesson_id', widget.lesson['id']).then((rows) => List<Map<String, dynamic>>.from(rows));
+    _completed = widget.allowCompletion ? _loadCompletion() : Future<bool>.value(false);
+  }
+  Future<bool> _loadCompletion() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return false;
+    final row = await Supabase.instance.client.from('lesson_completions').select('id')
+      .eq('user_id', userId).eq('lesson_id', widget.lesson['id']).maybeSingle();
+    return row != null;
+  }
+  Future<void> _markComplete() async {
+    setState(() => _markingComplete = true);
+    try {
+      await Supabase.instance.client.rpc('mark_lesson_completed', params: {'p_lesson_id': widget.lesson['id']});
+      if (mounted) {
+        setState(() => _completed = Future<bool>.value(true));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lesson marked as completed.')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update lesson progress: $e')));
+    } finally { if (mounted) setState(() => _markingComplete = false); }
   }
   @override
   Widget build(BuildContext context) {
@@ -3542,6 +3565,21 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
         const SizedBox(height: 8),
         Text('Live class schedule: ${DateTime.tryParse(lesson['scheduled_at'].toString())?.toLocal().toString() ?? ''}',
           style: const TextStyle(color: AppColors.muted)),
+      ],
+      if (widget.allowCompletion) ...[
+        const SizedBox(height: 14),
+        FutureBuilder<bool>(future: _completed, builder: (context, progress) {
+          final done = progress.data == true;
+          return Card(child: ListTile(
+            leading: Icon(done ? Icons.check_circle : Icons.radio_button_unchecked,
+              color: done ? Colors.green.shade700 : AppColors.brown),
+            title: Text(done ? 'Lesson completed' : 'Mark lesson as completed',
+              style: const TextStyle(fontWeight: FontWeight.w700,color:AppColors.ink)),
+            subtitle: Text(done ? 'Your progress has been saved.' : 'Mark this lesson when you have finished studying it.'),
+            trailing: _markingComplete ? const SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)) : null,
+            onTap: done || _markingComplete ? null : _markComplete,
+          ));
+        }),
       ],
       const SizedBox(height: 22),
       const Text('LESSON NOTES', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
@@ -3604,6 +3642,8 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
       client.from('assessment_attempts').select('id').eq('student_id', studentId),
       client.from('results').select('id').eq('student_id', studentId).not('published_at', 'is', null),
       client.from('attendance_records').select('id,status').eq('student_id', studentId),
+      client.from('lesson_completions').select('id').eq('user_id', userId),
+      client.from('lessons').select('id').eq('is_published', true),
     ]);
     final submissions = List<Map<String,dynamic>>.from(values[1]);
     final graded = submissions.where((r) => r['status'] == 'graded' && r['score'] is num).toList();
@@ -3629,6 +3669,8 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
       'results': values[3].length,
       'attendance_days': attendance.length,
       'attendance_rate': attendanceRate,
+      'completed_lessons': values[5].length,
+      'available_lessons': values[6].length,
     };
   }
 
@@ -3747,8 +3789,10 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
                   detail: stats['results'].toString() + ' results available to you',
                 ),
                 const SizedBox(height: 18),
-                const _InfoNotice(
-                  message: 'These figures come from your actual learner records. Lesson completion is not yet tracked separately, so it is not included as a completed-lesson figure.',
+                _FeatureRow(
+                  icon: Icons.menu_book_outlined,
+                  title: 'Lessons completed',
+                  detail: stats['completed_lessons'].toString() + ' of ' + stats['available_lessons'].toString() + ' published lessons completed',
                 ),
               ],
             );
