@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'learning_access.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Keep release and web clients aligned with the active Supabase project.
@@ -245,6 +246,16 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
             }
             final permissions = accessSnapshot.data ?? <String>{};
             return Column(children: [
+              if (permissions.contains('finance.manage') || permissions.contains('students.manage')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.account_balance_outlined, color: AppColors.brown),
+                  title: const Text('Learning access & payments'),
+                  subtitle: const Text('Manage programme fees, bank details and payment approvals'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(OwnerLearningAccessPage(owner: widget.owner)),
+                )),
+                const SizedBox(height: 8),
+              ],
               if (permissions.contains('students.manage')) ...[
                 Card(child: ListTile(
                   leading: const Icon(Icons.people_alt_outlined, color: AppColors.brown),
@@ -2656,6 +2667,17 @@ class _LearningTabState extends State<_LearningTab> {
         ),
       ),
       if (widget.tutor) const SizedBox(height: 10),
+      if (!widget.owner && !widget.admin && !widget.tutor) Card(
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.paleGold, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.school_outlined, color: AppColors.brown)),
+          title: const Text('Learning programmes', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+          subtitle: const Text('Choose a class programme, view fees and request classroom access'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LearningAccessPage())),
+        ),
+      ),
+      if (!widget.owner && !widget.admin && !widget.tutor) const SizedBox(height: 10),
       if (!widget.owner && !widget.admin && !widget.tutor) Card(
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
