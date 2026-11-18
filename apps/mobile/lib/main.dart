@@ -1126,7 +1126,8 @@ class _AdminAttendancePageState extends State<AdminAttendancePage> {
       if (classes.isEmpty || sessions.isEmpty) return ListView(padding: const EdgeInsets.all(20), children: [
         const Text('Class attendance', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
         const SizedBox(height: 12),
-        _InfoNotice(message: classes.isEmpty ? 'Create an active class before taking attendance.'
+        _InfoNotice(message: classes.isEmpty
+          ? 'No active classes are available to this account. If you are a tutor, ask the centre to assign you to a class. Otherwise, create an active class.'
           : 'Create an academic session before taking attendance.'),
       ]);
       return Column(children: [
@@ -1181,12 +1182,13 @@ class _AdminAttendancePageState extends State<AdminAttendancePage> {
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(value: _statuses[id] ?? 'unmarked',
                         decoration: const InputDecoration(labelText: 'Attendance status'),
-                        items: const [
-                          DropdownMenuItem(value: 'unmarked', child: Text('Not marked')),
-                          DropdownMenuItem(value: 'present', child: Text('Present')),
-                          DropdownMenuItem(value: 'absent', child: Text('Absent')),
-                          DropdownMenuItem(value: 'late', child: Text('Late')),
-                          DropdownMenuItem(value: 'excused', child: Text('Excused')),
+                        items: [
+                          if (row['attendance_id'] == null)
+                            const DropdownMenuItem(value: 'unmarked', child: Text('Not marked')),
+                          const DropdownMenuItem(value: 'present', child: Text('Present')),
+                          const DropdownMenuItem(value: 'absent', child: Text('Absent')),
+                          const DropdownMenuItem(value: 'late', child: Text('Late')),
+                          const DropdownMenuItem(value: 'excused', child: Text('Excused')),
                         ],
                         onChanged: (v) => setState(() => _statuses[id] = v ?? 'unmarked')),
                       const SizedBox(height: 7),
