@@ -2637,24 +2637,10 @@ class _AdminAccountsPageState extends State<AdminAccountsPage> {
   void initState() { super.initState(); _accounts = _load(); }
 
   Future<List<Map<String, dynamic>>> _load() async {
-    final db = Supabase.instance.client;
-    final results = await Future.wait<dynamic>([
-      db.from('profiles').select('id,full_name,email,account_type,created_at').order('created_at', ascending: false),
-      db.from('user_roles').select('user_id,role'),
-      db.from('students').select('id,user_id,level,status'),
-    ]);
-    final profiles = List<Map<String, dynamic>>.from(results[0]);
-    final roles = List<Map<String, dynamic>>.from(results[1]);
-    final students = List<Map<String, dynamic>>.from(results[2]);
-    for (final profile in profiles) {
-      final id = profile['id'].toString();
-      profile['roles'] = roles.where((r) => r['user_id'].toString() == id).toList();
-      final matchingStudents = students.where((st) => st['user_id']?.toString() == id).toList();
-      profile['student'] = matchingStudents.isEmpty ? null : matchingStudents.first;
-    }
-    return profiles;
+    final raw = await Supabase.instance.client.rpc('admin_registered_accounts');
+    if (raw is! List) return [];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
-
   Future<void> _refresh() async {
     final next = _load();
     setState(() => _accounts = next);
