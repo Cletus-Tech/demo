@@ -2649,7 +2649,8 @@ class _AdminAccountsPageState extends State<AdminAccountsPage> {
     for (final profile in profiles) {
       final id = profile['id'].toString();
       profile['roles'] = roles.where((r) => r['user_id'].toString() == id).toList();
-      profile['student'] = students.where((st) => st['user_id']?.toString() == id).cast<Map<String, dynamic>>().firstOrNull;
+      final matchingStudents = students.where((st) => st['user_id']?.toString() == id).toList();
+      profile['student'] = matchingStudents.isEmpty ? null : matchingStudents.first;
     }
     return profiles;
   }
