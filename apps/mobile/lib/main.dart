@@ -275,6 +275,16 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                 )),
                 const SizedBox(height: 8),
               ],
+              if (permissions.contains('students.manage') && !permissions.contains('academics.manage')) ...[
+                Card(child: ListTile(
+                  leading: const Icon(Icons.fact_check_outlined, color: AppColors.brown),
+                  title: const Text('Class attendance'),
+                  subtitle: const Text('Take attendance and review class registers'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminAttendancePage()),
+                )),
+                const SizedBox(height: 8),
+              ],
               if (permissions.contains('staff.manage')) ...[
                 Card(child: ListTile(
                   leading: const Icon(Icons.badge_outlined, color: AppColors.brown),
