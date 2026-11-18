@@ -34,12 +34,12 @@ create or replace function private.request_guardian_link(
 ) returns jsonb language plpgsql security definer set search_path = ''
 as $$
 declare
-  v_guardian_id uuid; v_student_id uuid; v_email text; v_relationship text;
+  v_guardian_id uuid; v_student_id uuid; v_email text; v_relationship text; v_request_id uuid;
 begin
   if auth.uid() is null then raise exception 'Sign in to submit a parent link request'; end if;
   v_email := lower(btrim(coalesce(p_student_email,'')));
   v_relationship := left(nullif(btrim(coalesce(p_relationship,'')),''),40);
-  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$' then
     raise exception 'Enter the learner account email address';
   end if;
   if v_relationship is null then v_relationship := 'Parent'; end if;
@@ -55,11 +55,15 @@ begin
   where lower(pr.email)=v_email and pr.id<>auth.uid()
   limit 1;
 
-  if exists (
-    select 1 from public.guardian_link_requests q
-    where q.guardian_user_id=auth.uid() and lower(q.requested_email)=v_email and q.status='pending'
-  ) then
-    return jsonb_build_object('status','pending','message','Your request is already awaiting review.');
+  select q.id into v_request_id
+  from public.guardian_link_requests q
+  where q.guardian_user_id=auth.uid() and lower(q.requested_email)=v_email and q.status='pending'
+  order by q.created_at desc limit 1;
+  if v_request_id is not null then
+    update public.guardian_link_requests
+    set student_id=v_student_id,guardian_id=v_guardian_id,relationship=v_relationship
+    where id=v_request_id;
+    return jsonb_build_object('status','pending','message','Your request is already awaiting review. The learner account match has been refreshed.');
   end if;
 
   insert into public.guardian_link_requests(
