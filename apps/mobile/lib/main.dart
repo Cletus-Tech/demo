@@ -3247,7 +3247,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
     if (student == null) return {'linked': false};
     final studentId = student['id'];
     final values = await Future.wait([
-      client.from('enrolments').select('id').eq('student_id', studentId),
+      client.from('learning_access_requests').select('id').eq('user_id', userId).eq('status', 'approved'),
       client.from('assignment_submissions').select('id,status,score,assignments(max_score)').eq('student_id', studentId),
       client.from('assessment_attempts').select('id').eq('student_id', studentId),
       client.from('results').select('id').eq('student_id', studentId).not('published_at', 'is', null),
@@ -3269,7 +3269,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
     final attendanceRate = attendanceDays == 0 ? null : attendedDays * 100 / attendanceDays;
     return {
       'linked': true,
-      'enrolments': values[0].length,
+      'programmes': values[0].length,
       'submissions': submissions.length,
       'graded': graded.length,
       'assignment_average': average,
@@ -3350,15 +3350,15 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
             final stats = snapshot.data!;
             if (stats['linked'] != true) {
               return const _InfoNotice(
-                message: 'Your learner profile has not yet been linked to a student record by the centre. Your analytics will appear after the centre completes your enrolment.',
+                message: 'Your learner profile is not ready yet. Your learning statistics will appear once your account is activated for a programme.',
               );
             }
             return Column(
               children: [
                 _FeatureRow(
                   icon: Icons.class_outlined,
-                  title: 'Active enrolments',
-                  detail: stats['enrolments'].toString() + ' recorded class enrolments',
+                  title: 'Active learning programmes',
+                  detail: stats['programmes'].toString() + ' approved programmes',
                 ),
                 const SizedBox(height: 10),
                 _FeatureRow(
