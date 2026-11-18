@@ -31,6 +31,54 @@ abstract final class AppColors {
   static const paleGold = Color(0xFFF5EBD7);
 }
 
+class YoungLearnersLogo extends StatelessWidget {
+  final bool compact;
+  const YoungLearnersLogo({super.key, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final markWidth = compact ? 44.0 : 76.0;
+    final markHeight = compact ? 42.0 : 68.0;
+    final mainSize = compact ? 12.0 : 21.0;
+    final subSize = compact ? 8.0 : 12.0;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('YL', style: TextStyle(
+          fontFamily: 'Georgia', fontSize: compact ? 25 : 43,
+          height: .88, fontWeight: FontWeight.w900,
+          letterSpacing: -2, color: AppColors.brown)),
+        SvgPicture.asset('assets/young_learners_logo.svg',
+          width: markWidth, height: markHeight, fit: BoxFit.contain),
+      ]),
+      SizedBox(width: compact ? 7 : 12),
+      Container(width: 2, height: compact ? 43 : 75, color: AppColors.gold),
+      SizedBox(width: compact ? 7 : 12),
+      Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('YOUNG', style: TextStyle(
+          fontSize: mainSize, height: 1, fontWeight: FontWeight.w900,
+          letterSpacing: compact ? .2 : .8, color: AppColors.brown)),
+        Text('LEARNERS', style: TextStyle(
+          fontSize: mainSize, height: 1, fontWeight: FontWeight.w900,
+          letterSpacing: compact ? .1 : .7, color: AppColors.brown)),
+        SizedBox(height: compact ? 2 : 5),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10, vertical: compact ? 1 : 3),
+          decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(6)),
+          child: Text('TUTORIAL', style: TextStyle(
+            fontSize: subSize, height: 1, fontWeight: FontWeight.w900,
+            letterSpacing: compact ? 1 : 2, color: AppColors.brown)),
+        ),
+        if (!compact) ...[
+          const SizedBox(height: 5),
+          const Text('EVERY CHILD CAN LEARN',
+            style: TextStyle(fontSize: 10, letterSpacing: 1.1,
+              fontWeight: FontWeight.w700, color: AppColors.brown)),
+        ],
+      ]),
+    ]);
+  }
+}
+
 class YoungLearnersApp extends StatelessWidget {
   const YoungLearnersApp({super.key});
 
@@ -2250,12 +2298,7 @@ class _SignInPageState extends State<SignInPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Center(child: SvgPicture.asset(
-                        'assets/young_learners_logo.svg',
-                        width: 300,
-                        height: 96,
-                        fit: BoxFit.contain,
-                      )),
+                      const Center(child: YoungLearnersLogo()),
                       const SizedBox(height: 16),
                       Text(_creating ? 'Create your account.' : 'Sign in to continue learning.',
                         style: const TextStyle(color: AppColors.muted)),
@@ -2399,13 +2442,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: titles[_selectedIndex] == 'Home'
-            ? SvgPicture.asset(
-                'assets/young_learners_logo.svg',
-                width: 210,
-                height: 48,
-                fit: BoxFit.contain,
-                alignment: Alignment.centerLeft,
-              )
+            ? const YoungLearnersLogo(compact: true)
             : Text(
                 titles[_selectedIndex],
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
