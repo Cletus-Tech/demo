@@ -247,8 +247,8 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
           ]),
           const SizedBox(height:8),
           Row(children:[
-            Expanded(child:TextField(controller:_maxCa,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Maximum CA'))),
-            const SizedBox(width:8),Expanded(child:TextField(controller:_maxExam,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Maximum exam'))),
+            Expanded(child:TextField(controller:_maxCa,keyboardType:const TextInputType.numberWithOptions(decimal:true),onChanged:(_)=>setState((){}),decoration:const InputDecoration(labelText:'Maximum CA'))),
+            const SizedBox(width:8),Expanded(child:TextField(controller:_maxExam,keyboardType:const TextInputType.numberWithOptions(decimal:true),onChanged:(_)=>setState((){}),decoration:const InputDecoration(labelText:'Maximum exam'))),
           ]),
           const SizedBox(height:9),
           SizedBox(width:double.infinity,child:FilledButton.icon(
@@ -275,9 +275,9 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
                   Text((student['profiles']?['full_name']??'Learner').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),
                   const SizedBox(height:8),
                   Row(children:[
-                    Expanded(child:TextField(controller:_ca[id],keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'CA / $maxCa',isDense:true))),
+                    Expanded(child:TextField(controller:_ca[id],keyboardType:const TextInputType.numberWithOptions(decimal:true),onChanged:(_)=>setState((){}),decoration:InputDecoration(labelText:'CA / $maxCa',isDense:true))),
                     const SizedBox(width:8),
-                    Expanded(child:TextField(controller:_exam[id],keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'Exam / $maxExam',isDense:true))),
+                    Expanded(child:TextField(controller:_exam[id],keyboardType:const TextInputType.numberWithOptions(decimal:true),onChanged:(_)=>setState((){}),decoration:InputDecoration(labelText:'Exam / $maxExam',isDense:true))),
                   ]),
                   const SizedBox(height:8),
                   TextField(controller:_teacherComments[id],maxLines:2,
