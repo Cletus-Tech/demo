@@ -36,7 +36,7 @@ jobs:
               raise SystemExit("Generated Android settings.gradle.kts is missing")
           content = settings.read_text()
           block = "pluginManagement {\\n    repositories {\\n        google()\\n        mavenCentral()\\n        gradlePluginPortal()\\n    }\\n}"
-          pattern = r"pluginManagement\\s*\\{.*?repositories\\s*\\{.*?\\}\\s*\\}"
+          pattern = r"pluginManagement\s*\{.*?repositories\s*\{.*?\}\s*\}"
           updated, count = re.subn(pattern, block, content, count=1, flags=re.S)
           if count == 0:
               raise SystemExit("Could not safely locate pluginManagement repositories")
