@@ -6584,7 +6584,7 @@ class _TutorInterviewCentrePageState extends State<TutorInterviewCentrePage>{
   }
   Future<List<Map<String,dynamic>>> _loadApplications() async{
     final rows=await Supabase.instance.client.from('tutor_applications')
-      .select('*,profiles(full_name,email)')
+      .select('*,profiles!tutor_applications_user_id_fkey(full_name,email)')
       .order('created_at',ascending:false);
     return List<Map<String,dynamic>>.from(rows);
   }
