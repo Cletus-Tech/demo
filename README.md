@@ -37,6 +37,7 @@ The live backend uses Supabase for authentication, Postgres, Row Level Security,
 
 ## Current feature boundaries
 
+- Tutor applications are reviewed by the centre. Approval activates the tutor account and automatically maps the applicant's selected active classes and subjects into tutor classroom assignments; unmatched catalogue selections are flagged for administrator correction.
 - Learning access uses administrator-reviewed programme/payment requests. After approval, an authorised administrator issues a unique 10-character classroom PIN; learners redeem it to unlock published lessons for the approved programme. PINs are stored as hashes and are shown to the administrator only at issuance. This workflow still requires end-to-end role-based QA.
 - Payments currently use a manual submission and administrator review process; no live payment gateway is configured.
 - Lessons, programmes, learning materials, assessments and CBT questions must be configured by the centre before learners can use those areas meaningfully.
