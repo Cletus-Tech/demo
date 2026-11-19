@@ -57,11 +57,23 @@ A first implementation is now connected to the approved payment workflow. An aut
 
 The database migration and learner/admin UI are committed. This workflow still needs authenticated role-based testing (issue, redeem, wrong PIN, reuse, multiple programmes, and cross-account denial) before public release.
 
-### 4. Payments — Limited scope
+### 4. Tutor application → tutor workspace — Connected, awaiting end-to-end verification
+
+The tutor application form already captured selected class levels and subjects, but approval previously created an active tutor account without converting those selections into `class_tutors` records. That left approved applicants with no assigned classrooms. The approval RPC now activates the tutor role and automatically creates matching class/subject assignments from the submitted selections. The administrator receives a result showing how many class/subject combinations were connected; unmatched catalogue selections are explicitly flagged for manual correction. Reversing an approved application also deactivates the tutor record and removes the tutor role.
+
+The review dropdown now includes the initial `submitted` stage, preventing the first review dialog from receiving a value absent from its options.
+
+### 5. Classroom access — PIN enforced across learner surfaces
+
+Learner classroom directory entries now appear only after a classroom PIN has been redeemed. Published classroom posts and learner assignment lists also require a redeemed, non-revoked PIN for the relevant programme/class. Published lessons already use the same gate. Parent supervised classroom access and assigned tutor access remain separate paths.
+
+These are backend and UI connection fixes. They still require authenticated tests for learner, guardian, tutor and administrator roles, including wrong/reused PINs and cross-account access denial.
+
+### 6. Payments — Limited scope
 
 The current workflow is manual payment submission and administrator review. A live payment gateway/automated payment confirmation is not configured. This must be clearly labelled as manual payment in the first release unless a payment provider is integrated.
 
-### 5. Native release packaging — Critical before store release
+### 7. Native release packaging — Critical before store release
 
 - Android APK workflow builds release-mode APKs, but no production signing keystore is configured in the workflow. Treat the artifact as a QA/sideload build, not a Play Store-ready signed release.
 - No iOS build workflow or IPA/TestFlight configuration is present.
@@ -69,7 +81,7 @@ The current workflow is manual payment submission and administrator review. A li
 
 **Required:** branded Android application ID, launcher icon/splash, release keystore and signing secrets; iOS project, Apple signing/provisioning and TestFlight workflow.
 
-### 6. Database migration source drift — Critical for reproducible deployment
+### 8. Database migration source drift — Critical for reproducible deployment
 
 The live Supabase migration history and repository migration files are not aligned: **60 migrations are applied in Supabase, while this branch contains 46 migration files; 28 applied migration names have no matching source file, 14 local migration files are not represented in the live history, and 25 same-name migrations have different version timestamps.** Do not run a blanket `supabase db push` or reset against production until this is reconciled.
 
@@ -81,7 +93,7 @@ The recent hardening changes are now recorded as migrations:
 
 **Required:** reconcile every applied migration against its source, restore missing migration files, correct version/name mismatches safely, and verify a clean rebuild on a separate development database before production deployment. The three new classroom PIN migrations are now present in this branch.
 
-### 7. Child-data privacy and security
+### 9. Child-data privacy and security
 
 - Profile photos are now private and served through short-lived signed URLs.
 - Profile table update permissions are restricted to editable columns and the own-profile RLS policy.
