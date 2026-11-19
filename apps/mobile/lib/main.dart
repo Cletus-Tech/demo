@@ -3556,6 +3556,88 @@ class _DashboardUpdateDetailPageState extends State<DashboardUpdateDetailPage> {
   );
 }
 
+class TutorApplicationStatusPage extends StatefulWidget {
+  final String applicationId;
+  const TutorApplicationStatusPage({super.key, required this.applicationId});
+
+  @override
+  State<TutorApplicationStatusPage> createState() => _TutorApplicationStatusPageState();
+}
+
+class _TutorApplicationStatusPageState extends State<TutorApplicationStatusPage> {
+  late Future<Map<String, dynamic>?> _application;
+
+  @override
+  void initState() {
+    super.initState();
+    _application = Supabase.instance.client
+        .from('tutor_applications')
+        .select('id,qualification,status,interview_at,review_note,created_at,reviewed_at')
+        .eq('id', widget.applicationId)
+        .maybeSingle();
+  }
+
+  String _statusLabel(String value) => value.replaceAll('_', ' ').split(' ')
+      .map((part) => part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Tutor application')),
+    body: FutureBuilder<Map<String, dynamic>?>(
+      future: _application,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return const Center(child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('Your tutor application details could not be found.'),
+          ));
+        }
+        final row = snapshot.data!;
+        final status = (row['status'] ?? 'submitted').toString();
+        final interview = DateTime.tryParse(row['interview_at']?.toString() ?? '')?.toLocal();
+        return ListView(padding: const EdgeInsets.all(20), children: [
+          Card(child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Application status', style: TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(_statusLabel(status), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+              if ((row['qualification'] ?? '').toString().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('Qualification: ${row['qualification']}'),
+              ],
+              if (interview != null) ...[
+                const SizedBox(height: 10),
+                Text('Interview: ${interview.toString()}'),
+              ],
+              if ((row['review_note'] ?? '').toString().isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Text('Centre feedback', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 5),
+                Text(row['review_note'].toString()),
+              ],
+            ]),
+          )),
+          if (status == 'approved') ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => const TutorWorkspacePage(),
+              )),
+              icon: const Icon(Icons.dashboard_outlined),
+              label: const Text('Open tutor workspace'),
+            ),
+          ],
+        ]);
+      },
+    ),
+  );
+}
+
 class NotificationMessagePage extends StatelessWidget {
   final String title;
   final String body;
@@ -3606,7 +3688,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final client = Supabase.instance.client;
     final notifications = await client
         .from('notifications')
-        .select('id,title,body,read_at,created_at,announcement_id')
+        .select('id,title,body,read_at,created_at,announcement_id,target_type,target_id')
         .order('created_at', ascending: false);
     final now = DateTime.now().toUtc().toIso8601String();
     final announcements = await client
@@ -3665,12 +3747,36 @@ class _NotificationsPageState extends State<NotificationsPage> {
       }
     }
     if (!mounted) return;
-    final linkedId = item['kind'] == 'announcement'
-        ? item['id']?.toString()
-        : item['announcement_id']?.toString();
-    if (linkedId != null && linkedId.isNotEmpty) {
+    final targetType = (item['target_type'] ??
+      (item['kind'] == 'announcement' || item['announcement_id'] != null ? 'announcement' : ''))
+      .toString();
+    final targetId = (item['target_id'] ?? item['announcement_id'] ??
+      (item['kind'] == 'announcement' ? item['id'] : null))?.toString();
+    Widget? destination;
+    switch (targetType) {
+      case 'announcement':
+        if (targetId != null && targetId.isNotEmpty) {
+          destination = DashboardUpdateDetailPage(announcementId: targetId);
+        }
+        break;
+      case 'learning_access':
+        destination = const LearningAccessPage();
+        break;
+      case 'result_period':
+        destination = const StudentReleasedResultsPage();
+        break;
+      case 'parent_link':
+        destination = const GuardianPortalPage();
+        break;
+      case 'tutor_application':
+        if (targetId != null && targetId.isNotEmpty) {
+          destination = TutorApplicationStatusPage(applicationId: targetId);
+        }
+        break;
+    }
+    if (destination != null) {
       await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => DashboardUpdateDetailPage(announcementId: linkedId),
+        builder: (_) => destination!,
       ));
       return;
     }
