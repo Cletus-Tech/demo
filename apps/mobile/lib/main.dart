@@ -198,11 +198,119 @@ class YoungLearnersApp extends StatelessWidget {
           inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.line)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.line)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.brown, width: 1.4))),
         ),
         darkTheme: ThemeData(
-          useMaterial3: true, brightness: Brightness.dark, colorScheme: darkScheme,
+          useMaterial3: true,
+          brightness: Brightness.dark,
+          colorScheme: darkScheme,
           scaffoldBackgroundColor: const Color(0xFF171513),
-          appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF171513), foregroundColor: Color(0xFFF4EFE8), elevation: 0),
-          cardTheme: CardThemeData(color: const Color(0xFF24211E), elevation: 0, margin: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFF3B342D)))),
-          inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: const Color(0xFF2B2723), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF494037))), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF494037))), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.gold, width: 1.4))),
+          canvasColor: const Color(0xFF201D1A),
+          textTheme: ThemeData.dark(useMaterial3: true).textTheme.apply(
+            bodyColor: const Color(0xFFF3EEE7),
+            displayColor: const Color(0xFFF3EEE7),
+          ),
+          primaryTextTheme: ThemeData.dark(useMaterial3: true).primaryTextTheme.apply(
+            bodyColor: const Color(0xFFF3EEE7),
+            displayColor: const Color(0xFFF3EEE7),
+          ),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFF171513),
+            foregroundColor: Color(0xFFF4EFE8),
+            elevation: 0,
+            iconTheme: IconThemeData(color: Color(0xFFF4EFE8)),
+          ),
+          iconTheme: const IconThemeData(color: Color(0xFFE8DCCB)),
+          dividerTheme: const DividerThemeData(color: Color(0xFF40382F), thickness: 1),
+          cardTheme: CardThemeData(
+            color: const Color(0xFF24211E),
+            elevation: 0,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFF3B342D)),
+            ),
+          ),
+          dialogTheme: const DialogThemeData(
+            backgroundColor: Color(0xFF24211E),
+            surfaceTintColor: Colors.transparent,
+            titleTextStyle: TextStyle(color: Color(0xFFF3EEE7), fontSize: 20, fontWeight: FontWeight.w700),
+            contentTextStyle: TextStyle(color: Color(0xFFE2D9CE), fontSize: 14),
+          ),
+          popupMenuTheme: const PopupMenuThemeData(
+            color: Color(0xFF2B2723),
+            textStyle: TextStyle(color: Color(0xFFF3EEE7)),
+          ),
+          bottomSheetTheme: const BottomSheetThemeData(
+            backgroundColor: Color(0xFF24211E),
+            modalBackgroundColor: Color(0xFF24211E),
+            surfaceTintColor: Colors.transparent,
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: const Color(0xFF2B2723),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+            labelStyle: const TextStyle(color: Color(0xFFC9BBAA)),
+            floatingLabelStyle: const TextStyle(color: Color(0xFFFFD98A)),
+            hintStyle: const TextStyle(color: Color(0xFFB0A396)),
+            helperStyle: const TextStyle(color: Color(0xFFB0A396)),
+            errorStyle: const TextStyle(color: Color(0xFFFF9B91)),
+            prefixIconColor: const Color(0xFFC9BBAA),
+            suffixIconColor: const Color(0xFFC9BBAA),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFF494037)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFF494037)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.gold, width: 1.6),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFFF766B)),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFFF9B91), width: 1.5),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFF39332D)),
+            ),
+          ),
+          textSelectionTheme: const TextSelectionThemeData(
+            cursorColor: Color(0xFFFFD98A),
+            selectionColor: Color(0x665F4928),
+            selectionHandleColor: Color(0xFFFFD98A),
+          ),
+          checkboxTheme: CheckboxThemeData(
+            fillColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected) ? AppColors.gold : const Color(0xFF39332D)),
+            checkColor: WidgetStateProperty.all(const Color(0xFF211A12)),
+          ),
+          radioTheme: RadioThemeData(
+            fillColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected) ? AppColors.gold : const Color(0xFFB0A396)),
+          ),
+          switchTheme: SwitchThemeData(
+            thumbColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected) ? AppColors.gold : const Color(0xFFB0A396)),
+            trackColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected) ? const Color(0xFF66502B) : const Color(0xFF39332D)),
+          ),
+          listTileTheme: const ListTileThemeData(
+            iconColor: Color(0xFFE8DCCB),
+            textColor: Color(0xFFF3EEE7),
+          ),
+          snackBarTheme: const SnackBarThemeData(
+            backgroundColor: Color(0xFF39332D),
+            contentTextStyle: TextStyle(color: Color(0xFFF8F3EC)),
+          ),
+          tooltipTheme: const TooltipThemeData(
+            decoration: BoxDecoration(color: Color(0xFF39332D)),
+            textStyle: TextStyle(color: Color(0xFFF8F3EC)),
+          ),
         ),
         home: const AuthGate(),
       );
