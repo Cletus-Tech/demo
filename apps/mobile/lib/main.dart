@@ -927,7 +927,7 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
       _safeRows(() => db.from('attendance_records').select('id,status,attended_at,attendance_date,note').eq('student_id', id).order('attended_at', ascending: false).limit(20)),
       _safeRows(() => db.from('assignment_submissions').select('id,status,score,submitted_at,assignments(title)').eq('student_id', id).order('submitted_at', ascending: false).limit(20)),
       _safeRows(() => db.from('assessment_attempts').select('id,score,submitted_at,assessments(title)').eq('student_id', id).order('started_at', ascending: false).limit(20)),
-      _safeRows(() => db.from('results').select('id,score,grade,published_at,tutor_comment,subjects(name)').eq('student_id', id).order('created_at', ascending: false).limit(20)),
+      _safeRows(() => db.from('results').select('id,score,grade,ca_score,exam_score,max_ca,max_exam,remark,published_at,tutor_comment,subjects(name),result_periods(title,academic_year)').eq('student_id', id).order('created_at', ascending: false).limit(40)),
       _safeRows(() => db.from('invoices').select('id,description,amount,currency,status,due_at').eq('student_id', id).order('created_at', ascending: false).limit(20)),
       _safeRows(() => db.from('payments').select('id,amount,status,paid_at,provider_reference,invoices!inner(description,student_id)').eq('invoices.student_id', id).order('paid_at', ascending: false).limit(20)),
     ]);
@@ -1024,7 +1024,7 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
               _section('Published results', data['results'] ?? [],
                 'No results have been published.',
                 (r) => (r['subjects']?['name'] ?? 'Subject').toString(),
-                (r) => 'Score: ${r['score']} • Grade: ${r['grade'] ?? '—'} • ${_date(r['published_at'])}'),
+                (r) => '${r['result_periods']?['title'] ?? 'Result'} ${r['result_periods']?['academic_year'] ?? ''} • CA: ${r['ca_score'] ?? '—'}/${r['max_ca'] ?? '—'} • Exam: ${r['exam_score'] ?? '—'}/${r['max_exam'] ?? '—'} • Total: ${r['score']} • Grade: ${r['grade'] ?? '—'} • ${r['remark'] ?? ''} • ${_date(r['published_at'])}'),
               _section('School fee invoices', data['invoices'] ?? [],
                 'No fee invoices recorded.',
                 (r) => (r['description'] ?? 'Invoice').toString(),
