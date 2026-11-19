@@ -20,6 +20,36 @@ const supabasePublishableKey = String.fromEnvironment(
   defaultValue: 'sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB',
 );
 
+String _profileAvatarPath(String? storedValue) {
+  final value = (storedValue ?? '').trim();
+  if (value.isEmpty) return '';
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    final uri = Uri.tryParse(value);
+    if (uri == null) return '';
+    const markers = [
+      '/storage/v1/object/public/profile-avatars/',
+      '/storage/v1/object/sign/profile-avatars/',
+    ];
+    for (final marker in markers) {
+      final index = uri.path.indexOf(marker);
+      if (index >= 0) {
+        return Uri.decodeComponent(uri.path.substring(index + marker.length));
+      }
+    }
+    return '';
+  }
+  return value;
+}
+
+Future<String?> _profileAvatarSignedUrl(
+  SupabaseClient client,
+  String? storedValue,
+) async {
+  final path = _profileAvatarPath(storedValue);
+  if (path.isEmpty) return null;
+  return client.storage.from('profile-avatars').createSignedUrl(path, 3600);
+}
+
 class AppThemeController {
   static final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.light);
   static const _key = 'young_learners_theme_mode';
@@ -2862,6 +2892,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
         .select('full_name,email,phone,avatar_url,about_me,occupation,profile_class,interests,skills,aspirations')
         .eq('id', user.id)
         .single();
+    final avatarUrl = await _profileAvatarSignedUrl(client, profile['avatar_url']?.toString());
     final roles = await client
         .from('user_roles')
         .select('role')
@@ -2876,7 +2907,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
       'email': profile['email'] ?? user.email ?? '',
       'role': role,
       'phone': profile['phone'] ?? '',
-      'avatar_url': profile['avatar_url'],
+      'avatar_url': avatarUrl,
       'about_me': profile['about_me'] ?? '',
       'occupation': profile['occupation'] ?? '',
       'profile_class': profile['profile_class'] ?? '',
@@ -5219,19 +5250,23 @@ class _ProfileEditorPageState extends State<ProfileEditorPage>{
     _interests=TextEditingController(),_skills=TextEditingController(),_goals=TextEditingController(),_phone=TextEditingController();
   bool _loading=true,_saving=false,_removeAvatar=false;
   String? _avatarUrl;
+  String? _avatarPath;
   PlatformFile? _photo;
   @override
   void initState(){super.initState();_load();}
   Future<void> _load()async{
     try{
-      final uid=Supabase.instance.client.auth.currentUser!.id;
-      final row=await Supabase.instance.client.from('profiles')
+      final db=Supabase.instance.client;
+      final uid=db.auth.currentUser!.id;
+      final row=await db.from('profiles')
         .select('phone,avatar_url,about_me,occupation,profile_class,interests,skills,aspirations')
         .eq('id',uid).single();
       _about.text=(row['about_me']??'').toString();_occupation.text=(row['occupation']??'').toString();
       _class.text=(row['profile_class']??'').toString();_interests.text=(row['interests']??'').toString();
       _skills.text=(row['skills']??'').toString();_goals.text=(row['aspirations']??'').toString();
-      _phone.text=(row['phone']??'').toString();_avatarUrl=row['avatar_url']?.toString();
+      _phone.text=(row['phone']??'').toString();
+      _avatarPath=_profileAvatarPath(row['avatar_url']?.toString());
+      _avatarUrl=await _profileAvatarSignedUrl(db,row['avatar_url']?.toString());
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Profile details could not load: $e')));}
     finally{if(mounted)setState(()=>_loading=false);}
   }
@@ -5244,37 +5279,43 @@ class _ProfileEditorPageState extends State<ProfileEditorPage>{
     if(mounted)setState((){_photo=file;_removeAvatar=false;});
   }
   Future<void> _save()async{
+    if(_saving)return;
     setState(()=>_saving=true);
     String? uploadedPath;
+    var profileSaved=false;
     try{
       final db=Supabase.instance.client,uid=db.auth.currentUser!.id;
-      String? nextAvatar=_removeAvatar?null:_avatarUrl;
+      final previousAvatarPath=_avatarPath;
+      String? nextAvatarPath=_removeAvatar?null:_avatarPath;
       if(_photo!=null){
         final bytes=_photo!.bytes;if(bytes==null)throw Exception('The selected image could not be read.');
         final ext=_photo!.extension!.toLowerCase();
         uploadedPath='$uid/avatar.$ext';
         await db.storage.from('profile-avatars').uploadBinary(uploadedPath!,bytes,
           fileOptions:FileOptions(contentType:ext=='jpg'||ext=='jpeg'?'image/jpeg':'image/$ext',upsert:true));
-        nextAvatar=db.storage.from('profile-avatars').getPublicUrl(uploadedPath!);
+        nextAvatarPath=uploadedPath;
       }
       String? optional(String v)=>v.trim().isEmpty?null:v.trim();
       await db.from('profiles').update({
-        'phone':optional(_phone.text),'avatar_url':nextAvatar,
+        'phone':optional(_phone.text),'avatar_url':nextAvatarPath,
         'about_me':optional(_about.text),'occupation':optional(_occupation.text),
         'profile_class':optional(_class.text),'interests':optional(_interests.text),
         'skills':optional(_skills.text),'aspirations':optional(_goals.text),
       }).eq('id',uid);
-      if(_removeAvatar&&_avatarUrl!=null){
-        try{final uri=Uri.parse(_avatarUrl!);final marker='/profile-avatars/';final i=uri.path.indexOf(marker);
-          if(i>=0)await db.storage.from('profile-avatars').remove([uri.path.substring(i+marker.length)]);
-        }catch(_){}
+      profileSaved=true;
+      if(previousAvatarPath!=null&&previousAvatarPath!=nextAvatarPath){
+        try{await db.storage.from('profile-avatars').remove([previousAvatarPath]);}catch(_){}
       }
       if(!mounted)return;
       final messenger=ScaffoldMessenger.of(context);
       widget.onSaved();Navigator.of(context).pop();
       messenger.showSnackBar(const SnackBar(content:Text('Your profile has been updated.')));
-    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Profile could not be saved: $e')));}
-    finally{if(mounted)setState(()=>_saving=false);}
+    }catch(e){
+      if(uploadedPath!=null&&!profileSaved){
+        try{await Supabase.instance.client.storage.from('profile-avatars').remove([uploadedPath]);}catch(_){}
+      }
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Profile could not be saved: $e')));
+    }finally{if(mounted)setState(()=>_saving=false);}
   }
   Widget _field(TextEditingController c,String label,{int lines=1,int maxLength=300,String? hint})=>Padding(
     padding:const EdgeInsets.only(bottom:12),child:TextField(controller:c,minLines:lines,maxLines:lines==1?1:4,
