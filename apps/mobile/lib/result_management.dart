@@ -21,6 +21,8 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
   List<Map<String,dynamic>> _students = [];
   final Map<String,TextEditingController> _ca = {};
   final Map<String,TextEditingController> _exam = {};
+  final Map<String,TextEditingController> _teacherComments = {};
+  final Map<String,TextEditingController> _headComments = {};
   bool _loadingRoster=false, _saving=false;
   SupabaseClient get _db => Supabase.instance.client;
 
@@ -34,7 +36,9 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
   void _clearFields(){
     for(final c in _ca.values){c.dispose();}
     for(final c in _exam.values){c.dispose();}
-    _ca.clear();_exam.clear();
+    for(final c in _teacherComments.values){c.dispose();}
+    for(final c in _headComments.values){c.dispose();}
+    _ca.clear();_exam.clear();_teacherComments.clear();_headComments.clear();
   }
   Future<Map<String,dynamic>> _loadOptions() async{
     final v=await Future.wait<dynamic>([
@@ -67,12 +71,21 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
           _ca[id]=TextEditingController(text:(r['ca_score']??0).toString());
           _exam[id]=TextEditingController(text:(r['exam_score']??0).toString());
         }
+        final cards=await _db.from('student_report_cards')
+          .select('student_id,class_teacher_comment,head_teacher_comment').eq('period_id',_periodId!);
+        for(final card in cards){
+          final id=card['student_id'].toString();
+          _teacherComments[id]=TextEditingController(text:(card['class_teacher_comment']??'').toString());
+          _headComments[id]=TextEditingController(text:(card['head_teacher_comment']??'').toString());
+        }
       }
       final list=List<Map<String,dynamic>>.from(rows);
       for(final r in list){
         final id=r['id'].toString();
         _ca.putIfAbsent(id,()=>TextEditingController());
         _exam.putIfAbsent(id,()=>TextEditingController());
+        _teacherComments.putIfAbsent(id,()=>TextEditingController());
+        _headComments.putIfAbsent(id,()=>TextEditingController());
       }
       if(mounted)setState(()=>_students=list);
     }catch(e){
@@ -114,6 +127,15 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
       final periodId=await _ensurePeriod();
       for(final row in payload){row['period_id']=periodId;}
       await _db.from('results').upsert(payload,onConflict:'period_id,student_id,subject_id');
+      final reportCards=_students.map((student){
+        final id=student['id'].toString();
+        return {
+          'period_id':periodId,'student_id':id,
+          'class_teacher_comment':_teacherComments[id]?.text.trim().isEmpty==true?null:_teacherComments[id]?.text.trim(),
+          'head_teacher_comment':_headComments[id]?.text.trim().isEmpty==true?null:_headComments[id]?.text.trim(),
+        };
+      }).toList();
+      await _db.from('student_report_cards').upsert(reportCards,onConflict:'period_id,student_id');
       if(release){
         await _db.rpc('release_result_period',params:{'_period_id':periodId});
         _periodStatus='published';
@@ -133,6 +155,9 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
         .select('score,grade,remark,ca_score,exam_score,max_ca,max_exam,subjects(name)')
         .eq('period_id',_periodId!).eq('student_id',student['id']).order('created_at');
       if(rows.isEmpty)throw Exception('No subject results have been saved for this learner.');
+      final report=await _db.from('student_report_cards')
+        .select('class_teacher_comment,head_teacher_comment,days_school_open,days_present,position_in_class,next_term_begins')
+        .eq('period_id',_periodId!).eq('student_id',student['id']).maybeSingle();
       final doc=pw.Document();
       final total=rows.fold<double>(0,(v,r)=>v+(double.tryParse(r['score'].toString())??0));
       final max=rows.fold<double>(0,(v,r)=>v+(double.tryParse(r['max_ca'].toString())??40)+(double.tryParse(r['max_exam'].toString())??60));
@@ -172,6 +197,12 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
               pw.Text('${max==0?'0':(total/max*100).toStringAsFixed(1)}%',style:pw.TextStyle(fontSize:20,fontWeight:pw.FontWeight.bold,color:PdfColor.fromHex('#4A3022'))),
             ]),
           ])),
+        if((report?['class_teacher_comment']??'').toString().isNotEmpty)
+          pw.Padding(padding:const pw.EdgeInsets.only(top:10),child:pw.Text('CLASS TEACHER’S REMARK: ${report!['class_teacher_comment']}',style:const pw.TextStyle(fontSize:9))),
+        if((report?['head_teacher_comment']??'').toString().isNotEmpty)
+          pw.Padding(padding:const pw.EdgeInsets.only(top:7),child:pw.Text('CENTRE COORDINATOR’S REMARK: ${report!['head_teacher_comment']}',style:const pw.TextStyle(fontSize:9))),
+        if(report?['position_in_class']!=null)
+          pw.Padding(padding:const pw.EdgeInsets.only(top:7),child:pw.Text('POSITION IN CLASS: ${report!['position_in_class']}',style:const pw.TextStyle(fontSize:9))),
         pw.SizedBox(height:28),
         pw.Row(children:[
           pw.Expanded(child:pw.Column(children:[pw.Divider(),pw.Text('CLASS TEACHER',style:const pw.TextStyle(fontSize:8))])),
@@ -248,6 +279,12 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
                     const SizedBox(width:8),
                     Expanded(child:TextField(controller:_exam[id],keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'Exam / $maxExam',isDense:true))),
                   ]),
+                  const SizedBox(height:8),
+                  TextField(controller:_teacherComments[id],maxLines:2,
+                    decoration:const InputDecoration(labelText:'Class teacher’s remark',isDense:true)),
+                  const SizedBox(height:7),
+                  TextField(controller:_headComments[id],maxLines:2,
+                    decoration:const InputDecoration(labelText:'Centre coordinator’s remark',isDense:true)),
                   const SizedBox(height:7),
                   Row(children:[
                     Expanded(child:Text('Total: ${(ca+exam).toStringAsFixed(1)} / ${(maxCa+maxExam).toStringAsFixed(1)}',style:const TextStyle(fontWeight:FontWeight.w700))),
