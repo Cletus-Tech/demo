@@ -669,6 +669,14 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                   onTap: () => _open(const AdminCommunicationsPage()),
                 )),
                 const SizedBox(height: 8),
+                Card(child: ListTile(
+                  leading: const Icon(Icons.palette_outlined, color: AppColors.brown),
+                  title: const Text('Billboard appearance'),
+                  subtitle: const Text('Change the design of an existing notice without editing its message'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminBillboardAppearancePage()),
+                )),
+                const SizedBox(height: 8),
               ],
               if (permissions.contains('academics.manage')) ...[
                 Card(child: ListTile(
@@ -2286,6 +2294,105 @@ class _AdminStaffPageState extends State<AdminStaffPage> {
   );
 }
 
+class AdminBillboardAppearancePage extends StatefulWidget{
+  const AdminBillboardAppearancePage({super.key});
+  @override State<AdminBillboardAppearancePage> createState()=>_AdminBillboardAppearancePageState();
+}
+class _AdminBillboardAppearancePageState extends State<AdminBillboardAppearancePage>{
+  static const styles=<String,String>{
+    'gold':'Warm gold','blue':'Ocean blue','green':'Forest green','rose':'Rose glow',
+    'ocean':'Deep ocean','violet':'Violet light','teal':'Teal shine','sunset':'Sunset glow',
+    'emerald':'Emerald glow','midnight':'Midnight','neon':'Neon night','aurora':'Aurora lights',
+    'royal':'Royal purple','coral':'Coral light',
+  };
+  late Future<List<Map<String,dynamic>>> _items;
+  String? _selected,_style;
+  bool _saving=false;
+  @override void initState(){super.initState();_items=_load();}
+  Future<List<Map<String,dynamic>>> _load()async{
+    final now=DateTime.now().toUtc().toIso8601String();
+    final rows=await Supabase.instance.client.from('announcements')
+      .select('id,title,body,banner_tone,published_at')
+      .not('published_at','is',null).lte('published_at',now)
+      .or('expires_at.is.null,expires_at.gt.$now').order('published_at',ascending:false);
+    final list=List<Map<String,dynamic>>.from(rows);
+    if(list.isNotEmpty){_selected??=list.first['id'].toString();final active=list.where((x)=>x['id'].toString()==_selected).firstOrNull??list.first;_style??=active['banner_tone'].toString();}
+    return list;
+  }
+  Future<void> _save()async{
+    if(_selected==null||_style==null)return;
+    setState(()=>_saving=true);
+    try{
+      await Supabase.instance.client.from('announcements').update({'banner_tone':_style}).eq('id',_selected!);
+      if(mounted){setState(()=>_items=_load());ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Billboard design changed. The headline and message were left untouched.')));}
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Appearance could not be updated: $e')));}
+    finally{if(mounted)setState(()=>_saving=false);}
+  }
+  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Billboard appearance')),
+    body:FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,s){
+      if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+      if(s.hasError)return Center(child:Text('Could not load notices: ${s.error}'));
+      final rows=s.data??[];
+      if(rows.isEmpty)return const Padding(padding:EdgeInsets.all(24),child:Text('There are no active billboard notices to style yet.'));
+      final selected=rows.where((x)=>x['id'].toString()==_selected).firstOrNull??rows.first;
+      return ListView(padding:const EdgeInsets.all(20),children:[
+        const Text('Choose a notice',style:TextStyle(fontWeight:FontWeight.w800)),
+        const SizedBox(height:8),
+        DropdownButtonFormField<String>(value:_selected,isExpanded:true,decoration:const InputDecoration(labelText:'Existing billboard message'),
+          items:rows.map((x)=>DropdownMenuItem(value:x['id'].toString(),child:Text(x['title'].toString(),overflow:TextOverflow.ellipsis))).toList(),
+          onChanged:_saving?null:(v){setState(()=>{_selected=v;final found=rows.where((x)=>x['id'].toString()==v).firstOrNull;_style=found?['banner_tone']?.toString()??'gold';});}),
+        const SizedBox(height:18),
+        const Text('Select a visual design',style:TextStyle(fontWeight:FontWeight.w800)),
+        const SizedBox(height:10),
+        Wrap(spacing:9,runSpacing:9,children:styles.entries.map((entry){
+          final active=_style==entry.key;
+          final palette=_preview(entry.key);
+          return InkWell(borderRadius:BorderRadius.circular(12),onTap:_saving?null:()=>setState(()=>_style=entry.key),
+            child:Container(width:145,padding:const EdgeInsets.all(10),decoration:BoxDecoration(
+              gradient:LinearGradient(colors:palette),borderRadius:BorderRadius.circular(12),
+              border:Border.all(color:active?AppColors.gold:Colors.white.withValues(alpha:.3),width:active?3:1),
+              boxShadow:[BoxShadow(color:palette[1].withValues(alpha:.22),blurRadius:active?15:7)]),
+              child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                const Icon(Icons.auto_awesome,color:Colors.white,size:18),
+                const SizedBox(height:16),Text(entry.value,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w800)),
+                if(active)const Text('SELECTED',style:TextStyle(color:Colors.white,fontSize:9,fontWeight:FontWeight.w900,letterSpacing:1)),
+              ])));
+        }).toList()),
+        const SizedBox(height:18),
+        Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(
+          gradient:LinearGradient(colors:_preview(_style??'gold')),borderRadius:BorderRadius.circular(16),
+          boxShadow:[BoxShadow(color:_preview(_style??'gold')[1].withValues(alpha:.3),blurRadius:22)]),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            const Text('CENTRE UPDATE',style:TextStyle(color:Colors.white70,fontSize:10,letterSpacing:1.4,fontWeight:FontWeight.w900)),
+            const SizedBox(height:12),Text(selected['title'].toString(),style:const TextStyle(color:Colors.white,fontSize:19,fontWeight:FontWeight.w900)),
+            const SizedBox(height:8),Text(selected['body'].toString(),maxLines:3,overflow:TextOverflow.ellipsis,style:const TextStyle(color:Colors.white,height:1.4)),
+          ])),
+        const SizedBox(height:10),
+        const Text('This action changes only the selected notice’s visual style. Its title, message, audience, expiry and attachments remain unchanged.',style:TextStyle(color:AppColors.muted,height:1.4)),
+        const SizedBox(height:16),FilledButton.icon(onPressed:_saving?null:_save,icon:const Icon(Icons.check_circle_outline),label:Text(_saving?'Saving...':'Apply design only')),
+      ]);
+    }));
+  List<Color> _preview(String key){
+    const palettes=<String,List<Color>>{
+      'gold':[Color(0xFF67431F),Color(0xFFC99A3D),Color(0xFF211B18)],
+      'blue':[Color(0xFF183E60),Color(0xFF247BA0),Color(0xFF102A43)],
+      'green':[Color(0xFF24513D),Color(0xFF3C8D68),Color(0xFF102D22)],
+      'rose':[Color(0xFF673B45),Color(0xFFB85C72),Color(0xFF321D2A)],
+      'ocean':[Color(0xFF042A45),Color(0xFF0077B6),Color(0xFF00B4D8)],
+      'violet':[Color(0xFF35155D),Color(0xFF7B2CBF),Color(0xFFC77DFF)],
+      'teal':[Color(0xFF064E52),Color(0xFF0F9B8E),Color(0xFF5EEAD4)],
+      'sunset':[Color(0xFF7F1D1D),Color(0xFFEA580C),Color(0xFFFBBF24)],
+      'emerald':[Color(0xFF064E3B),Color(0xFF059669),Color(0xFF6EE7B7)],
+      'midnight':[Color(0xFF111827),Color(0xFF334155),Color(0xFF64748B)],
+      'neon':[Color(0xFF17113A),Color(0xFF4C1D95),Color(0xFFDB2777)],
+      'aurora':[Color(0xFF082F49),Color(0xFF0F766E),Color(0xFF6D28D9)],
+      'royal':[Color(0xFF312E81),Color(0xFF6D28D9),Color(0xFFBE185D)],
+      'coral':[Color(0xFF7C2D12),Color(0xFFEA580C),Color(0xFFF97373)],
+    };
+    return palettes[key]??palettes['gold']!;
+  }
+}
+
 class AdminCommunicationsPage extends StatefulWidget {
   const AdminCommunicationsPage({super.key});
   @override
@@ -2382,9 +2489,19 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
         value:_tone,decoration:const InputDecoration(labelText:'Billboard appearance'),
         items:const [
           DropdownMenuItem(value:'gold',child:Text('Warm gold')),
-          DropdownMenuItem(value:'blue',child:Text('Blue notice')),
-          DropdownMenuItem(value:'green',child:Text('Green notice')),
-          DropdownMenuItem(value:'rose',child:Text('Rose notice')),
+          DropdownMenuItem(value:'blue',child:Text('Ocean blue')),
+          DropdownMenuItem(value:'green',child:Text('Forest green')),
+          DropdownMenuItem(value:'rose',child:Text('Rose glow')),
+          DropdownMenuItem(value:'ocean',child:Text('Deep ocean')),
+          DropdownMenuItem(value:'violet',child:Text('Violet light')),
+          DropdownMenuItem(value:'teal',child:Text('Teal shine')),
+          DropdownMenuItem(value:'sunset',child:Text('Sunset glow')),
+          DropdownMenuItem(value:'emerald',child:Text('Emerald glow')),
+          DropdownMenuItem(value:'midnight',child:Text('Midnight')),
+          DropdownMenuItem(value:'neon',child:Text('Neon night')),
+          DropdownMenuItem(value:'aurora',child:Text('Aurora lights')),
+          DropdownMenuItem(value:'royal',child:Text('Royal purple')),
+          DropdownMenuItem(value:'coral',child:Text('Coral light')),
         ],
         onChanged:_busy?null:(v)=>setState(()=>_tone=v??'gold')),
       const SizedBox(height:10),
@@ -2742,7 +2859,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
     final user = client.auth.currentUser!;
     final profile = await client
         .from('profiles')
-        .select('full_name,email')
+        .select('full_name,email,phone,avatar_url,about_me,occupation,profile_class,interests,skills,aspirations')
         .eq('id', user.id)
         .single();
     final roles = await client
@@ -2758,6 +2875,14 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
       'name': profile['full_name'] ?? 'Learner',
       'email': profile['email'] ?? user.email ?? '',
       'role': role,
+      'phone': profile['phone'] ?? '',
+      'avatar_url': profile['avatar_url'],
+      'about_me': profile['about_me'] ?? '',
+      'occupation': profile['occupation'] ?? '',
+      'profile_class': profile['profile_class'] ?? '',
+      'interests': profile['interests'] ?? '',
+      'skills': profile['skills'] ?? '',
+      'aspirations': profile['aspirations'] ?? '',
     };
   }
 
@@ -3066,14 +3191,29 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
       }
     }catch(_){if(mounted)setState(()=>_loading=false);}
   }
-  Color _tone(String value){
-    switch(value){case 'blue':return const Color(0xFF183E60);case 'green':return const Color(0xFF24513D);
-      case 'rose':return const Color(0xFF673B45);default:return AppColors.brown;}
+  List<Color> _toneColors(String value){
+    switch(value){
+      case 'blue':return const [Color(0xFF183E60),Color(0xFF247BA0),Color(0xFF102A43)];
+      case 'green':return const [Color(0xFF24513D),Color(0xFF3C8D68),Color(0xFF102D22)];
+      case 'rose':return const [Color(0xFF673B45),Color(0xFFB85C72),Color(0xFF321D2A)];
+      case 'ocean':return const [Color(0xFF042A45),Color(0xFF0077B6),Color(0xFF00B4D8)];
+      case 'violet':return const [Color(0xFF35155D),Color(0xFF7B2CBF),Color(0xFFC77DFF)];
+      case 'teal':return const [Color(0xFF064E52),Color(0xFF0F9B8E),Color(0xFF5EEAD4)];
+      case 'sunset':return const [Color(0xFF7F1D1D),Color(0xFFEA580C),Color(0xFFFBBF24)];
+      case 'emerald':return const [Color(0xFF064E3B),Color(0xFF059669),Color(0xFF6EE7B7)];
+      case 'midnight':return const [Color(0xFF111827),Color(0xFF334155),Color(0xFF64748B)];
+      case 'neon':return const [Color(0xFF17113A),Color(0xFF4C1D95),Color(0xFFDB2777)];
+      case 'aurora':return const [Color(0xFF082F49),Color(0xFF0F766E),Color(0xFF6D28D9)];
+      case 'royal':return const [Color(0xFF312E81),Color(0xFF6D28D9),Color(0xFFBE185D)];
+      case 'coral':return const [Color(0xFF7C2D12),Color(0xFFEA580C),Color(0xFFF97373)];
+      default:return const [Color(0xFF67431F),Color(0xFFC99A3D),Color(0xFF211B18)];
+    }
   }
   @override
   Widget build(BuildContext context){
     final item=_items.isEmpty?null:_items[_index.clamp(0,_items.length-1).toInt()];
-    final tone=_tone((item?['banner_tone']??'gold').toString());
+    final palette=_toneColors((item?['banner_tone']??'gold').toString());
+    final tone=palette.first;
     final title=(item?['title']??widget.fallbackTitle).toString();
     final body=(item?['body']??widget.fallbackBody).toString();
     final className=(item?['classes'] is Map?item!['classes']['name']:null)?.toString();
@@ -3081,9 +3221,9 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
       width:double.infinity,constraints:const BoxConstraints(minHeight:205),padding:const EdgeInsets.all(22),
       decoration:BoxDecoration(
         gradient:LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
-          colors:[tone,tone.withValues(alpha:.88),const Color(0xFF211B18)]),
+          colors:[palette[0],palette[1],palette[2]]),
         borderRadius:BorderRadius.circular(20),border:Border.all(color:AppColors.gold.withValues(alpha:.65),width:1.2),
-        boxShadow:[BoxShadow(color:tone.withValues(alpha:.20),blurRadius:18,offset:const Offset(0,7))]),
+        boxShadow:[BoxShadow(color:palette[1].withValues(alpha:.34),blurRadius:24,spreadRadius:1,offset:const Offset(0,7))]),
       child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Row(children:[
           const Icon(Icons.campaign_rounded,color:Color(0xFFFFD98A),size:22),const SizedBox(width:8),
@@ -4999,100 +5139,175 @@ class _ProfileTab extends StatelessWidget {
   final Future<Map<String, dynamic>> account;
   final VoidCallback onRetry;
   final VoidCallback onSignOut;
-  const _ProfileTab({
-    required this.account,
-    required this.onRetry,
-    required this.onSignOut,
-  });
+  const _ProfileTab({required this.account,required this.onRetry,required this.onSignOut});
+
+  Widget _detail(String label, String value, IconData icon) => value.trim().isEmpty
+      ? const SizedBox.shrink()
+      : Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
+          leading:Icon(icon,color:AppColors.brown),title:Text(label),
+          subtitle:Text(value,style:const TextStyle(height:1.35))));
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
-    future: account,
-    builder: (context, snapshot) {
-      if (snapshot.connectionState != ConnectionState.done) {
-        return const Center(child: CircularProgressIndicator(color: AppColors.brown));
-      }
-      if (snapshot.hasError) {
-        return Center(child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Your profile could not be loaded.',
-              style: TextStyle(color: AppColors.ink)),
-            const SizedBox(height: 12),
-            OutlinedButton(onPressed: onRetry, child: const Text('Try again')),
-          ]),
-        ));
-      }
-      final data = snapshot.data!;
-      return ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Center(
-            child: Column(children: [
-              CircleAvatar(
-                radius: 38,
-                backgroundColor: AppColors.paleGold,
-                child: Text(
-                  (data['name'] as String).trim().isEmpty
-                      ? 'L'
-                      : (data['name'] as String).trim()[0].toUpperCase(),
-                  style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w700,
-                    color: AppColors.brown),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(data['name'] as String,
-                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700,
-                  color: AppColors.ink)),
-              const SizedBox(height: 4),
-              Text(data['role'] as String,
-                style: const TextStyle(color: AppColors.muted)),
-            ]),
-          ),
-          const SizedBox(height: 26),
-          const Text('ACCOUNT DETAILS',
-            style: TextStyle(fontSize: 11, letterSpacing: 1.1,
-              fontWeight: FontWeight.w800, color: AppColors.muted)),
-          const SizedBox(height: 10),
-          Card(child: ListTile(
-            leading: const Icon(Icons.email_outlined, color: AppColors.brown),
-            title: const Text('Email address'),
-            subtitle: Text(data['email'] as String),
-          )),
-          const SizedBox(height: 9),
-          Card(child: ListTile(
-            leading: const Icon(Icons.verified_user_outlined, color: AppColors.brown),
-            title: const Text('Account type'),
-            subtitle: Text(data['role'] as String),
-          )),
-          const SizedBox(height: 24),
-          const Text('APPEARANCE', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
-          const SizedBox(height: 10),
-          Card(child: ValueListenableBuilder<ThemeMode>(
-            valueListenable: AppThemeController.mode,
-            builder: (context, mode, _) => SwitchListTile(
-              secondary: Icon(mode == ThemeMode.dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: Theme.of(context).colorScheme.primary),
-              title: const Text('Dark theme'),
-              subtitle: Text(mode == ThemeMode.dark ? 'Dark appearance is enabled' : 'Use the light appearance'),
-              value: mode == ThemeMode.dark, activeColor: AppColors.gold,
-              onChanged: AppThemeController.setDark,
-            ),
-          )),
-          const SizedBox(height: 24),
+  Widget build(BuildContext context) => FutureBuilder<Map<String,dynamic>>(
+    future:account,
+    builder:(context,snapshot){
+      if(snapshot.connectionState!=ConnectionState.done)
+        return const Center(child:CircularProgressIndicator(color:AppColors.brown));
+      if(snapshot.hasError)return Center(child:Padding(padding:const EdgeInsets.all(24),
+        child:Column(mainAxisSize:MainAxisSize.min,children:[
+          const Text('Your profile could not be loaded.'),
+          const SizedBox(height:12),OutlinedButton(onPressed:onRetry,child:const Text('Try again')),
+        ])));
+      final data=snapshot.data!;
+      final avatar=(data['avatar_url']??'').toString();
+      return ListView(padding:const EdgeInsets.all(20),children:[
+        Center(child:Column(children:[
+          CircleAvatar(radius:46,backgroundColor:AppColors.paleGold,
+            backgroundImage:avatar.isEmpty?null:NetworkImage(avatar),
+            child:avatar.isEmpty?Text((data['name'] as String).trim().isEmpty?'L':(data['name'] as String).trim()[0].toUpperCase(),
+              style:const TextStyle(fontSize:30,fontWeight:FontWeight.w700,color:AppColors.brown)):null),
+          const SizedBox(height:12),
+          Text(data['name'] as String,style:const TextStyle(fontSize:21,fontWeight:FontWeight.w700,color:AppColors.ink)),
+          const SizedBox(height:4),Text(data['role'] as String,style:const TextStyle(color:AppColors.muted)),
+          const SizedBox(height:12),
           OutlinedButton.icon(
-            onPressed: onSignOut,
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('Sign out'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.brown,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: const BorderSide(color: AppColors.line),
-            ),
-          ),
-        ],
-      );
-    },
-  );
+            onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+              builder:(_)=>ProfileEditorPage(onSaved:onRetry))),
+            icon:const Icon(Icons.edit_outlined),label:const Text('Edit my profile')),
+        ])),
+        const SizedBox(height:24),
+        const Text('ACCOUNT DETAILS',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+        const SizedBox(height:10),
+        Card(child:ListTile(leading:const Icon(Icons.email_outlined,color:AppColors.brown),
+          title:const Text('Email address'),subtitle:Text(data['email'] as String))),
+        const SizedBox(height:8),
+        Card(child:ListTile(leading:const Icon(Icons.verified_user_outlined,color:AppColors.brown),
+          title:const Text('Account type'),subtitle:Text(data['role'] as String))),
+        const SizedBox(height:22),
+        const Text('ABOUT ME',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+        const SizedBox(height:10),
+        _detail('About me',(data['about_me']??'').toString(),Icons.person_outline),
+        _detail('What I do',(data['occupation']??'').toString(),Icons.work_outline),
+        _detail('Class / level',(data['profile_class']??'').toString(),Icons.school_outlined),
+        _detail('Interests',(data['interests']??'').toString(),Icons.favorite_border),
+        _detail('Skills',(data['skills']??'').toString(),Icons.auto_awesome_outlined),
+        _detail('What I hope to become',(data['aspirations']??'').toString(),Icons.flag_outlined),
+        _detail('Phone / WhatsApp',(data['phone']??'').toString(),Icons.phone_outlined),
+        const SizedBox(height:20),
+        const Text('APPEARANCE',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+        const SizedBox(height:10),
+        Card(child:ValueListenableBuilder<ThemeMode>(valueListenable:AppThemeController.mode,
+          builder:(context,mode,_)=>SwitchListTile(
+            secondary:Icon(mode==ThemeMode.dark?Icons.dark_mode_rounded:Icons.light_mode_rounded,color:Theme.of(context).colorScheme.primary),
+            title:const Text('Dark theme'),subtitle:Text(mode==ThemeMode.dark?'Dark appearance is enabled':'Use the light appearance'),
+            value:mode==ThemeMode.dark,activeColor:AppColors.gold,onChanged:AppThemeController.setDark))),
+        const SizedBox(height:24),
+        OutlinedButton.icon(onPressed:onSignOut,icon:const Icon(Icons.logout_rounded),label:const Text('Sign out'),
+          style:OutlinedButton.styleFrom(foregroundColor:AppColors.brown,padding:const EdgeInsets.symmetric(vertical:14),side:const BorderSide(color:AppColors.line))),
+      ]);
+    });
+}
+
+class ProfileEditorPage extends StatefulWidget {
+  final VoidCallback onSaved;
+  const ProfileEditorPage({super.key,required this.onSaved});
+  @override
+  State<ProfileEditorPage> createState()=>_ProfileEditorPageState();
+}
+class _ProfileEditorPageState extends State<ProfileEditorPage>{
+  final _about=TextEditingController(),_occupation=TextEditingController(),_class=TextEditingController(),
+    _interests=TextEditingController(),_skills=TextEditingController(),_goals=TextEditingController(),_phone=TextEditingController();
+  bool _loading=true,_saving=false,_removeAvatar=false;
+  String? _avatarUrl;
+  PlatformFile? _photo;
+  @override
+  void initState(){super.initState();_load();}
+  Future<void> _load()async{
+    try{
+      final uid=Supabase.instance.client.auth.currentUser!.id;
+      final row=await Supabase.instance.client.from('profiles')
+        .select('phone,avatar_url,about_me,occupation,profile_class,interests,skills,aspirations')
+        .eq('id',uid).single();
+      _about.text=(row['about_me']??'').toString();_occupation.text=(row['occupation']??'').toString();
+      _class.text=(row['profile_class']??'').toString();_interests.text=(row['interests']??'').toString();
+      _skills.text=(row['skills']??'').toString();_goals.text=(row['aspirations']??'').toString();
+      _phone.text=(row['phone']??'').toString();_avatarUrl=row['avatar_url']?.toString();
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Profile details could not load: $e')));}
+    finally{if(mounted)setState(()=>_loading=false);}
+  }
+  Future<void> _choosePhoto()async{
+    final result=await FilePicker.platform.pickFiles(type:FileType.image,withData:true);
+    if(result==null||result.files.isEmpty)return;
+    final file=result.files.first;
+    if(file.size>5242880){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Choose an image smaller than 5 MB.')));return;}
+    if(!['jpg','jpeg','png','webp'].contains(file.extension?.toLowerCase())){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Use a JPG, PNG or WebP image.')));return;}
+    if(mounted)setState(()=>{_photo=file,_removeAvatar=false});
+  }
+  Future<void> _save()async{
+    setState(()=>_saving=true);
+    String? uploadedPath;
+    try{
+      final db=Supabase.instance.client,uid=db.auth.currentUser!.id;
+      String? nextAvatar=_removeAvatar?null:_avatarUrl;
+      if(_photo!=null){
+        final bytes=_photo!.bytes;if(bytes==null)throw Exception('The selected image could not be read.');
+        final ext=_photo!.extension!.toLowerCase();
+        uploadedPath='$uid/avatar.$ext';
+        await db.storage.from('profile-avatars').uploadBinary(uploadedPath!,bytes,
+          fileOptions:FileOptions(contentType:ext=='jpg'||ext=='jpeg'?'image/jpeg':'image/$ext',upsert:true));
+        nextAvatar=db.storage.from('profile-avatars').getPublicUrl(uploadedPath!);
+      }
+      String? optional(String v)=>v.trim().isEmpty?null:v.trim();
+      await db.from('profiles').update({
+        'phone':optional(_phone.text),'avatar_url':nextAvatar,
+        'about_me':optional(_about.text),'occupation':optional(_occupation.text),
+        'profile_class':optional(_class.text),'interests':optional(_interests.text),
+        'skills':optional(_skills.text),'aspirations':optional(_goals.text),
+      }).eq('id',uid);
+      if(_removeAvatar&&_avatarUrl!=null){
+        try{final uri=Uri.parse(_avatarUrl!);final marker='/profile-avatars/';final i=uri.path.indexOf(marker);
+          if(i>=0)await db.storage.from('profile-avatars').remove([uri.path.substring(i+marker.length)]);
+        }catch(_){}
+      }
+      if(!mounted)return;
+      widget.onSaved();Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your profile has been updated.')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Profile could not be saved: $e')));}
+    finally{if(mounted)setState(()=>_saving=false);}
+  }
+  Widget _field(TextEditingController c,String label,{int lines=1,String? hint})=>Padding(
+    padding:const EdgeInsets.only(bottom:12),child:TextField(controller:c,minLines:lines,maxLines:lines==1?1:4,
+      maxLength:label=='About me'?600:300,decoration:InputDecoration(labelText:label,hintText:hint,alignLabelWithHint:lines>1)));
+  @override
+  void dispose(){_about.dispose();_occupation.dispose();_class.dispose();_interests.dispose();_skills.dispose();_goals.dispose();_phone.dispose();super.dispose();}
+  @override
+  Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Edit my profile')),
+    body:_loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(20),children:[
+      const Text('Make your profile your own',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800)),
+      const SizedBox(height:6),const Text('Everything here is optional. Add one detail, several details, or leave everything blank. Your account will work normally either way.',style:TextStyle(color:AppColors.muted,height:1.45)),
+      const SizedBox(height:18),
+      Center(child:Column(children:[
+        CircleAvatar(radius:48,backgroundColor:AppColors.paleGold,
+          backgroundImage:_photo?.bytes!=null?MemoryImage(_photo!.bytes!):(_removeAvatar?null:(_avatarUrl==null?null:NetworkImage(_avatarUrl!))) as ImageProvider?,
+          child:_photo==null&&(_avatarUrl==null||_removeAvatar)?const Icon(Icons.person_outline,size:42,color:AppColors.brown):null),
+        const SizedBox(height:8),Wrap(spacing:8,children:[
+          OutlinedButton.icon(onPressed:_saving?null:_choosePhoto,icon:const Icon(Icons.photo_camera_outlined),label:const Text('Choose photo')),
+          if(_avatarUrl!=null&&!_removeAvatar)TextButton(onPressed:()=>setState(()=>_removeAvatar=true),child:const Text('Remove photo')),
+          if(_removeAvatar)TextButton(onPressed:()=>setState(()=>_removeAvatar=false),child:const Text('Keep current photo')),
+        ]),
+      ])),
+      const SizedBox(height:20),
+      _field(_about,'About me',lines:3,hint:'A little about yourself...'),
+      _field(_occupation,'What I do',hint:'Student, teacher, designer, business owner...'),
+      _field(_class,'Class / level',hint:'Optional profile description of your class or level'),
+      _field(_interests,'Interests',lines:2,hint:'Things you enjoy learning or doing...'),
+      _field(_skills,'Skills',lines:2,hint:'Skills you have or are developing...'),
+      _field(_goals,'What I hope to become',lines:2,hint:'Your dreams, career goals or ambitions...'),
+      _field(_phone,'Phone / WhatsApp number',hint:'Optional contact number'),
+      const SizedBox(height:8),
+      FilledButton.icon(onPressed:_saving?null:_save,icon:const Icon(Icons.save_outlined),label:Text(_saving?'Saving...':'Save profile')),
+      const SizedBox(height:12),const Text('Your name and sign-in email are managed by your account and are not changed here.',style:TextStyle(fontSize:12,color:AppColors.muted)),
+    ]));
 }
 
 class _InfoNotice extends StatelessWidget {
