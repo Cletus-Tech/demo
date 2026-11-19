@@ -7,26 +7,26 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('recognises a redeemed one-to-one classroom pass relation', () {
-    expect(_hasRedeemedClassroomPass({
+    expect(hasRedeemedClassroomPass({
       'redeemed_at': '2026-11-19T11:25:05Z',
       'revoked_at': null,
     }), isTrue);
   });
 
   test('recognises a redeemed classroom pass in a list relation', () {
-    expect(_hasRedeemedClassroomPass([
+    expect(hasRedeemedClassroomPass([
       {'redeemed_at': null, 'revoked_at': null},
       {'redeemed_at': '2026-11-19T11:25:05Z', 'revoked_at': null},
     ]), isTrue);
   });
 
   test('does not unlock missing, unredeemed or revoked passes', () {
-    expect(_hasRedeemedClassroomPass(null), isFalse);
-    expect(_hasRedeemedClassroomPass({
+    expect(hasRedeemedClassroomPass(null), isFalse);
+    expect(hasRedeemedClassroomPass({
       'redeemed_at': null,
       'revoked_at': null,
     }), isFalse);
-    expect(_hasRedeemedClassroomPass({
+    expect(hasRedeemedClassroomPass({
       'redeemed_at': '2026-11-19T11:25:05Z',
       'revoked_at': '2026-11-19T11:30:00Z',
     }), isFalse);
