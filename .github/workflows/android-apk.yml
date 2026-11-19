@@ -61,6 +61,44 @@ jobs:
           PY
       - name: Resolve packages
         run: flutter pub get
+      - name: Align file picker Android library with API 36
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          cache = Path.home() / ".pub-cache" / "hosted" / "pub.dev"
+          packages = sorted(cache.glob("file_picker-*/android"))
+          if not packages:
+              raise SystemExit("Resolved file_picker Android module was not found")
+          changed = []
+          for android_dir in packages:
+              for gradle in (android_dir / "build.gradle.kts", android_dir / "build.gradle"):
+                  if not gradle.exists():
+                      continue
+                  content = gradle.read_text()
+                  updated, count = re.subn(
+                      r'compileSdk\\s*=\\s*flutter\\.compileSdkVersion',
+                      'compileSdk = 36', content)
+                  if count == 0:
+                      updated, count = re.subn(
+                          r'compileSdkVersion\\s+flutter\\.compileSdkVersion',
+                          'compileSdkVersion 36', content)
+                  if count == 0:
+                      updated, count = re.subn(
+                          r'compileSdk\\s*=\\s*\\d+',
+                          'compileSdk = 36', content)
+                  if count == 0:
+                      updated, count = re.subn(
+                          r'compileSdkVersion\\s+\\d+',
+                          'compileSdkVersion 36', content)
+                  if count == 0:
+                      raise SystemExit(f"Could not set API 36 in {gradle}")
+                  gradle.write_text(updated)
+                  changed.append(str(gradle))
+          if not changed:
+              raise SystemExit("No file_picker Android Gradle file was updated")
+          print("Configured file_picker Android module for API 36:", ", ".join(changed))
+          PY
       - name: Run tests
         run: flutter test
       - name: Build optimised release APKs
