@@ -6631,11 +6631,24 @@ class _TutorInterviewCentrePageState extends State<TutorInterviewCentrePage>{
     if(ok!=true){noteController.dispose();return;}
     if(status=='interview_scheduled'&&interview==null){noteController.dispose();ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Choose the interview date and time.')));return;}
     try{
-      await Supabase.instance.client.rpc('review_tutor_application',params:{
+      final reviewResult=await Supabase.instance.client.rpc('review_tutor_application',params:{
         'p_application_id':app['id'],'p_status':status,'p_review_note':noteController.text.trim().isEmpty?null:noteController.text.trim(),
         'p_interview_at':status=='interview_scheduled'?interview!.toUtc().toIso8601String():null,
       });
+      if(!mounted)return;
       setState(()=>_applications=_loadApplications());
+      if(status=='approved' && reviewResult is Map){
+        final assigned=(reviewResult['new_class_subject_assignments'] as num?)?.toInt()??0;
+        final classes=(reviewResult['assigned_classes'] as num?)?.toInt()??0;
+        final subjects=(reviewResult['matched_subjects'] as num?)?.toInt()??0;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+          assigned>0
+            ? 'Tutor approved and connected to $assigned class/subject combinations.'
+            : 'Tutor approved, but no selected class/subject matches were found ($classes classes, $subjects subjects). Check the catalogue and assign the tutor manually.'
+        )));
+      }else{
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Tutor application review saved.')));
+      }
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Application review failed: $e')));}
     finally{noteController.dispose();}
   }
