@@ -3482,17 +3482,21 @@ class _HomeTab extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                const _FeatureRow(icon: Icons.menu_book_outlined,
+                _FeatureRow(icon: Icons.menu_book_outlined,
                   title: 'Subjects and lessons',
-                  detail: 'Your enrolled subjects and lesson materials.'),
+                  detail: 'Your enrolled subjects and lesson materials.',
+                  onTap: onOpenLearning),
                 const SizedBox(height: 10),
-                const _FeatureRow(icon: Icons.assignment_outlined,
+                _FeatureRow(icon: Icons.assignment_outlined,
                   title: 'Assignments and assessments',
-                  detail: 'Tasks, practice and assessments from your tutors.'),
+                  detail: 'Tasks, practice and assessments from your tutors.',
+                  onTap: onOpenLearning),
                 const SizedBox(height: 10),
-                const _FeatureRow(icon: Icons.query_stats_outlined,
+                _FeatureRow(icon: Icons.query_stats_outlined,
                   title: 'Learning progress',
-                  detail: 'Track learning activity and published results.'),
+                  detail: 'Track learning activity and published results.',
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const StudentLearningProgressPage()))),
                 const SizedBox(height: 26),
 
                 ],
@@ -5197,6 +5201,65 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
   }
 }
 
+class StudentLearningProgressPage extends StatefulWidget {
+  const StudentLearningProgressPage({super.key});
+  @override
+  State<StudentLearningProgressPage> createState() => _StudentLearningProgressPageState();
+}
+
+class _StudentLearningProgressPageState extends State<StudentLearningProgressPage> {
+  late Future<Map<String, dynamic>> _stats;
+  @override
+  void initState() { super.initState(); _stats = _load(); }
+  Future<Map<String, dynamic>> _load() async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser!.id;
+    final student = await client.from('students').select('id').eq('user_id', userId).maybeSingle();
+    if (student == null) return {'linked': false};
+    final studentId = student['id'];
+    final values = await Future.wait([
+      client.from('assignment_submissions').select('id,status').eq('student_id', studentId),
+      client.from('assessment_attempts').select('id').eq('student_id', studentId),
+      client.from('results').select('id').eq('student_id', studentId).not('published_at', 'is', null),
+      client.from('lesson_completions').select('id').eq('user_id', userId),
+      client.from('lessons').select('id').eq('is_published', true),
+    ]);
+    final submissions = List<Map<String, dynamic>>.from(values[0]);
+    return {'linked': true, 'submitted': submissions.length,
+      'graded': submissions.where((r) => r['status'] == 'graded').length,
+      'attempts': values[1].length, 'results': values[2].length,
+      'completed': values[3].length, 'available': values[4].length};
+  }
+  Future<void> _refresh() async { final next = _load(); setState(() => _stats = next); await next; }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Learning progress')),
+    body: RefreshIndicator(color: AppColors.brown, onRefresh: _refresh,
+      child: FutureBuilder<Map<String, dynamic>>(future: _stats, builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) return const ListView(children: [
+          Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator(color: AppColors.brown)))]);
+        if (snapshot.hasError) return ListView(padding: const EdgeInsets.all(20), children: const [
+          _InfoNotice(message: 'Learning progress could not be loaded. Pull down to retry.')]);
+        final data = snapshot.data ?? {};
+        if (data['linked'] != true) return ListView(padding: const EdgeInsets.all(20), children: const [
+          _InfoNotice(message: 'Your learner profile is not linked yet. Progress will appear when your learner account is set up.')]);
+        Widget metric(String label, dynamic value, IconData icon) => Card(child: ListTile(
+          leading: Icon(icon, color: AppColors.brown), title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          trailing: Text(value.toString(), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.brown))));
+        return ListView(padding: const EdgeInsets.all(20), children: [
+          const Text('Your learning activity', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 6),
+          const Text('A summary of completed lessons, submitted work, assessments and published results.', style: TextStyle(color: AppColors.muted, height: 1.45)),
+          const SizedBox(height: 16),
+          metric('Lessons completed', data['completed'].toString() + ' of ' + data['available'].toString(), Icons.menu_book_outlined),
+          metric('Assignments submitted', data['submitted'], Icons.assignment_outlined),
+          metric('Assignments marked', data['graded'], Icons.fact_check_outlined),
+          metric('Assessment attempts', data['attempts'], Icons.quiz_outlined),
+          metric('Published results', data['results'], Icons.workspace_premium_outlined),
+        ]);
+      })),
+  );
+}
 class _ProfileTab extends StatelessWidget {
   final Future<Map<String, dynamic>> account;
   final VoidCallback onRetry;
@@ -5415,7 +5478,8 @@ class _FeatureRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String detail;
-  const _FeatureRow({required this.icon, required this.title, required this.detail});
+  final VoidCallback? onTap;
+  const _FeatureRow({required this.icon, required this.title, required this.detail, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -5435,6 +5499,7 @@ class _FeatureRow extends StatelessWidget {
           color: colors.onSurfaceVariant, height: 1.45)),
         trailing: Icon(Icons.chevron_right_rounded,
           color: colors.onSurfaceVariant),
+        onTap: onTap,
       ),
     );
   }
