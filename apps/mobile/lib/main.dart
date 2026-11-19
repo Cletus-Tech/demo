@@ -3344,11 +3344,7 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
               ),
         actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: _openNotifications,
-            icon: const Icon(Icons.notifications_none_rounded),
-          ),
+          _NotificationBell(onPressed: _openNotifications),
           const SizedBox(width: 6),
         ],
         bottom: const PreferredSize(
@@ -3407,6 +3403,190 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
   }
 }
 
+class _NotificationBell extends StatefulWidget {
+  final VoidCallback onPressed;
+  const _NotificationBell({required this.onPressed});
+
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell> {
+  late final Stream<List<Map<String, dynamic>>> _notifications;
+
+  @override
+  void initState() {
+    super.initState();
+    final userId = Supabase.instance.client.auth.currentUser!.id;
+    _notifications = Supabase.instance.client
+        .from('notifications')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', userId);
+  }
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<Map<String, dynamic>>>(
+    stream: _notifications,
+    builder: (context, snapshot) {
+      final unread = snapshot.data
+          ?.where((item) => item['read_at'] == null)
+          .length ?? 0;
+      final label = unread > 99 ? '99+' : unread.toString();
+      return IconButton(
+        tooltip: unread == 0 ? 'Notifications' : '$unread unread notifications',
+        onPressed: widget.onPressed,
+        icon: Badge(
+          isLabelVisible: unread > 0,
+          label: Text(label),
+          child: const Icon(Icons.notifications_none_rounded),
+        ),
+      );
+    },
+  );
+}
+
+class DashboardUpdateDetailPage extends StatefulWidget {
+  final String announcementId;
+  const DashboardUpdateDetailPage({super.key, required this.announcementId});
+
+  @override
+  State<DashboardUpdateDetailPage> createState() => _DashboardUpdateDetailPageState();
+}
+
+class _DashboardUpdateDetailPageState extends State<DashboardUpdateDetailPage> {
+  late Future<Map<String, dynamic>?> _announcement;
+
+  @override
+  void initState() {
+    super.initState();
+    _announcement = _load();
+  }
+
+  Future<Map<String, dynamic>?> _load() async {
+    return await Supabase.instance.client
+        .from('announcements')
+        .select('id,title,body,published_at,expires_at,attachment_path,attachment_name,attachment_mime_type,attachment_size,banner_tone')
+        .eq('id', widget.announcementId)
+        .maybeSingle();
+  }
+
+  Future<void> _openAttachment(Map<String, dynamic> item) async {
+    try {
+      final path = (item['attachment_path'] ?? '').toString();
+      if (path.isEmpty) throw Exception('No attachment is available.');
+      final url = await Supabase.instance.client.storage
+          .from('platform-attachments').createSignedUrl(path, 3600);
+      if (!await _openResourceUrl(url)) {
+        throw Exception('No compatible document viewer is available.');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open attachment: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Dashboard update')),
+    body: FutureBuilder<Map<String, dynamic>?>(
+      future: _announcement,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('This update could not be loaded. Please try again later.'),
+          ));
+        }
+        final item = snapshot.data;
+        if (item == null) {
+          return const Center(child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('This update is no longer available.'),
+          ));
+        }
+        final hasAttachment = (item['attachment_path'] ?? '').toString().isNotEmpty;
+        return ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(
+              (item['title'] ?? 'Dashboard update').toString(),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item['published_at'] == null ? '' : 'Published ${DateTime.parse(item['published_at'].toString()).toLocal()}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 18),
+            SelectableText(
+              (item['body'] ?? '').toString(),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.55),
+            ),
+            if (hasAttachment) ...[
+              const SizedBox(height: 20),
+              Text('Attached media or document', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: _AnnouncementMedia(
+                    item: item,
+                    onOpen: () => _openAttachment(item),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _openAttachment(item),
+                icon: const Icon(Icons.open_in_new),
+                label: Text((item['attachment_name'] ?? 'Open attachment').toString()),
+              ),
+            ],
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class NotificationMessagePage extends StatelessWidget {
+  final String title;
+  final String body;
+  final String createdAt;
+  const NotificationMessagePage({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.createdAt,
+  });
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Notification')),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        if (createdAt.isNotEmpty)
+          Text(
+            DateTime.tryParse(createdAt)?.toLocal().toString() ?? createdAt,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        const SizedBox(height: 18),
+        SelectableText(body, style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.55)),
+      ],
+    ),
+  );
+}
+
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
   @override
@@ -3426,7 +3606,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final client = Supabase.instance.client;
     final notifications = await client
         .from('notifications')
-        .select('id,title,body,read_at,created_at')
+        .select('id,title,body,read_at,created_at,announcement_id')
         .order('created_at', ascending: false);
     final now = DateTime.now().toUtc().toIso8601String();
     final announcements = await client
@@ -3465,6 +3645,27 @@ class _NotificationsPageState extends State<NotificationsPage> {
         .update({'read_at': DateTime.now().toUtc().toIso8601String()})
         .eq('id', item['id']);
     await _refresh();
+  }
+
+  Future<void> _openItem(Map<String, dynamic> item) async {
+    await _markRead(item);
+    if (!mounted) return;
+    final linkedId = item['kind'] == 'announcement'
+        ? item['id']?.toString()
+        : item['announcement_id']?.toString();
+    if (linkedId != null && linkedId.isNotEmpty) {
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => DashboardUpdateDetailPage(announcementId: linkedId),
+      ));
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => NotificationMessagePage(
+        title: (item['title'] ?? 'Notification').toString(),
+        body: (item['body'] ?? '').toString(),
+        createdAt: (item['created_at'] ?? item['sort_at'] ?? '').toString(),
+      ),
+    ));
   }
 
   @override
@@ -3517,7 +3718,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 10),
                     child: ListTile(
-                      onTap: () => _markRead(item),
+                      onTap: () => _openItem(item),
                       leading: Icon(
                         isAnnouncement ? Icons.campaign_outlined : Icons.notifications_none_rounded,
                         color: AppColors.brown,
