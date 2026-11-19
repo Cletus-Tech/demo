@@ -26,6 +26,26 @@ jobs:
           cache: true
       - name: Generate Android platform scaffolding
         run: flutter create . --platforms=android
+      - name: Set Android compile SDK to API 36
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          gradle = next((p for p in candidates if p.exists()), None)
+          if gradle is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          content = gradle.read_text()
+          import re
+          content, count_kts = re.subn(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
+          content, count_groovy = re.subn(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
+          if count_kts + count_groovy == 0:
+              content, count_kts = re.subn(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
+              content, count_groovy = re.subn(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
+          if count_kts + count_groovy == 0:
+              raise SystemExit("Could not locate compileSdk declaration")
+          gradle.write_text(content)
+          print(f"Configured {gradle} to compile against Android API 36")
+          PY
       - name: Ensure release app has internet permission
         run: |
           python3 - <<'PY'
