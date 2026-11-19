@@ -5302,7 +5302,7 @@ class _StudentLearningProgressPageState extends State<StudentLearningProgressPag
     appBar: AppBar(title: const Text('Learning progress')),
     body: RefreshIndicator(color: AppColors.brown, onRefresh: _refresh,
       child: FutureBuilder<Map<String, dynamic>>(future: _stats, builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) return const ListView(children: [
+        if (snapshot.connectionState != ConnectionState.done) return ListView(children: [
           Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator(color: AppColors.brown)))]);
         if (snapshot.hasError) return ListView(padding: const EdgeInsets.all(20), children: const [
           _InfoNotice(message: 'Learning progress could not be loaded. Pull down to retry.')]);
