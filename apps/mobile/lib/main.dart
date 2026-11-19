@@ -6648,19 +6648,15 @@ class ExamPreparationPage extends StatelessWidget {
       'name': 'WAEC',
       'full': 'West African Examinations Council',
       'exam': 'WASSCE School • WASSCE Private • GCE',
-      'url': 'https://waecnigeria.org/',
-      'logo': 'https://waecinternational.org/timetable/images/logo.png',
-      'domain': 'waecnigeria.org',
+      'url': 'https://www.waeconline.org.ng/',
       'stage': 'SS3 and eligible private candidates',
       'note': 'WASSCE school candidates are generally in SS3. Private-candidate routes are for eligible candidates outside the school-candidate route.',
     },
     {
       'name': 'NECO',
       'full': 'National Examinations Council',
-      'exam': 'SSCE Internal • SSCE External • BECE • NCEE • NGE',
+      'exam': 'SSCE Internal • SSCE External • BECE • NCEE',
       'url': 'https://neco.gov.ng/',
-      'logo': 'https://d1jcea4y7xhp7l.cloudfront.net/2021/01/neco-timetable-novdec-e1457601333710.jpg',
-      'domain': 'neco.gov.ng',
       'stage': 'Primary 6 • JSS3 • SS3',
       'note': 'NCEE is for pupils completing Primary 6; BECE is for eligible JSS3 candidates; SSCE is the senior secondary certificate route.',
     },
@@ -6669,8 +6665,6 @@ class ExamPreparationPage extends StatelessWidget {
       'full': 'Joint Admissions and Matriculation Board',
       'exam': 'UTME • Direct Entry',
       'url': 'https://www.jamb.gov.ng/',
-      'logo': 'https://www.jamb.gov.ng/assets/layouts/layout3/img/banner.png',
-      'domain': 'jamb.gov.ng',
       'stage': 'SS3 and post-secondary eligible candidates',
       'note': 'UTME and Direct Entry are tertiary-admission pathways. JAMB does not conduct GCE; WAEC and NECO offer external/private-candidate routes.',
     },
@@ -6679,8 +6673,6 @@ class ExamPreparationPage extends StatelessWidget {
       'full': 'National Business and Technical Examinations Board',
       'exam': 'NBC • NTC • ANBC • ANTC',
       'url': 'https://nabteb.gov.ng/',
-      'logo': 'https://jambhub.com/wp-content/uploads/2022/02/National-Business-and-Technical-Examinations-Board-Nabteb.jpg',
-      'domain': 'nabteb.gov.ng',
       'stage': 'Senior secondary and technical/vocational candidates',
       'note': 'National business, technical, advanced and modular trade certificate pathways.',
     },
@@ -6688,19 +6680,25 @@ class ExamPreparationPage extends StatelessWidget {
       'name': 'NBAIS',
       'full': 'National Board for Arabic and Islamic Studies',
       'exam': 'SAISSCE • Tahfeez and related pathways',
-      'url': 'https://nbais.gov.ng/',
-      'logo': 'https://wazobianet.com/static/landing/assets/images/parters/nbais.jpg',
-      'domain': 'nbais.gov.ng',
+      'url': 'https://nbais.com.ng/',
       'stage': 'Learners in recognised Arabic and Islamic studies pathways',
       'note': 'SAISSCE, Tahfeez and related Arabic and Islamic studies certification pathways.',
     },
   ];
 
   Future<void> _open(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      throw Exception('Could not open $url');
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      throw Exception('This institution website address is invalid.');
     }
+    // Keep official institution sites inside the app first. This avoids
+    // broken external intent resolution on some Android devices.
+    if (await _openResourceUrl(uri.toString())) return;
+    // A browser fallback is useful when the device WebView is unavailable.
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    throw Exception('No browser could open this official website. Check your internet connection and try again.');
   }
 
   @override
@@ -6734,20 +6732,21 @@ class ExamPreparationPage extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(9),
-                  child: Image.network(
-                    body['logo']!,
-                    width: 52, height: 52,
-                    fit: body['name'] == 'JAMB' ? BoxFit.cover : BoxFit.contain,
-                    alignment: body['name'] == 'JAMB' ? Alignment.centerRight : Alignment.center,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 52, height: 52, alignment: Alignment.center,
-                      color: AppColors.paleGold,
-                      child: Text(body['name']!.substring(0, 1),
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.brown)),
-                    ),
+                Container(
+                  width: 54, height: 54,
+                  decoration: BoxDecoration(
+                    color: AppColors.paleGold,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.gold.withValues(alpha: .35)),
                   ),
+                  alignment: Alignment.center,
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    const Icon(Icons.account_balance_outlined, size: 19, color: AppColors.brown),
+                    const SizedBox(height: 2),
+                    Text(body['name']!, style: const TextStyle(
+                      fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: .3,
+                      color: AppColors.brown)),
+                  ]),
                 ),
                 const SizedBox(width: 13),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
