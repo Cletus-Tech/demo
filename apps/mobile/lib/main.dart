@@ -2340,7 +2340,7 @@ class _AdminBillboardAppearancePageState extends State<AdminBillboardAppearanceP
         const SizedBox(height:8),
         DropdownButtonFormField<String>(value:_selected,isExpanded:true,decoration:const InputDecoration(labelText:'Existing billboard message'),
           items:rows.map((x)=>DropdownMenuItem(value:x['id'].toString(),child:Text(x['title'].toString(),overflow:TextOverflow.ellipsis))).toList(),
-          onChanged:_saving?null:(v){setState(()=>{_selected=v;final found=rows.where((x)=>x['id'].toString()==v).firstOrNull;_style=found?['banner_tone']?.toString()??'gold';});}),
+          onChanged:_saving?null:(v){setState((){_selected=v;final found=rows.where((x)=>x['id'].toString()==v).firstOrNull;_style=found?['banner_tone']?.toString()??'gold';});}),
         const SizedBox(height:18),
         const Text('Select a visual design',style:TextStyle(fontWeight:FontWeight.w800)),
         const SizedBox(height:10),
