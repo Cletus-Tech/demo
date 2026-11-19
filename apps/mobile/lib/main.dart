@@ -191,7 +191,16 @@ class _RoleRouterState extends State<RoleRouter> {
         .map((e) => e['role'] as String).toList();
     final profile = await client.from('profiles')
         .select('account_type').eq('id', user.id).maybeSingle();
-    if (profile?['account_type'] == 'parent') roles.add('parent_account');
+    if (profile?['account_type'] == 'parent') {
+      roles.add('parent_account');
+    } else if (profile?['account_type'] == 'student' &&
+        !roles.any((r) => ['super_admin', 'admin', 'tutor', 'staff'].contains(r))) {
+      final student = await client.from('students')
+          .select('id,level').eq('user_id', user.id).maybeSingle();
+      if (student == null || (student['level'] as String? ?? '').trim().isEmpty) {
+        roles.add('class_missing');
+      }
+    }
     return roles;
   }
   @override
@@ -209,6 +218,11 @@ class _RoleRouterState extends State<RoleRouter> {
         ])));
       }
       final roles = s.data ?? [];
+      if (roles.contains('class_missing')) {
+        return StudentClassSetupPage(onComplete: () {
+          if (mounted) setState(() => _roles = _load());
+        });
+      }
       // Every authenticated account enters the same connected app shell.
       // Owner/admin tools are role-aware destinations inside the main dashboard,
       // not a replacement for the learner-facing home experience.
@@ -223,6 +237,89 @@ class _RoleRouterState extends State<RoleRouter> {
   );
 }
 
+
+
+class StudentClassSetupPage extends StatefulWidget {
+  final VoidCallback onComplete;
+  const StudentClassSetupPage({super.key, required this.onComplete});
+  @override
+  State<StudentClassSetupPage> createState() => _StudentClassSetupPageState();
+}
+
+class _StudentClassSetupPageState extends State<StudentClassSetupPage> {
+  static const _levels = [
+    'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6',
+    'JSS 1', 'JSS 2', 'JSS 3', 'SS 1', 'SS 2', 'SS 3',
+  ];
+  String? _level;
+  bool _saving = false;
+  String? _error;
+
+  Future<void> _save() async {
+    if (_level == null) return;
+    setState(() { _saving = true; _error = null; });
+    try {
+      final db = Supabase.instance.client;
+      final user = db.auth.currentUser!;
+      final existing = await db.from('students')
+          .select('id').eq('user_id', user.id).maybeSingle();
+      if (existing == null) {
+        await db.from('students').insert({'user_id': user.id, 'level': _level});
+      } else {
+        await db.from('students').update({'level': _level})
+            .eq('id', existing['id']);
+      }
+      widget.onComplete();
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Your class could not be saved. Please try again.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(child: Center(child: SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480),
+        child: Card(child: Padding(padding: const EdgeInsets.all(24), child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Center(child: YoungLearnersLogo()),
+            const SizedBox(height: 24),
+            const Text('Let’s set up your learning space',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            const Text('Choose the class you are currently in. We’ll use this to organise your lessons, classroom, assignments and learning resources.',
+              textAlign: TextAlign.center, style: TextStyle(height: 1.45)),
+            const SizedBox(height: 22),
+            DropdownButtonFormField<String>(
+              value: _level,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Select your current class'),
+              items: _levels.map((level) => DropdownMenuItem(
+                value: level, child: Text(level))).toList(),
+              onChanged: _saving ? null : (value) => setState(() => _level = value),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            ],
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: _saving || _level == null ? null : _save,
+              child: Text(_saving ? 'Saving...' : 'Continue to my dashboard'),
+            ),
+            const SizedBox(height: 8),
+            const Text('You can ask the centre administrator to correct your class if you select the wrong one.',
+              textAlign: TextAlign.center, style: TextStyle(fontSize: 12, height: 1.4)),
+          ],
+        ))),
+      ),
+    ))),
+  );
+}
 
 class AdminReportsPage extends StatefulWidget {
   const AdminReportsPage({super.key});
@@ -683,25 +780,52 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
             const SizedBox(height: 12),
             if (filtered.isEmpty)
               const _InfoNotice(message: 'No student matches this search.')
-            else
-              ...filtered.map((r) {
-                final p = r['profiles'] as Map<String, dynamic>?;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Card(child: ListTile(
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                      builder: (_) => _StudentRecordDetailPage(student: r),
-                    )),
-                    title: Text(p?['full_name'] as String? ?? 'Account not linked'),
-                    subtitle: Text([
-                      p?['email'] ?? 'No email',
-                      'Level: ' + (r['level'] ?? 'Not set').toString(),
-                      'Status: ' + (r['status'] ?? '').toString(),
-                    ].join(' • ')),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                  )),
-                );
-              }),
+            else ...[
+              for (final level in const [
+                'Primary 1','Primary 2','Primary 3','Primary 4','Primary 5','Primary 6',
+                'JSS 1','JSS 2','JSS 3','SS 1','SS 2','SS 3','Not yet selected','Other',
+              ])
+                if (filtered.where((r) {
+                  final value = (r['level'] ?? '').toString().trim();
+                  final group = value.isEmpty ? 'Not yet selected' :
+                      (const ['Primary 1','Primary 2','Primary 3','Primary 4','Primary 5','Primary 6',
+                        'JSS 1','JSS 2','JSS 3','SS 1','SS 2','SS 3'].contains(value) ? value : 'Other');
+                  return group == level;
+                }).isNotEmpty)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 9),
+                    clipBehavior: Clip.antiAlias,
+                    child: ExpansionTile(
+                      initiallyExpanded: query.isNotEmpty,
+                      leading: const Icon(Icons.school_outlined, color: AppColors.gold),
+                      title: Text(level, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      subtitle: Text('${filtered.where((r) {
+                        final value = (r['level'] ?? '').toString().trim();
+                        final group = value.isEmpty ? 'Not yet selected' :
+                            (const ['Primary 1','Primary 2','Primary 3','Primary 4','Primary 5','Primary 6',
+                              'JSS 1','JSS 2','JSS 3','SS 1','SS 2','SS 3'].contains(value) ? value : 'Other');
+                        return group == level;
+                      }).length} student(s)'),
+                      children: filtered.where((r) {
+                        final value = (r['level'] ?? '').toString().trim();
+                        final group = value.isEmpty ? 'Not yet selected' :
+                            (const ['Primary 1','Primary 2','Primary 3','Primary 4','Primary 5','Primary 6',
+                              'JSS 1','JSS 2','JSS 3','SS 1','SS 2','SS 3'].contains(value) ? value : 'Other');
+                        return group == level;
+                      }).map((r) {
+                        final p = r['profiles'] as Map<String, dynamic>?;
+                        return ListTile(
+                          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                            builder: (_) => _StudentRecordDetailPage(student: r),
+                          )),
+                          title: Text(p?['full_name'] as String? ?? 'Account not linked'),
+                          subtitle: Text('${p?['email'] ?? 'No email'} • ${r['status'] ?? ''}'),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+            ],
           ],
         );
       }),
