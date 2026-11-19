@@ -69,7 +69,7 @@ The current workflow is manual payment submission and administrator review. A li
 
 ### 6. Database migration source drift — Critical for reproducible deployment
 
-The live Supabase migration history and repository migration files are not aligned. The audit found applied migration versions without matching source files, local migration files not represented in the live history, and numerous same-name migrations whose timestamps differ. Do not run a blanket `supabase db push` or reset against production until this is reconciled.
+The live Supabase migration history and repository migration files are not aligned: **58 migrations are applied in Supabase, while this branch contains 44 migration files; 28 applied migration names have no matching source file, 14 local migration files are not represented in the live history, and 25 same-name migrations have different version timestamps.** Do not run a blanket `supabase db push` or reset against production until this is reconciled.
 
 The two recent hardening changes are now recorded as migrations:
 - `20261119014426_profile_fields_and_message_immutability.sql`
