@@ -988,7 +988,11 @@ class _StudentRecordDetailPageState extends State<_StudentRecordDetailPage> {
     final profile = student['profiles'] as Map<String, dynamic>?;
     final name = profile?['full_name'] as String? ?? 'Unlinked student record';
     return Scaffold(
-      appBar: AppBar(title: const Text('Student profile')),
+      appBar: AppBar(title: const Text('Student profile'),actions:[
+        IconButton(tooltip:'Message this student',icon:const Icon(Icons.chat_bubble_outline),
+          onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+            builder:(_)=>StudentDirectChatPage(studentId:student['id'].toString(),studentName:name,admin:true)))),
+      ]),
       body: RefreshIndicator(
         onRefresh: () async { final next = _load(); setState(() => _records = next); await next; },
         child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
@@ -5315,6 +5319,13 @@ class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
               builder:(_)=>const StudentReleasedResultsPage())),
             icon:const Icon(Icons.school_outlined),
             label:const Text('View released school report cards'),
+          ),
+          const SizedBox(height:8),
+          OutlinedButton.icon(
+            onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+              builder:(_)=>const StudentDirectChatPage())),
+            icon:const Icon(Icons.chat_bubble_outline),
+            label:const Text('Message the Centre'),
           ),
           const SizedBox(height: 14),
           if (items.isEmpty) const _InfoNotice(message: 'There are no published practice tests for your current class yet. Your tutor will publish eligible tests here when they are ready.'),
