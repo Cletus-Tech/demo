@@ -3616,17 +3616,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
         .lte('published_at', now)
         .or('expires_at.is.null,expires_at.gt.$now')
         .order('published_at', ascending: false);
+    final notificationItems = List<Map<String, dynamic>>.from(notifications);
+    final linkedAnnouncementIds = notificationItems
+        .map((item) => item['announcement_id']?.toString())
+        .whereType<String>()
+        .toSet();
     final items = <Map<String, dynamic>>[
-      ...List<Map<String, dynamic>>.from(notifications).map((item) => {
+      ...notificationItems.map((item) => {
         ...item,
         'kind': 'notification',
         'sort_at': item['created_at'],
       }),
-      ...List<Map<String, dynamic>>.from(announcements).map((item) => {
-        ...item,
-        'kind': 'announcement',
-        'sort_at': item['published_at'],
-      }),
+      ...List<Map<String, dynamic>>.from(announcements)
+          .where((item) => !linkedAnnouncementIds.contains(item['id']?.toString()))
+          .map((item) => {
+            ...item,
+            'kind': 'announcement',
+            'sort_at': item['published_at'],
+          }),
     ];
     items.sort((a, b) => DateTime.parse(b['sort_at'] as String)
         .compareTo(DateTime.parse(a['sort_at'] as String)));
@@ -3648,7 +3655,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Future<void> _openItem(Map<String, dynamic> item) async {
-    await _markRead(item);
+    try {
+      await _markRead(item);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update the read status. Opening notification anyway.')),
+        );
+      }
+    }
     if (!mounted) return;
     final linkedId = item['kind'] == 'announcement'
         ? item['id']?.toString()
