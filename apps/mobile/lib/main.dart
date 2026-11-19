@@ -3007,16 +3007,34 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
   bool _loading=true;
   Timer? _rotation;
   Timer? _expiryRefresh;
+  Timer? _typingTimer;
+  int _typedTitle=0;
   @override
   void initState(){
     super.initState();_load();
-    _rotation=Timer.periodic(const Duration(seconds:7),(_){
-      if(mounted&&_items.length>1)setState(()=>_index=(_index+1)%_items.length);
+    _rotation=Timer.periodic(const Duration(seconds:8),(_){
+      if(mounted&&_items.length>1){
+        setState(()=>_index=(_index+1)%_items.length);
+        _startTitleTyping();
+      }
     });
     _expiryRefresh=Timer.periodic(const Duration(minutes:1),(_)=>_load());
   }
+  void _startTitleTyping(){
+    _typingTimer?.cancel();
+    final item=_items.isEmpty?null:_items[_index.clamp(0,_items.length-1).toInt()];
+    final title=(item?['title']??widget.fallbackTitle).toString();
+    _typedTitle=0;
+    if(!mounted)return;
+    if(title.isEmpty){setState((){});return;}
+    _typingTimer=Timer.periodic(const Duration(milliseconds:32),(timer){
+      if(!mounted){timer.cancel();return;}
+      if(_typedTitle>=title.length){timer.cancel();return;}
+      setState(()=>_typedTitle=(_typedTitle+1).clamp(0,title.length));
+    });
+  }
   @override
-  void dispose(){_rotation?.cancel();_expiryRefresh?.cancel();super.dispose();}
+  void dispose(){_rotation?.cancel();_expiryRefresh?.cancel();_typingTimer?.cancel();super.dispose();}
   Future<void> _openAttachment(Map<String,dynamic> item) async{
     try{
       final path=item['attachment_path']?.toString();
@@ -3033,7 +3051,15 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
         .not('published_at','is',null).lte('published_at',now)
         .or('expires_at.is.null,expires_at.gt.$now')
         .order('display_order',ascending:false).order('published_at',ascending:false).limit(10);
-      if(mounted)setState((){_items=List<Map<String,dynamic>>.from(rows);_index=0;_loading=false;});
+      if(mounted){
+        final previousId=_items.isNotEmpty?_items[_index.clamp(0,_items.length-1).toInt()]['id']:null;
+        final nextItems=List<Map<String,dynamic>>.from(rows);
+        final nextIndex=previousId==null?0:nextItems.indexWhere((row)=>row['id']==previousId);
+        final safeIndex=nextIndex<0?0:nextIndex;
+        final activeChanged=previousId!= (nextItems.isEmpty?null:nextItems[safeIndex]['id']);
+        setState(()=>{_items=nextItems,_index=safeIndex,_loading=false});
+        if(activeChanged)_startTitleTyping();
+      }
     }catch(_){if(mounted)setState(()=>_loading=false);}
   }
   Color _tone(String value){
@@ -3075,8 +3101,13 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
             position:Tween<Offset>(begin:const Offset(.06,0),end:Offset.zero).animate(animation),
             child:FadeTransition(opacity:animation,child:child)),
           child:Column(key:ValueKey(item?['id']??'welcome-board'),crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(title,maxLines:2,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(color:Colors.white,fontSize:22,height:1.16,fontWeight:FontWeight.w800)),
+            Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Expanded(child:Text(title.substring(0,_typedTitle.clamp(0,title.length)),maxLines:2,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:Colors.white,fontSize:22,height:1.16,fontWeight:FontWeight.w800))),
+              if(_typedTitle<title.length)
+                Container(width:2,height:23,margin:const EdgeInsets.only(left:3,top:2),
+                  decoration:BoxDecoration(color:const Color(0xFFFFD98A),borderRadius:BorderRadius.circular(2))),
+            ]),
             const SizedBox(height:9),
             Text(body,maxLines:4,overflow:TextOverflow.ellipsis,
               style:const TextStyle(color:Color(0xFFF0E8DE),fontSize:13,height:1.48)),
@@ -3090,11 +3121,21 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
         const SizedBox(height:14),
         Row(children:[
           if(_items.length>1)
-            Row(children:List.generate(_items.length,(i)=>AnimatedContainer(
-              duration:const Duration(milliseconds:250),margin:const EdgeInsets.only(right:5),
-              width:i==_index?18:6,height:6,
-              decoration:BoxDecoration(color:i==_index?const Color(0xFFFFD98A):Colors.white.withValues(alpha:.42),
-                borderRadius:BorderRadius.circular(8)))))
+            Row(children:[
+              IconButton(
+                visualDensity:VisualDensity.compact,padding:EdgeInsets.zero,constraints:const BoxConstraints(minWidth:28,minHeight:28),
+                onPressed:(){setState(()=>_index=(_index-1+_items.length)%_items.length);_startTitleTyping();},
+                icon:const Icon(Icons.chevron_left_rounded,color:Colors.white,size:20)),
+              ...List.generate(_items.length,(i)=>AnimatedContainer(
+                duration:const Duration(milliseconds:350),curve:Curves.easeOutCubic,
+                margin:const EdgeInsets.only(right:5),width:i==_index?20:6,height:6,
+                decoration:BoxDecoration(color:i==_index?const Color(0xFFFFD98A):Colors.white.withValues(alpha:.42),
+                  borderRadius:BorderRadius.circular(8)))),
+              IconButton(
+                visualDensity:VisualDensity.compact,padding:EdgeInsets.zero,constraints:const BoxConstraints(minWidth:28,minHeight:28),
+                onPressed:(){setState(()=>_index=(_index+1)%_items.length);_startTitleTyping();},
+                icon:const Icon(Icons.chevron_right_rounded,color:Colors.white,size:20)),
+            ])
           else
             Text(item==null?'YOUR LEARNING SPACE':'YOUNG LEARNERS TUTORIAL',
               style:TextStyle(color:Colors.white.withValues(alpha:.72),fontSize:9,letterSpacing:1.1,fontWeight:FontWeight.w800)),
