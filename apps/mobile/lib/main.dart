@@ -2332,7 +2332,7 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
       });
       _title.clear();_body.clear();
       if(mounted){
-        setState(()=>{_expiresAt=DateTime.now().add(const Duration(days:7));_attachment=null;});
+        setState(() {_expiresAt=DateTime.now().add(const Duration(days:7));_attachment=null;});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content:Text('Dashboard update published. ${sent.toString()} student notification(s) sent.')));
       }
@@ -3003,11 +3003,19 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
   }
   @override
   void dispose(){_rotation?.cancel();_expiryRefresh?.cancel();super.dispose();}
+  Future<void> _openAttachment(Map<String,dynamic> item) async{
+    try{
+      final path=item['attachment_path']?.toString();
+      if(path==null||path.isEmpty)throw Exception('No attachment is available.');
+      final url=await Supabase.instance.client.storage.from('platform-attachments').createSignedUrl(path,3600);
+      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open attachment: $e')));}
+  }
   Future<void> _load() async{
     try{
       final now=DateTime.now().toUtc().toIso8601String();
       final rows=await Supabase.instance.client.from('announcements')
-        .select('id,title,body,published_at,expires_at,banner_tone,target_class_id,classes(name)')
+        .select('id,title,body,published_at,expires_at,banner_tone,target_class_id,attachment_path,attachment_name,classes(name)')
         .not('published_at','is',null).lte('published_at',now)
         .or('expires_at.is.null,expires_at.gt.$now')
         .order('display_order',ascending:false).order('published_at',ascending:false).limit(10);
@@ -3058,6 +3066,12 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
             const SizedBox(height:9),
             Text(body,maxLines:4,overflow:TextOverflow.ellipsis,
               style:const TextStyle(color:Color(0xFFF0E8DE),fontSize:13,height:1.48)),
+            if(item!=null && (item['attachment_path']??'').toString().isNotEmpty)
+              Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+                onPressed:()=>_openAttachment(item),
+                icon:const Icon(Icons.attach_file,size:15),
+                label:Text((item['attachment_name']??'Open attachment').toString(),maxLines:1,overflow:TextOverflow.ellipsis),
+                style:TextButton.styleFrom(foregroundColor:const Color(0xFFFFD98A)))),
           ])),
         const SizedBox(height:14),
         Row(children:[
@@ -4474,7 +4488,7 @@ class _ClassroomPageState extends State<ClassroomPage> {
         const SizedBox(height:10),TextField(controller:body,minLines:3,maxLines:7,decoration:const InputDecoration(labelText:'Explanation or notice')),
         const SizedBox(height:10),TextField(controller:url,decoration:const InputDecoration(labelText:'Optional video or image URL',hintText:'https://...')),
         const SizedBox(height:10),OutlinedButton.icon(onPressed:()async{
-          final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:const ['jpg','jpeg','png','webp','gif','mp4','webm','mov','pdf'],withData:true);
+          final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:const ['jpg','jpeg','png','webp','gif','mp4','webm','mov','pdf','doc','docx','xls','xlsx','ppt','pptx','txt','csv','rtf'],withData:true);
           if(picked!=null&&picked.files.isNotEmpty)setDialogState(()=>file=picked.files.first);
         },icon:const Icon(Icons.attach_file),label:Text(file==null?'Choose image, video or PDF':'Selected: ${file!.name}')),
         const Text('Maximum file size: 100 MB. Files are stored privately for this classroom.',style:TextStyle(fontSize:11,color:AppColors.muted)),
@@ -4493,7 +4507,7 @@ class _ClassroomPageState extends State<ClassroomPage> {
         if(bytes==null)throw Exception('This device could not read the selected file. Please choose it again.');
         if(bytes.length>104857600)throw Exception('The selected file is larger than 100 MB.');
         final ext=file!.extension?.toLowerCase()??'bin';
-        final mime=const {'jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp','gif':'image/gif','mp4':'video/mp4','webm':'video/webm','mov':'video/quicktime','pdf':'application/pdf'}[ext]??'application/octet-stream';
+        final mime=const {'jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp','gif':'image/gif','mp4':'video/mp4','webm':'video/webm','mov':'video/quicktime','pdf':'application/pdf','doc':'application/msword','docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','xls':'application/vnd.ms-excel','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','ppt':'application/vnd.ms-powerpoint','pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation','txt':'text/plain','csv':'text/csv','rtf':'application/rtf'}[ext]??'application/octet-stream';
         final safeName=file!.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'),'_');
         mediaPath='$_classId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
         await Supabase.instance.client.storage.from('classroom-resources').uploadBinary(mediaPath!,bytes,fileOptions:FileOptions(contentType:mime,upsert:false));
