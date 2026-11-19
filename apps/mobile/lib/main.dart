@@ -2463,8 +2463,9 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
   String _targetClassId='', _tone='gold';
   DateTime _expiresAt=DateTime.now().add(const Duration(days:7));
   late Future<List<Map<String,dynamic>>> _classes;
+  late Future<List<Map<String,dynamic>>> _managedAnnouncements;
   @override
-  void initState(){super.initState();_classes=_loadClasses();}
+  void initState(){super.initState();_classes=_loadClasses();_managedAnnouncements=_loadAnnouncements();}
   @override
   void dispose(){_title.dispose();_body.dispose();super.dispose();}
   String _mime(PlatformFile f){final ext=f.extension?.toLowerCase()??'';return const {'pdf':'application/pdf','doc':'application/msword','docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','xls':'application/vnd.ms-excel','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','ppt':'application/vnd.ms-powerpoint','pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation','txt':'text/plain','csv':'text/csv','rtf':'application/rtf','jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp','gif':'image/gif','mp4':'video/mp4','webm':'video/webm','mov':'video/quicktime'}[ext]??'application/octet-stream';}
@@ -2478,6 +2479,148 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
       firstDate:DateTime.now(),lastDate:DateTime.now().add(const Duration(days:365)),
       helpText:'When should this dashboard notice expire?');
     if(picked!=null&&mounted)setState(()=>_expiresAt=DateTime(picked.year,picked.month,picked.day,23,59,59));
+  }
+  Future<List<Map<String,dynamic>>> _loadAnnouncements() async{
+    final rows=await Supabase.instance.client.from('announcements')
+      .select('id,title,body,published_at,expires_at,banner_tone,target_class_id,attachment_path,attachment_name,attachment_mime_type,attachment_size,classes(name)')
+      .order('created_at',ascending:false).limit(200);
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  Future<void> _refreshAnnouncements() async{
+    final next=_loadAnnouncements();
+    setState(()=>_managedAnnouncements=next);
+    await next;
+  }
+  Future<void> _openManagedAttachment(Map<String,dynamic> item) async{
+    try{
+      final path=item['attachment_path']?.toString()??'';
+      if(path.isEmpty)throw Exception('No attachment is available.');
+      final url=await Supabase.instance.client.storage.from('platform-attachments').createSignedUrl(path,3600);
+      if(!await _openResourceUrl(url))throw Exception('No compatible viewer is available.');
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open media: $e')));}
+  }
+  Future<void> _editAnnouncement(Map<String,dynamic> item) async{
+    final title=TextEditingController(text:(item['title']??'').toString());
+    final body=TextEditingController(text:(item['body']??'').toString());
+    var tone=(item['banner_tone']??'gold').toString();
+    var replacement= null as PlatformFile?;
+    var removeAttachment=false;
+    final result=await showDialog<Map<String,dynamic>>(context:context,builder:(dialogContext)=>StatefulBuilder(
+      builder:(context,dialogSetState)=>AlertDialog(
+        title:const Text('Edit dashboard post'),
+        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          TextField(controller:title,maxLength:90,decoration:const InputDecoration(labelText:'Headline')),
+          const SizedBox(height:8),
+          TextField(controller:body,minLines:3,maxLines:7,maxLength:1200,
+            decoration:const InputDecoration(labelText:'Announcement / message')),
+          const SizedBox(height:10),
+          DropdownButtonFormField<String>(value:tone,decoration:const InputDecoration(labelText:'Billboard appearance'),
+            items:const [
+              DropdownMenuItem(value:'gold',child:Text('Warm gold')),
+              DropdownMenuItem(value:'blue',child:Text('Ocean blue')),
+              DropdownMenuItem(value:'green',child:Text('Forest green')),
+              DropdownMenuItem(value:'rose',child:Text('Rose glow')),
+              DropdownMenuItem(value:'ocean',child:Text('Deep ocean')),
+              DropdownMenuItem(value:'violet',child:Text('Violet light')),
+              DropdownMenuItem(value:'teal',child:Text('Teal shine')),
+              DropdownMenuItem(value:'sunset',child:Text('Sunset glow')),
+              DropdownMenuItem(value:'emerald',child:Text('Emerald glow')),
+              DropdownMenuItem(value:'midnight',child:Text('Midnight')),
+              DropdownMenuItem(value:'neon',child:Text('Neon night')),
+              DropdownMenuItem(value:'aurora',child:Text('Aurora lights')),
+              DropdownMenuItem(value:'royal',child:Text('Royal purple')),
+              DropdownMenuItem(value:'coral',child:Text('Coral light')),
+            ],onChanged:(v)=>dialogSetState(()=>tone=v??'gold')),
+          const SizedBox(height:12),
+          Align(alignment:Alignment.centerLeft,child:Text(
+            replacement?.name??(removeAttachment?'Media will be removed':(item['attachment_name']??'No media attached').toString()),
+            style:const TextStyle(fontSize:12,color:AppColors.muted))),
+          Wrap(spacing:8,children:[
+            OutlinedButton.icon(onPressed:()async{
+              final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:_fileTypes,withData:true);
+              if(picked!=null&&picked.files.isNotEmpty){
+                if(picked.files.first.size>52428800){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Attachments must be 50 MB or smaller.')));return;}
+                dialogSetState(()=>{replacement=picked.files.first,removeAttachment=false});
+              }
+            },icon:const Icon(Icons.swap_horiz),label:const Text('Replace media')),
+            TextButton.icon(onPressed:()=>dialogSetState(()=>{replacement=null,removeAttachment=true}),
+              icon:const Icon(Icons.delete_outline),label:const Text('Remove media')),
+          ]),
+          const Text('Changes apply to the existing dashboard post. Maximum media size: 50 MB.',
+            style:TextStyle(fontSize:11,color:AppColors.muted)),
+        ])),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(dialogContext,{
+            'title':title.text.trim(),'body':body.text.trim(),'tone':tone,
+            'replacement':replacement,'removeAttachment':removeAttachment,
+          }),child:const Text('Save changes')),
+        ],
+      )));
+    title.dispose();body.dispose();
+    if(result==null)return;
+    if((result['title'] as String).isEmpty||(result['body'] as String).isEmpty){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Headline and message cannot be empty.')));
+      return;
+    }
+    setState(()=>_busy=true);
+    String? newPath;
+    try{
+      final oldPath=item['attachment_path']?.toString();
+      final file=result['replacement'] as PlatformFile?;
+      String? newName=item['attachment_name']?.toString();
+      String? newMime=item['attachment_mime_type']?.toString();
+      int? newSize=(item['attachment_size'] as num?)?.toInt();
+      if(file!=null){
+        final bytes=file.bytes;
+        if(bytes==null)throw Exception('The selected media file could not be read.');
+        final uid=Supabase.instance.client.auth.currentUser!.id;
+        newName=file.name;newMime=_mime(file);newSize=file.size;
+        final safe=file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
+        newPath='announcements/$uid/${DateTime.now().microsecondsSinceEpoch}_$safe';
+        await Supabase.instance.client.storage.from('platform-attachments')
+          .uploadBinary(newPath!,bytes,fileOptions:FileOptions(contentType:newMime,upsert:false));
+      }else if(result['removeAttachment']==true){newPath=null;newName=null;newMime=null;newSize=null;}
+      else{newPath=oldPath;}
+      await Supabase.instance.client.from('announcements').update({
+        'title':result['title'],'body':result['body'],'banner_tone':result['tone'],
+        'attachment_path':newPath,'attachment_name':newName,
+        'attachment_mime_type':newMime,'attachment_size':newSize,
+      }).eq('id',item['id']);
+      if(oldPath!=null&&oldPath.isNotEmpty&&oldPath!=newPath){
+        try{await Supabase.instance.client.storage.from('platform-attachments').remove([oldPath]);}catch(_){}
+      }
+      await _refreshAnnouncements();
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Dashboard post updated.')));
+    }catch(e){
+      if(newPath!=null&&newPath!=item['attachment_path']){
+        try{await Supabase.instance.client.storage.from('platform-attachments').remove([newPath]);}catch(_){}
+      }
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not update dashboard post: $e')));
+    }finally{if(mounted)setState(()=>_busy=false);}
+  }
+  Future<void> _deleteAnnouncement(Map<String,dynamic> item) async{
+    final confirmed=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('Delete dashboard post?'),
+      content:Text('“${item['title']??'This post'}” will be removed from the dashboard. This action cannot be undone.'),
+      actions:[
+        TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+        FilledButton.tonal(onPressed:()=>Navigator.pop(ctx,true),
+          style:FilledButton.styleFrom(foregroundColor:Colors.red),child:const Text('Delete post')),
+      ]));
+    if(confirmed!=true)return;
+    setState(()=>_busy=true);
+    try{
+      final path=item['attachment_path']?.toString();
+      await Supabase.instance.client.from('announcements').delete().eq('id',item['id']);
+      if(path!=null&&path.isNotEmpty){
+        try{await Supabase.instance.client.storage.from('platform-attachments').remove([path]);}catch(_){}
+      }
+      await _refreshAnnouncements();
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Dashboard post deleted.')));
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not delete dashboard post: $e')));
+    }finally{if(mounted)setState(()=>_busy=false);}
   }
   Future<void> _publish() async{
     if(_title.text.trim().isEmpty||_body.text.trim().isEmpty){
@@ -2521,11 +2664,73 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
   }
   @override
   Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('Dashboard update board')),
+    appBar:AppBar(title:const Text('Dashboard management')),
     body:ListView(padding:const EdgeInsets.all(20),children:[
-      const Text('Publish a dashboard notice',style:TextStyle(fontSize:22,fontWeight:FontWeight.w700,color:AppColors.ink)),
+      Row(children:[
+        const Expanded(child:Text('Existing dashboard posts',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink))),
+        IconButton(onPressed:_busy?null:_refreshAnnouncements,tooltip:'Refresh posts',icon:const Icon(Icons.refresh)),
+      ]),
+      const Text('View every dashboard announcement, including expired posts. Edit its headline, message, appearance or media, or delete it completely.',
+        style:TextStyle(color:AppColors.muted,height:1.45)),
+      const SizedBox(height:12),
+      FutureBuilder<List<Map<String,dynamic>>>(future:_managedAnnouncements,builder:(context,snapshot){
+        if(snapshot.connectionState!=ConnectionState.done)return const Padding(
+          padding:EdgeInsets.all(24),child:Center(child:CircularProgressIndicator()));
+        if(snapshot.hasError)return _InfoNotice(message:'Dashboard posts could not be loaded: ${snapshot.error}');
+        final posts=snapshot.data??[];
+        if(posts.isEmpty)return const _InfoNotice(message:'There are no dashboard posts yet.');
+        return Column(children:posts.map((item){
+          final mediaPath=(item['attachment_path']??'').toString();
+          final mime=(item['attachment_mime_type']??'').toString();
+          final isVideo=mime.startsWith('video/');
+          final isImage=mime.startsWith('image/');
+          final expires=item['expires_at']==null?'No expiry':'Expires ${DateTime.tryParse(item['expires_at'].toString())?.toLocal().toString().substring(0,16)??item['expires_at']}';
+          return Card(margin:const EdgeInsets.only(bottom:10),clipBehavior:Clip.antiAlias,
+            child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  Text((item['title']??'Untitled').toString(),style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink,fontSize:16)),
+                  const SizedBox(height:4),
+                  Text((item['body']??'').toString(),maxLines:3,overflow:TextOverflow.ellipsis,
+                    style:const TextStyle(color:AppColors.muted,height:1.35)),
+                ])),
+                PopupMenuButton<String>(enabled:!_busy,onSelected:(v){
+                  if(v=='edit')_editAnnouncement(item);
+                  if(v=='delete')_deleteAnnouncement(item);
+                },itemBuilder:(_)=>const [
+                  PopupMenuItem(value:'edit',child:ListTile(leading:Icon(Icons.edit_outlined),title:Text('Edit post'),contentPadding:EdgeInsets.zero)),
+                  PopupMenuItem(value:'delete',child:ListTile(leading:Icon(Icons.delete_outline,color:Colors.red),title:Text('Delete post'),contentPadding:EdgeInsets.zero)),
+                ]),
+              ]),
+              if(mediaPath.isNotEmpty)...[
+                const SizedBox(height:8),
+                if(isImage||isVideo)SizedBox(height:132,width:double.infinity,
+                  child:ClipRRect(borderRadius:BorderRadius.circular(10),
+                    child:_AnnouncementMedia(item:item,onOpen:()=>_openManagedAttachment(item)))),
+                Row(children:[
+                  Icon(isVideo?Icons.videocam_outlined:isImage?Icons.image_outlined:Icons.attach_file,
+                    size:17,color:AppColors.brown),
+                  const SizedBox(width:6),
+                  Expanded(child:Text((item['attachment_name']??'Attached media').toString(),
+                    maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12,color:AppColors.muted))),
+                  TextButton(onPressed:()=>_openManagedAttachment(item),child:const Text('Open')),
+                ]),
+              ]else
+                const Padding(padding:EdgeInsets.only(top:8),child:Text('No media attached',style:TextStyle(fontSize:12,color:AppColors.muted))),
+              const Divider(height:16),
+              Row(children:[
+                Expanded(child:Text('${item['published_at']==null?'Draft':'Published'} • $expires',
+                  style:const TextStyle(fontSize:11,color:AppColors.muted))),
+                Text((item['classes'] is Map?item['classes']['name']:null)?.toString()??'Whole platform',
+                  style:const TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:AppColors.brown)),
+              ]),
+            ])));
+        }).toList());
+      }),
+      const Divider(height:30),
+      const Text('Publish a new dashboard post',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink)),
       const SizedBox(height:8),
-      const Text('This notice appears on the dashboard as a rotating billboard. Publish to the whole platform or target one class. When its expiry date passes, it automatically leaves the active board.',
+      const Text('Publish to the whole platform or target one class. Posts automatically leave the active board when they expire.',
         style:TextStyle(color:AppColors.muted,height:1.45)),
       const SizedBox(height:18),
       TextField(controller:_title,maxLength:90,decoration:const InputDecoration(labelText:'Headline')),
@@ -2538,7 +2743,7 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
         return DropdownButtonFormField<String>(
           value:_targetClassId,decoration:const InputDecoration(labelText:'Who should see this update?'),
           items:[const DropdownMenuItem(value:'',child:Text('Whole platform')),
-            ...classes.map((c)=>DropdownMenuItem(value:c['id'].toString(),child:Text(c['name'].toString())))],
+            ...classes.map((cl)=>DropdownMenuItem(value:cl['id'].toString(),child:Text(cl['name'].toString())))],
           onChanged:_busy?null:(v)=>setState(()=>_targetClassId=v??''));
       }),
       const SizedBox(height:12),
@@ -2559,13 +2764,10 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
           DropdownMenuItem(value:'aurora',child:Text('Aurora lights')),
           DropdownMenuItem(value:'royal',child:Text('Royal purple')),
           DropdownMenuItem(value:'coral',child:Text('Coral light')),
-        ],
-        onChanged:_busy?null:(v)=>setState(()=>_tone=v??'gold')),
+        ],onChanged:_busy?null:(v)=>setState(()=>_tone=v??'gold')),
       const SizedBox(height:10),
       OutlinedButton.icon(onPressed:_busy?null:_chooseAttachment,
-        icon:const Icon(Icons.attach_file),
-        label:Text(_attachment==null?'Attach a document or media file':_attachment!.name),
-      ),
+        icon:const Icon(Icons.attach_file),label:Text(_attachment==null?'Attach a document or media file':_attachment!.name)),
       if(_attachment!=null)Align(alignment:Alignment.centerLeft,child:TextButton.icon(
         onPressed:()=>setState(()=>_attachment=null),icon:const Icon(Icons.close),label:const Text('Remove attachment'))),
       const Text('Supported: PDF, Word, Excel, PowerPoint, text, images and videos. Maximum 50 MB.',
