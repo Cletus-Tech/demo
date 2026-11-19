@@ -94,11 +94,14 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
     if(p>=45)return 'D';if(p>=40)return 'E';return 'F';
   }
   Future<void> _save({bool release=false}) async{
-    final caMax=double.tryParse(_maxCa.text.trim()),examMax=double.tryParse(_maxExam.text.trim());
+    final caMax=double.tryParse(_maxCa.text.trim());
+    final examMax=double.tryParse(_maxExam.text.trim());
     if(caMax==null||examMax==null||caMax<=0||examMax<=0||_students.isEmpty)return;
     final payload=<Map<String,dynamic>>[];
     for(final student in _students){
-      final id=student['id'].toString(),ca=_value(_ca[id]!),exam=_value(_exam[id]!);
+      final id=student['id'].toString();
+      final ca=_value(_ca[id]!);
+      final exam=_value(_exam[id]!);
       if(ca==null||exam==null||ca<0||exam<0||ca>caMax||exam>examMax){
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Check scores for ${'(student['profiles']?['full_name']??'this learner').toString()}')));
         return;
@@ -113,13 +116,7 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
       await _db.from('results').upsert(payload,onConflict:'period_id,student_id,subject_id');
       if(release){
         final now=DateTime.now().toUtc().toIso8601String();
-        await _db.from('result_periods').update({'status':'published','published_at':now}).eq('id',periodId);
-        await _db.from('results').update({'published_at':now}).eq('period_id',periodId);
-        final users=_students.where((s)=>s['user_id']!=null).map((s)=>s['user_id'].toString()).toSet();
-        if(users.isNotEmpty)await _db.from('notifications').insert(users.map((id)=>{
-          'user_id':id,'title':'Your results are ready',
-          'body':'Your ${_period.text.trim()} ${_year.text.trim()} results have been released. Open your dashboard to view them.',
-        }).toList());
+        await _db.rpc('release_result_period',params:{'_period_id':periodId});
         _periodStatus='published';
       }
       if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -239,8 +236,10 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
             const SizedBox(height:8),
             ..._students.map((student){
               final id=student['id'].toString();
-              final ca=_value(_ca[id]!)??0,exam=_value(_exam[id]!)??0;
-              final maxCa=double.tryParse(_maxCa.text.trim())??40,maxExam=double.tryParse(_maxExam.text.trim())??60;
+              final ca=_value(_ca[id]!)??0;
+              final exam=_value(_exam[id]!)??0;
+              final maxCa=double.tryParse(_maxCa.text.trim())??40;
+              final maxExam=double.tryParse(_maxExam.text.trim())??60;
               return Card(margin:const EdgeInsets.only(bottom:9),child:Padding(padding:const EdgeInsets.all(12),
                 child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                   Text((student['profiles']?['full_name']??'Learner').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),
