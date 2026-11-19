@@ -71,9 +71,11 @@ The current workflow is manual payment submission and administrator review. A li
 
 The live Supabase migration history and repository migration files are not aligned: **60 migrations are applied in Supabase, while this branch contains 46 migration files; 28 applied migration names have no matching source file, 14 local migration files are not represented in the live history, and 25 same-name migrations have different version timestamps.** Do not run a blanket `supabase db push` or reset against production until this is reconciled.
 
-The two recent hardening changes are now recorded as migrations:
+The recent hardening changes are now recorded as migrations:
 - `20261119014426_profile_fields_and_message_immutability.sql`
 - `20261119014733_make_profile_avatars_private.sql`
+- `20261119014912_optimise_own_row_rls_auth_checks.sql`
+- `20261119014944_index_uncovered_foreign_keys.sql`
 
 **Required:** reconcile every applied migration against its source, restore missing migration files, correct version/name mismatches safely, and verify a clean rebuild on a separate development database before production deployment.
 
