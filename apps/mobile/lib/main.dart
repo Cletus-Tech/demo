@@ -4555,11 +4555,13 @@ class _ClassroomPageState extends State<ClassroomPage> {
     final external=post['media_url']?.toString();
     final source=(path??external??'').split('?').first.toLowerCase();
     final isImage=['.jpg','.jpeg','.png','.webp','.gif'].any(source.endsWith);
+    final isPdf=source.endsWith('.pdf');
+    final isDocument=['.doc','.docx','.xls','.xlsx','.ppt','.pptx','.txt','.csv','.rtf'].any(source.endsWith);
     if(!isImage)return Container(width:double.infinity,padding:const EdgeInsets.all(14),
       decoration:BoxDecoration(color:AppColors.cream,borderRadius:BorderRadius.circular(12)),
-      child:Row(children:[Icon(source.endsWith('.pdf')?Icons.picture_as_pdf_outlined:Icons.play_circle_outline_rounded,
+      child:Row(children:[Icon(isPdf?Icons.picture_as_pdf_outlined:isDocument?Icons.description_outlined:Icons.play_circle_outline_rounded,
         color:AppColors.brown,size:30),const SizedBox(width:10),
-        Expanded(child:Text(source.endsWith('.pdf')?'PDF learning material':'Video learning resource',
+        Expanded(child:Text(isPdf?'PDF learning material':isDocument?'Attached document':'Video learning resource',
           style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)))]));
     final future=path!=null
       ?Supabase.instance.client.storage.from('classroom-resources').createSignedUrl(path,3600)
