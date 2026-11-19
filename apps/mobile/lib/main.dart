@@ -5553,7 +5553,7 @@ class _StaffRoomPageState extends State<StaffRoomPage>{
             Icon(Icons.forum_outlined,size:48,color:AppColors.gold),const SizedBox(height:12),
             const _InfoNotice(message:'The staff room is ready. The first coordinator message or staff conversation will appear here.')]);
           return ListView.builder(reverse:true,padding:const EdgeInsets.all(14),itemCount:rows.length,itemBuilder:(context,index){
-            final r=rows[rows.length-1-index];
+            final r=rows[index];
             final announcement=r['message_type']=='announcement';
             return Card(color:announcement?AppColors.cream:null,margin:const EdgeInsets.only(bottom:9),
               child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
