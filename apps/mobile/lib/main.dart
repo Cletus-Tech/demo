@@ -2021,7 +2021,6 @@ class _SubmissionCountCard extends StatelessWidget{
     const SizedBox(height:3),Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:10,color:AppColors.muted,fontWeight:FontWeight.w700)),
   ])));
 }
-}
 
 class AdminAssessmentQuestionsPage extends StatefulWidget {
   final Map<String,dynamic> assessment;
@@ -3449,7 +3448,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 class _AnnouncementMedia extends StatefulWidget {
   final Map<String,dynamic> item;
   final VoidCallback onOpen;
-  const _AnnouncementMedia({required this.item,required this.onOpen});
+  const _AnnouncementMedia({super.key,required this.item,required this.onOpen});
   @override State<_AnnouncementMedia> createState()=>_AnnouncementMediaState();
 }
 class _AnnouncementMediaState extends State<_AnnouncementMedia> {
