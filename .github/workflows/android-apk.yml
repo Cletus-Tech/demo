@@ -61,43 +61,47 @@ jobs:
           PY
       - name: Resolve packages
         run: flutter pub get
-      - name: Align file picker Android library with API 36
+      - name: Align Android plugin libraries with API 36
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
           cache = Path.home() / ".pub-cache" / "hosted" / "pub.dev"
-          packages = sorted(cache.glob("file_picker-*/android"))
-          if not packages:
-              raise SystemExit("Resolved file_picker Android module was not found")
+          targets = {"file_picker", "flutter_plugin_android_lifecycle"}
           changed = []
-          for android_dir in packages:
-              for gradle in (android_dir / "build.gradle.kts", android_dir / "build.gradle"):
-                  if not gradle.exists():
-                      continue
-                  content = gradle.read_text()
-                  updated, count = re.subn(
-                      r'compileSdk\s*=\s*flutter\.compileSdkVersion',
-                      'compileSdk = 36', content)
-                  if count == 0:
-                      updated, count = re.subn(
-                          r'compileSdkVersion\s+flutter\.compileSdkVersion',
-                          'compileSdkVersion 36', content)
-                  if count == 0:
-                      updated, count = re.subn(
-                          r'compileSdk\s*=\s*\d+',
-                          'compileSdk = 36', content)
-                  if count == 0:
-                      updated, count = re.subn(
-                          r'compileSdkVersion\s+\d+',
-                          'compileSdkVersion 36', content)
-                  if count == 0:
-                      raise SystemExit(f"Could not set API 36 in {gradle}")
-                  gradle.write_text(updated)
-                  changed.append(str(gradle))
+          found = set()
+          patterns = [
+              (r'compileSdk\\s*=\\s*flutter\\.compileSdkVersion', 'compileSdk = 36'),
+              (r'compileSdk\\s+flutter\\.compileSdkVersion', 'compileSdk 36'),
+              (r'compileSdkVersion\\s*=\\s*flutter\\.compileSdkVersion', 'compileSdkVersion = 36'),
+              (r'compileSdkVersion\\s+flutter\\.compileSdkVersion', 'compileSdkVersion 36'),
+              (r'compileSdk\\s*=\\s*\\d+', 'compileSdk = 36'),
+              (r'compileSdk\\s+\\d+', 'compileSdk 36'),
+              (r'compileSdkVersion\\s*=\\s*\\d+', 'compileSdkVersion = 36'),
+              (r'compileSdkVersion\\s+\\d+', 'compileSdkVersion 36'),
+          ]
+          for package in targets:
+              for android_dir in sorted(cache.glob(f"{package}-*/android")):
+                  found.add(package)
+                  for gradle in (android_dir / "build.gradle.kts", android_dir / "build.gradle"):
+                      if not gradle.exists():
+                          continue
+                      content = gradle.read_text()
+                      updated = content
+                      for pattern, replacement in patterns:
+                          updated, count = re.subn(pattern, replacement, updated)
+                          if count:
+                              break
+                      if updated == content:
+                          continue
+                      gradle.write_text(updated)
+                      changed.append(str(gradle))
+          missing = targets - found
+          if missing:
+              raise SystemExit("Missing resolved Android plugin(s): " + ", ".join(sorted(missing)))
           if not changed:
-              raise SystemExit("No file_picker Android Gradle file was updated")
-          print("Configured file_picker Android module for API 36:", ", ".join(changed))
+              raise SystemExit("No Android plugin compileSdk declarations were updated")
+          print("Configured Android plugin libraries for API 36:", ", ".join(changed))
           PY
       - name: Run tests
         run: flutter test
