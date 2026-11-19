@@ -20,6 +20,32 @@ const supabasePublishableKey = String.fromEnvironment(
   defaultValue: 'sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB',
 );
 
+/// Opens private Supabase resources without handing their URL to arbitrary
+/// third-party apps registered for ACTION_VIEW (some devices route these URLs
+/// to non-exported payment-app activities). Prefer a browser Custom Tab, then
+/// the app's own WebView. Never fall back to an external ACTION_VIEW intent.
+Future<bool> _openResourceUrl(String rawUrl) async {
+  final uri = Uri.tryParse(rawUrl);
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return false;
+  try {
+    if (await launchUrl(uri, mode: LaunchMode.inAppBrowserView)) return true;
+  } catch (_) {
+    // Continue to the app-contained WebView fallback.
+  }
+  try {
+    return await launchUrl(
+      uri,
+      mode: LaunchMode.inAppWebView,
+      webViewConfiguration: const WebViewConfiguration(
+        enableJavaScript: true,
+        enableDomStorage: true,
+      ),
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
 String _profileAvatarPath(String? storedValue) {
   final value = (storedValue ?? '').trim();
   if (value.isEmpty) return '';
@@ -3196,7 +3222,7 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
       final path=item['attachment_path']?.toString();
       if(path==null||path.isEmpty)throw Exception('No attachment is available.');
       final url=await Supabase.instance.client.storage.from('platform-attachments').createSignedUrl(path,3600);
-      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+      if (!await _openResourceUrl(url)) throw Exception('No compatible in-app viewer is available on this device.');
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open attachment: $e')));}
   }
   Future<void> _load() async{
@@ -3742,7 +3768,7 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
         ? await Supabase.instance.client.storage.from('classroom-resources').createSignedUrl(path,3600)
         : row['media_url']?.toString();
       if(url==null||!url.startsWith('https://'))throw Exception('Resource unavailable');
-      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+      if (!await _openResourceUrl(url)) throw Exception('No compatible in-app viewer is available on this device.');
     } catch(e) {
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open classroom resource: $e')));
     }
@@ -4766,7 +4792,7 @@ class _ClassroomPageState extends State<ClassroomPage> {
       final path=post['media_path']?.toString();
       final url=path!=null?await Supabase.instance.client.storage.from('classroom-resources').createSignedUrl(path,3600):post['media_url']?.toString();
       if(url==null||!url.startsWith('https://'))throw Exception('Resource link is unavailable.');
-      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+      if (!await _openResourceUrl(url)) throw Exception('No compatible in-app viewer is available on this device.');
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open resource: $e')));}
   }
   IconData _postIcon(String type)=>type=='notice'?Icons.campaign_outlined:type=='explanation'?Icons.lightbulb_outline_rounded:type=='whiteboard'?Icons.edit_note_rounded:Icons.perm_media_outlined;
@@ -4968,7 +4994,7 @@ class _LessonDetailPageState extends State<LessonDetailPage> {
           onTap: () {
             final url = item['external_url'];
             if (url is String && url.startsWith('https://')) {
-              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+              _openResourceUrl(url).then((opened) { if (!opened && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This resource could not be opened inside the app. Please try again later.'))); });
             } else {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This resource does not have an external link yet.')));
             }
@@ -6271,7 +6297,7 @@ class _StaffRoomPageState extends State<StaffRoomPage>{
       final path=row['attachment_path']?.toString();
       if(path==null||path.isEmpty)throw Exception('Attachment not found.');
       final url=await Supabase.instance.client.storage.from('platform-attachments').createSignedUrl(path,3600);
-      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+      if (!await _openResourceUrl(url)) throw Exception('No compatible in-app viewer is available on this device.');
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open attachment: $e')));}
   }
   Future<void> _send() async{
@@ -6437,7 +6463,7 @@ class _StudentDirectChatPageState extends State<StudentDirectChatPage>{
       final path=row['attachment_path']?.toString();
       if(path==null||path.isEmpty)throw Exception('Attachment not found.');
       final url=await _db.storage.from('platform-attachments').createSignedUrl(path,3600);
-      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+      if (!await _openResourceUrl(url)) throw Exception('No compatible in-app viewer is available on this device.');
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open attachment: $e')));}
   }
   Future<void> _send() async{
