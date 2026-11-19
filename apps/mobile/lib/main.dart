@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'learning_access.dart';
 import 'result_management.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 
 // Keep release and web clients aligned with the active Supabase project.
 const supabaseUrl = String.fromEnvironment(
@@ -3176,6 +3177,68 @@ class _NotificationsPageState extends State<NotificationsPage> {
   );
 }
 
+class _AnnouncementMedia extends StatefulWidget {
+  final Map<String,dynamic> item;
+  final VoidCallback onOpen;
+  const _AnnouncementMedia({required this.item,required this.onOpen});
+  @override State<_AnnouncementMedia> createState()=>_AnnouncementMediaState();
+}
+class _AnnouncementMediaState extends State<_AnnouncementMedia> {
+  VideoPlayerController? _video;
+  String? _url;
+  Object? _error;
+  bool _loading=true;
+  bool get _isVideo => (widget.item['attachment_mime_type']??'').toString().startsWith('video/');
+  @override void initState(){super.initState();_prepare();}
+  Future<void> _prepare() async {
+    try {
+      final path=(widget.item['attachment_path']??'').toString();
+      if(path.isEmpty)throw Exception('Media path is missing.');
+      final url=await Supabase.instance.client.storage.from('platform-attachments').createSignedUrl(path,3600);
+      if(_isVideo){
+        final controller=VideoPlayerController.networkUrl(Uri.parse(url));
+        await controller.initialize();
+        if(!mounted){await controller.dispose();return;}
+        setState(()=>_video=controller);
+      }
+      if(mounted)setState(()=>_url=url);
+    } catch(e){if(mounted)setState(()=>_error=e);}
+    finally{if(mounted)setState(()=>_loading=false);}
+  }
+  @override void dispose(){_video?.dispose();super.dispose();}
+  @override Widget build(BuildContext context){
+    if(_loading)return const AspectRatio(aspectRatio:16/9,child:Center(child:CircularProgressIndicator(color:Color(0xFFFFD98A))));
+    if(_error!=null)return _mediaFallback('Media preview unavailable. Tap the attachment below to open it.');
+    if(_isVideo){
+      final controller=_video;
+      if(controller==null)return _mediaFallback('Video preview unavailable. Tap to open.');
+      return ClipRRect(borderRadius:BorderRadius.circular(14),child:ColoredBox(
+        color:Colors.black,child:AspectRatio(aspectRatio:controller.value.aspectRatio>0?controller.value.aspectRatio:16/9,
+          child:Stack(alignment:Alignment.center,children:[
+            VideoPlayer(controller),
+            IconButton.filledTonal(onPressed:(){
+              setState(()=>controller.value.isPlaying?controller.pause():controller.play());
+            },icon:Icon(controller.value.isPlaying?Icons.pause_rounded:Icons.play_arrow_rounded,size:34),
+              style:IconButton.styleFrom(backgroundColor:Colors.white.withValues(alpha:.9),foregroundColor:AppColors.ink)),
+            Positioned(left:10,right:10,bottom:8,child:VideoProgressIndicator(controller,allowScrubbing:true,
+              colors:const VideoProgressColors(playedColor:Color(0xFFFFD98A),backgroundColor:Colors.white54))),
+          ]))));
+    }
+    if((widget.item['attachment_mime_type']??'').toString().startsWith('image/')){
+      return ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.network(_url!,width:double.infinity,
+        fit:BoxFit.contain,errorBuilder:(_,__,___)=>_mediaFallback('Image preview unavailable. Tap to open.')));
+    }
+    return _mediaFallback('Attachment: ${widget.item['attachment_name']??'Open file'}');
+  }
+  Widget _mediaFallback(String message)=>Material(
+    color:Colors.white.withValues(alpha:.12),borderRadius:BorderRadius.circular(12),
+    child:InkWell(onTap:widget.onOpen,borderRadius:BorderRadius.circular(12),
+      child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[
+        const Icon(Icons.open_in_new,color:Color(0xFFFFD98A)),const SizedBox(width:10),
+        Expanded(child:Text(message,style:const TextStyle(color:Colors.white))),
+      ]))));
+}
+
 class _DashboardAnnouncementBoard extends StatefulWidget {
   final String fallbackTitle, fallbackBody;
   final bool canManage;
@@ -3229,7 +3292,7 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
     try{
       final now=DateTime.now().toUtc().toIso8601String();
       final rows=await Supabase.instance.client.from('announcements')
-        .select('id,title,body,published_at,expires_at,banner_tone,target_class_id,attachment_path,attachment_name,classes(name)')
+        .select('id,title,body,published_at,expires_at,banner_tone,target_class_id,attachment_path,attachment_name,attachment_mime_type,classes(name)')
         .not('published_at','is',null).lte('published_at',now)
         .or('expires_at.is.null,expires_at.gt.$now')
         .order('display_order',ascending:false).order('published_at',ascending:false).limit(10);
@@ -3312,6 +3375,9 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
             const SizedBox(height:9),
             Text(body,maxLines:4,overflow:TextOverflow.ellipsis,
               style:const TextStyle(color:Color(0xFFF0E8DE),fontSize:13,height:1.48)),
+            if(item!=null && (item['attachment_path']??'').toString().isNotEmpty)
+              Padding(padding:const EdgeInsets.only(top:14),
+                child:_AnnouncementMedia(item:item,onOpen:()=>_openAttachment(item))),
             if(item!=null && (item['attachment_path']??'').toString().isNotEmpty)
               Align(alignment:Alignment.centerLeft,child:TextButton.icon(
                 onPressed:()=>_openAttachment(item),
