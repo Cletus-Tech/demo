@@ -2237,52 +2237,94 @@ class AdminCommunicationsPage extends StatefulWidget {
   State<AdminCommunicationsPage> createState() => _AdminCommunicationsPageState();
 }
 class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
-  final _title = TextEditingController();
-  final _body = TextEditingController();
-  bool _notify = true;
-  bool _busy = false;
+  final _title=TextEditingController(), _body=TextEditingController();
+  bool _notify=true, _busy=false;
+  String _targetClassId='', _tone='gold';
+  DateTime _expiresAt=DateTime.now().add(const Duration(days:7));
+  late Future<List<Map<String,dynamic>>> _classes;
   @override
-  void dispose() { _title.dispose(); _body.dispose(); super.dispose(); }
-  Future<void> _publish() async {
-    if (_title.text.trim().isEmpty || _body.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a title and message.')));
-      return;
+  void initState(){super.initState();_classes=_loadClasses();}
+  @override
+  void dispose(){_title.dispose();_body.dispose();super.dispose();}
+  Future<List<Map<String,dynamic>>> _loadClasses() async{
+    final rows=await Supabase.instance.client.from('classes').select('id,name').eq('status','active').order('name');
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  Future<void> _chooseExpiry() async{
+    final picked=await showDatePicker(context:context,initialDate:_expiresAt,
+      firstDate:DateTime.now(),lastDate:DateTime.now().add(const Duration(days:365)),
+      helpText:'When should this dashboard notice expire?');
+    if(picked!=null&&mounted)setState(()=>_expiresAt=DateTime(picked.year,picked.month,picked.day,23,59,59));
+  }
+  Future<void> _publish() async{
+    if(_title.text.trim().isEmpty||_body.text.trim().isEmpty){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a title and message.')));return;
     }
-    setState(() => _busy = true);
-    try {
-      final sent = await Supabase.instance.client.rpc('publish_centre_announcement', params: {
-        '_title': _title.text.trim(),
-        '_body': _body.text.trim(),
-        '_notify_students': _notify,
+    if(!_expiresAt.isAfter(DateTime.now())){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Choose an expiry date in the future.')));return;
+    }
+    setState(()=>_busy=true);
+    try{
+      final sent=await Supabase.instance.client.rpc('publish_dashboard_announcement',params:{
+        '_title':_title.text.trim(),'_body':_body.text.trim(),'_notify_students':_notify,
+        '_expires_at':_expiresAt.toUtc().toIso8601String(),
+        '_target_class_id':_targetClassId.isEmpty?null:_targetClassId,'_banner_tone':_tone,
       });
-      _title.clear();
-      _body.clear();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Announcement published. Personal notifications sent to ' + sent.toString() + ' linked student account(s).')));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message could not be published: $e')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+      _title.clear();_body.clear();
+      if(mounted){
+        setState(()=>_expiresAt=DateTime.now().add(const Duration(days:7)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content:Text('Dashboard update published. \${sent.toString()} student notification(s) sent.')));
+      }
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Update could not be published: $e')));
+    }finally{if(mounted)setState(()=>_busy=false);}
   }
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Centre communications')),
-    body: ListView(padding: const EdgeInsets.all(20), children: [
-      const Text('Send a centre-wide message', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
-      const SizedBox(height: 8),
-      const Text('Publish a general announcement and optionally send a personal notification to every linked student account.',
-        style: TextStyle(color: AppColors.muted, height: 1.45)),
-      const SizedBox(height: 18),
-      TextField(controller: _title, decoration: const InputDecoration(labelText: 'Message title')),
-      const SizedBox(height: 12),
-      TextField(controller: _body, minLines: 5, maxLines: 9, decoration: const InputDecoration(labelText: 'Message')),
-      SwitchListTile(contentPadding: EdgeInsets.zero, value: _notify, onChanged: _busy ? null : (v) => setState(() => _notify = v),
-        title: const Text('Also notify linked student accounts')),
-      const SizedBox(height: 12),
-      FilledButton.icon(onPressed: _busy ? null : _publish, icon: const Icon(Icons.send_rounded),
-        label: Text(_busy ? 'Publishing...' : 'Publish message'),
-        style: FilledButton.styleFrom(backgroundColor: AppColors.brown, padding: const EdgeInsets.symmetric(vertical: 15))),
+  Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Dashboard update board')),
+    body:ListView(padding:const EdgeInsets.all(20),children:[
+      const Text('Publish a dashboard notice',style:TextStyle(fontSize:22,fontWeight:FontWeight.w700,color:AppColors.ink)),
+      const SizedBox(height:8),
+      const Text('This notice appears on the dashboard as a rotating billboard. Publish to the whole platform or target one class. When its expiry date passes, it automatically leaves the active board.',
+        style:TextStyle(color:AppColors.muted,height:1.45)),
+      const SizedBox(height:18),
+      TextField(controller:_title,maxLength:90,decoration:const InputDecoration(labelText:'Headline')),
+      const SizedBox(height:8),
+      TextField(controller:_body,minLines:4,maxLines:8,maxLength:1200,
+        decoration:const InputDecoration(labelText:'Announcement / learning instruction')),
+      const SizedBox(height:12),
+      FutureBuilder<List<Map<String,dynamic>>>(future:_classes,builder:(context,snapshot){
+        final classes=snapshot.data??[];
+        return DropdownButtonFormField<String>(
+          value:_targetClassId,decoration:const InputDecoration(labelText:'Who should see this update?'),
+          items:[const DropdownMenuItem(value:'',child:Text('Whole platform')),
+            ...classes.map((c)=>DropdownMenuItem(value:c['id'].toString(),child:Text(c['name'].toString())))],
+          onChanged:_busy?null:(v)=>setState(()=>_targetClassId=v??''));
+      }),
+      const SizedBox(height:12),
+      DropdownButtonFormField<String>(
+        value:_tone,decoration:const InputDecoration(labelText:'Billboard appearance'),
+        items:const [
+          DropdownMenuItem(value:'gold',child:Text('Warm gold')),
+          DropdownMenuItem(value:'blue',child:Text('Blue notice')),
+          DropdownMenuItem(value:'green',child:Text('Green notice')),
+          DropdownMenuItem(value:'rose',child:Text('Rose notice')),
+        ],
+        onChanged:_busy?null:(v)=>setState(()=>_tone=v??'gold')),
+      const SizedBox(height:8),
+      Card(child:ListTile(
+        leading:const Icon(Icons.event_available_outlined,color:AppColors.brown),
+        title:const Text('Automatic expiry'),
+        subtitle:Text('Visible until \${_expiresAt.day}/\${_expiresAt.month}/\${_expiresAt.year}'),
+        trailing:const Icon(Icons.calendar_month_outlined),onTap:_busy?null:_chooseExpiry)),
+      SwitchListTile(contentPadding:EdgeInsets.zero,value:_notify,
+        onChanged:_busy?null:(v)=>setState(()=>_notify=v),
+        title:const Text('Also send a personal notification to affected students')),
+      const SizedBox(height:12),
+      FilledButton.icon(onPressed:_busy?null:_publish,icon:const Icon(Icons.campaign_outlined),
+        label:Text(_busy?'Publishing...':'Publish dashboard update'),
+        style:FilledButton.styleFrom(backgroundColor:AppColors.brown,padding:const EdgeInsets.symmetric(vertical:15))),
     ]),
   );
 }
@@ -2866,6 +2908,109 @@ class _NotificationsPageState extends State<NotificationsPage> {
   );
 }
 
+class _DashboardAnnouncementBoard extends StatefulWidget {
+  final String fallbackTitle, fallbackBody;
+  final bool canManage;
+  const _DashboardAnnouncementBoard({required this.fallbackTitle,required this.fallbackBody,required this.canManage});
+  @override
+  State<_DashboardAnnouncementBoard> createState()=>_DashboardAnnouncementBoardState();
+}
+class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard>{
+  List<Map<String,dynamic>> _items=[];
+  int _index=0;
+  bool _loading=true;
+  Timer? _rotation;
+  @override
+  void initState(){
+    super.initState();_load();
+    _rotation=Timer.periodic(const Duration(seconds:7),(_){
+      if(mounted&&_items.length>1)setState(()=>_index=(_index+1)%_items.length);
+    });
+  }
+  @override
+  void dispose(){_rotation?.cancel();super.dispose();}
+  Future<void> _load() async{
+    try{
+      final now=DateTime.now().toUtc().toIso8601String();
+      final rows=await Supabase.instance.client.from('announcements')
+        .select('id,title,body,published_at,expires_at,banner_tone,target_class_id,classes(name)')
+        .not('published_at','is',null).lte('published_at',now)
+        .or('expires_at.is.null,expires_at.gt.$now')
+        .order('display_order',ascending:false).order('published_at',ascending:false).limit(10);
+      if(mounted)setState(()=>{_items=List<Map<String,dynamic>>.from(rows),_index=0,_loading=false});
+    }catch(_){if(mounted)setState(()=>_loading=false);}
+  }
+  Color _tone(String value){
+    switch(value){case 'blue':return const Color(0xFF183E60);case 'green':return const Color(0xFF24513D);
+      case 'rose':return const Color(0xFF673B45);default:return AppColors.brown;}
+  }
+  @override
+  Widget build(BuildContext context){
+    final item=_items.isEmpty?null:_items[_index.clamp(0,_items.length-1)];
+    final tone=_tone((item?['banner_tone']??'gold').toString());
+    final title=(item?['title']??widget.fallbackTitle).toString();
+    final body=(item?['body']??widget.fallbackBody).toString();
+    final className=(item?['classes'] is Map?item!['classes']['name']:null)?.toString();
+    return Container(
+      width:double.infinity,constraints:const BoxConstraints(minHeight:205),padding:const EdgeInsets.all(22),
+      decoration:BoxDecoration(
+        gradient:LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
+          colors:[tone,tone.withValues(alpha:.88),const Color(0xFF211B18)]),
+        borderRadius:BorderRadius.circular(20),border:Border.all(color:AppColors.gold.withValues(alpha:.65),width:1.2),
+        boxShadow:[BoxShadow(color:tone.withValues(alpha:.20),blurRadius:18,offset:const Offset(0,7))]),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Row(children:[
+          const Icon(Icons.campaign_rounded,color:Color(0xFFFFD98A),size:22),const SizedBox(width:8),
+          Text(item==null?'LEARNING BOARD':'CENTRE UPDATE',
+            style:const TextStyle(color:Color(0xFFFFD98A),fontSize:10,letterSpacing:1.5,fontWeight:FontWeight.w900)),
+          const Spacer(),
+          if(className!=null&&className.isNotEmpty)
+            Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),
+              decoration:BoxDecoration(color:Colors.white.withValues(alpha:.14),borderRadius:BorderRadius.circular(20)),
+              child:Text(className,style:const TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.w700)))
+          else if(item!=null)
+            Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),
+              decoration:BoxDecoration(color:Colors.white.withValues(alpha:.14),borderRadius:BorderRadius.circular(20)),
+              child:const Text('ALL LEARNERS',style:TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.w700))),
+        ]),
+        const SizedBox(height:16),
+        AnimatedSwitcher(duration:const Duration(milliseconds:550),
+          transitionBuilder:(child,animation)=>SlideTransition(
+            position:Tween<Offset>(begin:const Offset(.06,0),end:Offset.zero).animate(animation),
+            child:FadeTransition(opacity:animation,child:child)),
+          child:Column(key:ValueKey(item?['id']??'welcome-board'),crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(title,maxLines:2,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:Colors.white,fontSize:22,height:1.16,fontWeight:FontWeight.w800)),
+            const SizedBox(height:9),
+            Text(body,maxLines:4,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(color:Color(0xFFF0E8DE),fontSize:13,height:1.48)),
+          ])),
+        const SizedBox(height:14),
+        Row(children:[
+          if(_items.length>1)
+            Row(children:List.generate(_items.length,(i)=>AnimatedContainer(
+              duration:const Duration(milliseconds:250),margin:const EdgeInsets.only(right:5),
+              width:i==_index?18:6,height:6,
+              decoration:BoxDecoration(color:i==_index?const Color(0xFFFFD98A):Colors.white.withValues(alpha:.42),
+                borderRadius:BorderRadius.circular(8)))))
+          else
+            Text(item==null?'YOUR LEARNING SPACE':'YOUNG LEARNERS TUTORIAL',
+              style:TextStyle(color:Colors.white.withValues(alpha:.72),fontSize:9,letterSpacing:1.1,fontWeight:FontWeight.w800)),
+          const Spacer(),
+          if(widget.canManage)
+            TextButton.icon(
+              onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+                builder:(_)=>const AdminCommunicationsPage())).then((_)=>_load()),
+              icon:const Icon(Icons.edit_outlined,size:15),label:const Text('Manage board'),
+              style:TextButton.styleFrom(foregroundColor:const Color(0xFFFFD98A),visualDensity:VisualDensity.compact))
+          else if(_loading)
+            const SizedBox(width:14,height:14,child:CircularProgressIndicator(strokeWidth:1.5,color:Color(0xFFFFD98A))),
+        ]),
+      ]),
+    );
+  }
+}
+
 class _HomeTab extends StatelessWidget {
   final Future<Map<String, dynamic>> account;
   final VoidCallback onOpenLearning;
@@ -2910,25 +3055,13 @@ class _HomeTab extends StatelessWidget {
                 Text('Every Child Can Learn.',
                   style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 22),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(color: AppColors.brown,
-                    borderRadius: BorderRadius.circular(16)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(parent ? 'Stay connected to your child’s learning' : staffMember ? 'Welcome to your staff workspace' : 'Your learning journey starts here',
-                        style: TextStyle(color: Colors.white, fontSize: 21,
-                          fontWeight: FontWeight.w700)),
-                      SizedBox(height: 8),
-                      Text(parent
-                        ? 'Link your child’s learner account to follow assignments, results and attendance from one place.'
-                        : staffMember ? 'Keep up with centre updates, team conversations and your staff responsibilities.'
-                        : 'Your classes, subjects, learning materials and progress will appear here as the centre activates them.',
-                        style: TextStyle(color: Color(0xFFE7DED6), height: 1.5)),
-                    ],
-                  ),
+                _DashboardAnnouncementBoard(
+                  fallbackTitle: parent ? 'Stay connected to your child’s learning' : staffMember ? 'Welcome to your staff workspace' : 'Your learning journey starts here',
+                  fallbackBody: parent
+                    ? 'Link your child’s learner account to follow assignments, results and attendance from one place.'
+                    : staffMember ? 'Keep up with centre updates, team conversations and your staff responsibilities.'
+                    : 'Your classes, subjects, learning materials and progress will appear here as the centre activates them.',
+                  canManage: owner || admin,
                 ),
                 if (owner) ...[
                   const SizedBox(height: 20),
