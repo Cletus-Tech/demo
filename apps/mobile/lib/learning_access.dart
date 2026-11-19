@@ -128,6 +128,33 @@ class _LearningAccessPageState extends State<LearningAccessPage> {
     amount.dispose(); reference.dispose(); note.dispose();
   }
 
+
+  Future<void> _enterClassroomWithPin(Map<String, dynamic> request) async {
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Unlock your classroom'),
+      content: TextField(controller: controller, autofocus: true, textCapitalization: TextCapitalization.characters, maxLength: 10,
+        decoration: const InputDecoration(labelText: 'Unique classroom PIN', hintText: 'Enter the 10-character PIN')),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Unlock'))],
+    ));
+    if (ok == true) {
+      setState(() => _busy = true);
+      try {
+        final unlocked = await Supabase.instance.client.rpc('redeem_classroom_access_pin', params: {'p_pin': controller.text.trim()});
+        if (unlocked == true) {
+          await _refresh();
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN accepted. Your classroom is unlocked.')));
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('That PIN is invalid, already used, or locked. Check with the centre administrator.')));
+        }
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not unlock classroom: $e')));
+      } finally { if (mounted) setState(() => _busy = false); }
+    }
+    controller.dispose();
+  }
+
   Future<void> _chooseProgramme(List<Map<String, dynamic>> programmes, String name) async {
     if (programmes.isEmpty) return;
     Map<String, dynamic> selected = programmes.first;
@@ -188,7 +215,7 @@ class _LearningAccessPageState extends State<LearningAccessPage> {
               if ((r['admin_note'] ?? '').toString().isNotEmpty) Text('Admin note: ${r['admin_note']}'),
               if (status == 'awaiting_payment' || status == 'rejected') Align(alignment: Alignment.centerRight, child: FilledButton(onPressed: _busy ? null : () => _showPayment(r, settings), style: FilledButton.styleFrom(backgroundColor: _laBrown), child: const Text('Make / resubmit payment'))),
               if (status == 'payment_submitted') const Text('Your payment is being checked. We will notify you when the review is complete.', style: TextStyle(color: _laMuted)),
-              if (status == 'approved') const Text('Your programme has been approved. Classroom access is now authorised for this programme.', style: TextStyle(color: Colors.green)),
+              if (status == 'approved') ...[const Text('Your payment is approved. Enter the unique PIN issued by the centre administrator to unlock your classroom and learning resources.', style: TextStyle(color: Colors.green)), const SizedBox(height: 8), Align(alignment: Alignment.centerRight, child: FilledButton(onPressed: _busy ? null : () => _enterClassroomWithPin(r), style: FilledButton.styleFrom(backgroundColor: _laBrown), child: const Text('Enter classroom PIN')))],
             ])));
           }),
         ]);
@@ -324,6 +351,28 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
     title.dispose(); description.dispose(); fee.dispose(); duration.dispose();
   }
 
+
+  Future<void> _issueClassroomPin(Map<String, dynamic> request) async {
+    setState(() => _busy = true);
+    try {
+      final pin = await Supabase.instance.client.rpc('issue_classroom_access_pin', params: {'p_request_id': request['id']});
+      if (!mounted) return;
+      await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Classroom PIN issued'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Give this one-time PIN to ${request['learner_name']}. It is shown only now; issue a new one if it is lost.'),
+          const SizedBox(height: 12),
+          SelectableText(pin.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: 2)),
+        ]),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          FilledButton.icon(onPressed: () { Clipboard.setData(ClipboardData(text: pin.toString())); Navigator.pop(ctx); }, icon: const Icon(Icons.copy), label: const Text('Copy PIN'))],
+      ));
+      await _refresh();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not issue classroom PIN: $e')));
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+
   Future<void> _review(Map<String, dynamic> request, String decision) async {
     final note = TextEditingController();
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
@@ -405,6 +454,7 @@ class _OwnerLearningAccessPageState extends State<OwnerLearningAccessPage> {
             if ((r['payment_reference'] ?? '').toString().isNotEmpty) SelectableText('Transfer reference: ${r['payment_reference']}'),
             if ((r['payment_note'] ?? '').toString().isNotEmpty) Text('Learner note: ${r['payment_note']}'),
             if ((r['admin_note'] ?? '').toString().isNotEmpty) Text('Previous admin note: ${r['admin_note']}'),
+            if (status == 'approved') Align(alignment: Alignment.centerRight, child: FilledButton.icon(onPressed: _busy ? null : () => _issueClassroomPin(r), icon: const Icon(Icons.key), style: FilledButton.styleFrom(backgroundColor: _laBrown), label: const Text('Issue / reset classroom PIN'))),
             if (status == 'payment_submitted') Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(onPressed: _busy ? null : () => _review(r, 'rejected'), child: const Text('Reject')),
               const SizedBox(width: 8), FilledButton(onPressed: _busy ? null : () => _review(r, 'approved'), style: FilledButton.styleFrom(backgroundColor: _laBrown), child: const Text('Verify & approve')),
