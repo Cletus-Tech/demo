@@ -3536,11 +3536,18 @@ class _DashboardCountdownState extends State<_DashboardCountdown> with SingleTic
   late final AnimationController _pulse;
   Duration _left=Duration.zero;
   bool _loading=true,_sound=false;
+  String? _loadError;
   int _lastBeep=-1;
   @override void initState(){super.initState();_pulse=AnimationController(vsync:this,duration:const Duration(milliseconds:900))..repeat(reverse:true);_load();_timer=Timer.periodic(const Duration(milliseconds:50),(_)=>_tick());}
   Future<void> _load() async {
-    try { final row=await Supabase.instance.client.from('dashboard_countdowns').select('id,title,target_at,tone').eq('is_active',true).order('created_at',ascending:false).limit(1).maybeSingle(); if(mounted)setState(()=>_event=row); _tick(); }
-    catch(_){if(mounted)setState(()=>_event=null);} finally{if(mounted)setState(()=>_loading=false);}
+    if(mounted)setState(()=>_loading=true);
+    try {
+      final row=await Supabase.instance.client.from('dashboard_countdowns').select('id,title,target_at,tone').eq('is_active',true).order('created_at',ascending:false).limit(1).maybeSingle();
+      if(mounted)setState(()=>{_event=row,_loadError=null});
+      _tick();
+    } catch(e) {
+      if(mounted)setState(()=>{_event=null,_loadError=e.toString()});
+    } finally {if(mounted)setState(()=>_loading=false);}
   }
   void _tick(){
     final target=DateTime.tryParse((_event?['target_at']??'').toString());if(target==null||!mounted)return;
@@ -3577,7 +3584,9 @@ class _DashboardCountdownState extends State<_DashboardCountdown> with SingleTic
   Future<void> _stop() async{if(_event==null)return;try{await Supabase.instance.client.from('dashboard_countdowns').update({'is_active':false}).eq('id',_event!['id']);await _load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not stop countdown: $e')));}}
   @override void dispose(){_timer?.cancel();_pulse.dispose();super.dispose();}
   @override Widget build(BuildContext context){
-    if(_loading||(_event==null&&!widget.canManage))return const SizedBox.shrink();
+    if(_loading)return const SizedBox.shrink();
+    if(_loadError!=null)return Container(margin:const EdgeInsets.only(top:12),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:const Color(0xFFFFF3E8),borderRadius:BorderRadius.circular(12),border:Border.all(color:const Color(0xFFE7B98C))),child:Row(children:[const Icon(Icons.warning_amber_rounded,color:Color(0xFF9A4D12)),const SizedBox(width:8),Expanded(child:Text('Countdown could not load: $_loadError',maxLines:3,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:11,color:Color(0xFF71380D)))),TextButton(onPressed:_load,child:const Text('Retry'))]));
+    if(_event==null&&!widget.canManage)return const SizedBox.shrink();
     final total=_left.inMilliseconds,days=total~/86400000,hours=(total~/3600000)%24,mins=(total~/60000)%60,secs=(total~/1000)%60,ms=total%1000;
     final colors=_palette((_event?['tone']??'gold').toString());
     return AnimatedBuilder(animation:_pulse,builder:(context,child)=>Container(margin:const EdgeInsets.only(top:12),padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),
