@@ -6035,6 +6035,194 @@ class _StaffRoomPageState extends State<StaffRoomPage>{
   );
 }
 
+
+class StudentDirectChatPage extends StatefulWidget {
+  final String? studentId;
+  final String? studentName;
+  final bool admin;
+  const StudentDirectChatPage({super.key,this.studentId,this.studentName,this.admin=false});
+  @override
+  State<StudentDirectChatPage> createState()=>_StudentDirectChatPageState();
+}
+class _StudentDirectChatPageState extends State<StudentDirectChatPage>{
+  final _composer=TextEditingController();
+  late Future<Map<String,dynamic>> _setup;
+  Future<List<Map<String,dynamic>>>? _messages;
+  String? _studentId;
+  String _studentName='Learner';
+  dynamic _channel;
+  PlatformFile? _attachment;
+  bool _sending=false;
+  static const _extensions=['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','csv','rtf','jpg','jpeg','png','webp','gif','mp4','webm','mov'];
+  SupabaseClient get _db=>Supabase.instance.client;
+
+  @override
+  void initState(){super.initState();_setup=_resolveStudent();}
+  Future<Map<String,dynamic>> _resolveStudent() async{
+    Map<String,dynamic>? row;
+    if(widget.studentId!=null){
+      row=await _db.from('students').select('id,profiles(full_name)').eq('id',widget.studentId!).maybeSingle();
+    }else{
+      final uid=_db.auth.currentUser?.id;
+      if(uid==null)throw Exception('Sign in to open your messages.');
+      row=await _db.from('students').select('id,profiles(full_name)').eq('user_id',uid).maybeSingle();
+    }
+    if(row==null)throw Exception('The learner record could not be found.');
+    _studentId=row['id'].toString();
+    _studentName=(widget.studentName??row['profiles']?['full_name']??'Learner').toString();
+    _messages=_loadMessages();
+    _subscribe();
+    return {'id':_studentId,'name':_studentName};
+  }
+  Future<List<Map<String,dynamic>>> _loadMessages() async{
+    final rows=await _db.from('student_direct_messages')
+      .select('id,student_id,sender_id,body,attachment_path,attachment_name,attachment_mime_type,attachment_size,read_at,created_at')
+      .eq('student_id',_studentId!).order('created_at',ascending:true).limit(300);
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  void _subscribe(){
+    _channel=_db.channel('student-direct-$_studentId')
+      .onPostgresChanges(event:PostgresChangeEvent.all,schema:'public',table:'student_direct_messages',callback:(_)=>_refresh())
+      .subscribe();
+  }
+  Future<void> _refresh() async{
+    if(_studentId==null)return;
+    final next=_loadMessages();if(mounted)setState(()=>_messages=next);await next;
+  }
+  String _mime(PlatformFile file){
+    final ext=file.extension?.toLowerCase()??'';
+    return const {
+      'pdf':'application/pdf','doc':'application/msword',
+      'docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls':'application/vnd.ms-excel','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt':'application/vnd.ms-powerpoint','pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'txt':'text/plain','csv':'text/csv','rtf':'application/rtf',
+      'jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp','gif':'image/gif',
+      'mp4':'video/mp4','webm':'video/webm','mov':'video/quicktime',
+    }[ext]??'application/octet-stream';
+  }
+  Future<void> _chooseFile() async{
+    final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:_extensions,withData:true);
+    if(result!=null&&result.files.isNotEmpty&&mounted){
+      final file=result.files.first;
+      if(file.size>52428800){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Attachments must be 50 MB or smaller.')));return;}
+      setState(()=>_attachment=file);
+    }
+  }
+  Future<void> _openAttachment(Map<String,dynamic> row) async{
+    try{
+      final path=row['attachment_path']?.toString();
+      if(path==null||path.isEmpty)throw Exception('Attachment not found.');
+      final url=await _db.storage.from('platform-attachments').createSignedUrl(path,3600);
+      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open attachment: $e')));}
+  }
+  Future<void> _send() async{
+    final body=_composer.text.trim();
+    if((body.isEmpty&&_attachment==null)||_sending||_studentId==null)return;
+    setState(()=>_sending=true);
+    String? path;
+    try{
+      String? fileName,mime;int? size;
+      if(_attachment!=null){
+        final file=_attachment!;
+        final bytes=file.bytes;
+        if(bytes==null)throw Exception('The selected file could not be read. Please choose it again.');
+        final uid=_db.auth.currentUser!.id;
+        fileName=file.name;mime=_mime(file);size=file.size;
+        final safe=file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
+        path='direct-messages/$_studentId/$uid/${DateTime.now().microsecondsSinceEpoch}_$safe';
+        await _db.storage.from('platform-attachments').uploadBinary(path!,bytes,
+          fileOptions:FileOptions(contentType:mime,upsert:false));
+      }
+      await _db.from('student_direct_messages').insert({
+        'student_id':_studentId,'sender_id':_db.auth.currentUser!.id,
+        'body':body.isEmpty?'Shared a file':body,
+        'attachment_path':path,'attachment_name':fileName,
+        'attachment_mime_type':mime,'attachment_size':size,
+      });
+      _composer.clear();if(mounted)setState(()=>_attachment=null);await _refresh();
+    }catch(e){
+      if(path!=null){try{await _db.storage.from('platform-attachments').remove([path]);}catch(_){}}
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Message could not be sent: $e')));
+    }finally{if(mounted)setState(()=>_sending=false);}
+  }
+  @override
+  void dispose(){
+    _composer.dispose();
+    if(_channel!=null)_db.removeChannel(_channel);
+    super.dispose();
+  }
+  Widget _message(Map<String,dynamic> row){
+    final mine=row['sender_id']==_db.auth.currentUser?.id;
+    final path=(row['attachment_path']??'').toString();
+    return Align(alignment:mine?Alignment.centerRight:Alignment.centerLeft,
+      child:Container(
+        constraints:const BoxConstraints(maxWidth:340),
+        margin:const EdgeInsets.only(bottom:9),
+        padding:const EdgeInsets.all(12),
+        decoration:BoxDecoration(
+          color:mine?AppColors.brown:Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius:BorderRadius.circular(15),
+        ),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(mine?'You':widget.admin?_studentName:'Centre team',
+            style:TextStyle(fontSize:11,fontWeight:FontWeight.w800,color:mine?const Color(0xFFFFD98A):AppColors.brown)),
+          const SizedBox(height:5),
+          Text(row['body']?.toString()??'',style:TextStyle(height:1.4,color:mine?Colors.white:Theme.of(context).colorScheme.onSurface)),
+          if(path.isNotEmpty)
+            Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+              onPressed:()=>_openAttachment(row),icon:Icon(Icons.attach_file,color:mine?const Color(0xFFFFD98A):AppColors.brown),
+              label:Text((row['attachment_name']??'Open attachment').toString(),maxLines:1,overflow:TextOverflow.ellipsis,
+                style:TextStyle(color:mine?const Color(0xFFFFD98A):AppColors.brown)))),
+          Align(alignment:Alignment.centerRight,child:Text(_staffDate(row['created_at']),
+            style:TextStyle(fontSize:10,color:mine?const Color(0xFFE7DED6):AppColors.muted))),
+        ]),
+      ));
+  }
+  @override
+  Widget build(BuildContext context)=>FutureBuilder<Map<String,dynamic>>(
+    future:_setup,builder:(context,setup){
+      if(setup.connectionState!=ConnectionState.done)return const Scaffold(body:Center(child:CircularProgressIndicator()));
+      if(setup.hasError)return Scaffold(appBar:AppBar(title:const Text('Messages')),
+        body:Center(child:Padding(padding:const EdgeInsets.all(22),child:Text('Could not open messages: ${setup.error}'))));
+      return Scaffold(
+        appBar:AppBar(title:Text(widget.admin?'Chat with $_studentName':'Message the Centre')),
+        body:Column(children:[
+          Container(width:double.infinity,padding:const EdgeInsets.all(12),color:AppColors.cream,
+            child:Text(widget.admin?'Private conversation with this learner.':'A private conversation with the Young Learners Tutorial team.',
+              style:const TextStyle(color:AppColors.ink,fontWeight:FontWeight.w600))),
+          Expanded(child:RefreshIndicator(onRefresh:_refresh,child:FutureBuilder<List<Map<String,dynamic>>>(
+            future:_messages,builder:(context,s){
+              if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+              if(s.hasError)return ListView(children:[_InfoNotice(message:'Messages could not be loaded: ${s.error}')]);
+              final rows=s.data??[];
+              if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(24),children:[
+                const SizedBox(height:70),Icon(Icons.forum_outlined,size:48,color:AppColors.gold),
+                const SizedBox(height:12),const Center(child:Text('No messages yet. Start the conversation below.',style:TextStyle(color:AppColors.muted))),
+              ]);
+              return ListView(reverse:true,padding:const EdgeInsets.all(14),children:rows.reversed.map(_message).toList());
+            }))),
+          SafeArea(top:false,child:Padding(padding:const EdgeInsets.fromLTRB(12,8,12,12),child:Column(children:[
+            if(_attachment!=null)Container(width:double.infinity,padding:const EdgeInsets.symmetric(horizontal:10,vertical:7),
+              decoration:BoxDecoration(color:AppColors.cream,borderRadius:BorderRadius.circular(9)),
+              child:Row(children:[const Icon(Icons.attach_file,size:17),Expanded(child:Text(_attachment!.name,maxLines:1,overflow:TextOverflow.ellipsis)),
+                IconButton(onPressed:()=>setState(()=>_attachment=null),icon:const Icon(Icons.close,size:18))])),
+            Row(crossAxisAlignment:CrossAxisAlignment.end,children:[
+              IconButton(onPressed:_sending?null:_chooseFile,tooltip:'Attach a document or file',icon:const Icon(Icons.attach_file)),
+              Expanded(child:TextField(controller:_composer,minLines:1,maxLines:4,
+                decoration:const InputDecoration(hintText:'Write a message...',border:OutlineInputBorder()))),
+              const SizedBox(width:8),IconButton.filled(onPressed:_sending?null:_send,
+                style:IconButton.styleFrom(backgroundColor:AppColors.brown,foregroundColor:Colors.white),
+                icon:_sending?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.send_rounded)),
+            ]),
+          ]))),
+        ]),
+      );
+    },
+  );
+}
+
 String _staffDate(dynamic raw){
   if(raw==null)return '';
   final d=DateTime.tryParse(raw.toString())?.toLocal();if(d==null)return '';
