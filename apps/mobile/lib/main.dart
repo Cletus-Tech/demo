@@ -2545,8 +2545,9 @@ class _LearnerHomePageState extends State<LearnerHomePage> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) => setState(() => _selectedIndex = index),
-        backgroundColor: Colors.white,
-        indicatorColor: AppColors.paleGold,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        indicatorColor: Theme.of(context).colorScheme.secondaryContainer,
+        elevation: 0,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -2749,14 +2750,14 @@ class _HomeTab extends StatelessWidget {
               children: [
                 Text(owner ? 'OWNER DASHBOARD' : admin ? 'CENTRE DASHBOARD' : tutor ? 'TUTOR PORTAL' : staffMember ? 'STAFF PORTAL' : parent ? 'PARENT PORTAL' : 'LEARNER PORTAL',
                   style: TextStyle(fontSize: 10, letterSpacing: 1.4,
-                    fontWeight: FontWeight.w800, color: AppColors.muted)),
+                    fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 8),
                 Text('Welcome, $name',
-                  style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w700,
-                    color: AppColors.ink)),
+                  style: TextStyle(fontSize: 25, fontWeight: FontWeight.w800,
+                    color: Theme.of(context).colorScheme.onSurface)),
                 const SizedBox(height: 5),
-                const Text('Every Child Can Learn.',
-                  style: TextStyle(color: AppColors.muted)),
+                Text('Every Child Can Learn.',
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 22),
                 Container(
                   width: double.infinity,
@@ -4687,19 +4688,26 @@ class _FeatureRow extends StatelessWidget {
   const _FeatureRow({required this.icon, required this.title, required this.detail});
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      leading: Container(width: 42, height: 42,
-        decoration: BoxDecoration(color: AppColors.paleGold,
-          borderRadius: BorderRadius.circular(10)),
-        child: Icon(icon, color: AppColors.brown)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700,
-        color: AppColors.ink)),
-      subtitle: Text(detail, style: const TextStyle(color: AppColors.muted)),
-      trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(width: 46, height: 46,
+          decoration: BoxDecoration(
+            color: colors.secondaryContainer,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, color: colors.onSecondaryContainer)),
+        title: Text(title, style: TextStyle(
+          fontWeight: FontWeight.w800, color: colors.onSurface)),
+        subtitle: Text(detail, style: TextStyle(
+          color: colors.onSurfaceVariant, height: 1.45)),
+        trailing: Icon(Icons.chevron_right_rounded,
+          color: colors.onSurfaceVariant),
+      ),
+    );
+  }
 }
 
 
