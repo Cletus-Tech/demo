@@ -5466,7 +5466,7 @@ class _LearningTabState extends State<_LearningTab> {
   }
 }
 
-bool _hasRedeemedClassroomPass(dynamic relation) {
+bool hasRedeemedClassroomPass(dynamic relation) {
   bool isRedeemed(dynamic pass) =>
       pass is Map && pass['redeemed_at'] != null && pass['revoked_at'] == null;
   // PostgREST returns a single object for a one-to-one relation (request_id
@@ -5511,7 +5511,7 @@ class _ClassroomDirectoryPageState extends State<ClassroomDirectoryPage> {
       .select('learning_programmes(class_id),classroom_access_passes(redeemed_at,revoked_at)')
       .eq('user_id',userId).eq('status','approved');
     final ids=requests.where((r){
-      return _hasRedeemedClassroomPass(r['classroom_access_passes']);
+      return hasRedeemedClassroomPass(r['classroom_access_passes']);
     }).map((r){
       final p=r['learning_programmes'];
       return p is Map ? p['class_id']?.toString() : null;
