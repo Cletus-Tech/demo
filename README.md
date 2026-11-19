@@ -1,50 +1,58 @@
-# Demo Broker — Brokerage Platform Foundation
+# Young Learners Tutorial
 
-This repository contains the existing client-approved brokerage-style dashboard, connected to Supabase for authentication, account data, demo wallets, ledger entries, orders, positions, referrals, notifications, and administration.
+**Every Child Can Learn.**
 
-## Important operating mode
+Young Learners Tutorial is a cross-platform tutoring and learning platform for Nigerian learners from Primary 1 to SS3, with separate experiences for learners, parents/guardians, tutors, staff, centre administrators and the owner.
 
-The current platform is a **demo/practice environment**:
-- Balances and deposits/withdrawals are simulated practice funds.
-- Market prices are marked as demo/simulated; they are not exchange feeds.
-- Spot orders, swaps, and leveraged positions are processed by database functions against demo wallets.
-- Service products (cards, custody, signals, copy trading, staking, etc.) are enquiry workflows, not activated financial products.
-- No real money, crypto custody, or live exchange orders are processed.
+## Product areas
 
-A production launch requires separately integrating and testing licensed payment, custody, KYC/AML, market-data, and brokerage/exchange providers, plus legal/compliance approval. Provider credentials must never be committed to this public repository.
+- **Learner:** class profile, learning programmes, lessons and resources, classroom, assignments, timed CBT, question bank, results, progress and notifications.
+- **Parent / guardian:** verified child linking, child learning progress, assignments, attendance, released results and classroom updates.
+- **Tutor:** assigned classes and subjects, classroom resources, attendance, assignments, student submissions and marking.
+- **Centre team:** student records, classes, subjects, learning programmes, access/payment review, results, announcements, staff room and tutor applications.
+- **Owner:** centre overview, administrator access and permission management.
 
-## Main files
+The product is a tutorial platform, not a formal school-management or examination-registration system.
 
-- `index.html` — entry / route page
-- `login.html` — registration, sign-in and password recovery
-- `reset-password.html` — password reset callback
-- `dashboard.html` — existing responsive dashboard and trading interface
-- `admin.html` — protected staff console
-- `setup-check.html` — connection and security self-check
-- `config.js` — public Supabase project URL and publishable key only
-- `supabase-client.js` — Supabase client/session setup
-- `api.js` — browser-to-database API calls
-- `setup_all.sql` — consolidated initial database setup
-- `migrations/` — incremental database migrations
+## Brand and interface
 
-## Deployment
+- Deep brown, warm gold and cream; optional dark theme.
+- Tagline: **Every Child Can Learn.**
+- Responsive Flutter application.
 
-The site is deployed from the repository's `main` branch through GitHub Pages.
+## Current review targets
 
-Live site: https://cletus-tech.github.io/demo/
+- Web preview: https://cletus-tech.github.io/demo/
+- Android release workflow: https://github.com/Cletus-Tech/demo/actions/workflows/android-apk.yml
+- Web preview workflow: https://github.com/Cletus-Tech/demo/actions/workflows/ios-web-preview.yml
+- First-release audit: [docs/FIRST_RELEASE_AUDIT.md](docs/FIRST_RELEASE_AUDIT.md)
 
-After changing authentication redirect URLs or the hosting domain, update Supabase Authentication > URL Configuration to include the deployed site and the login/reset-password callback pages.
+The Android workflow currently produces QA/sideload APK artifacts. Production signing and Play Store release configuration are not complete. An iOS IPA/TestFlight workflow is not yet configured.
 
-## Database changes
+## Backend
 
-The connected Supabase project is the **Demo Broker** project. Do not run `setup_all.sql` again on an already initialized database. Apply only migrations that have not already been applied, then run the setup check and database security advisors.
+The live backend uses Supabase for authentication, Postgres, Row Level Security, Realtime and Storage. Exposed application tables have RLS enabled. Do not put a Supabase service-role key in a client application.
 
-## Validation
+**Important:** the live database migration history and the migration files in this branch still need reconciliation. Do not run a production reset or blanket `supabase db push` until the first-release audit's migration-reconciliation task is complete.
 
-1. Open `setup-check.html` while signed in.
-2. Confirm the authenticated trading-function validation rejects the intentionally invalid test order.
-3. Confirm the profile, service request access, demo wallets, and demo market prices checks.
-4. Use a dedicated authorized admin/superadmin account to test `admin.html`.
-5. Test demo transactions with practice funds only and verify resulting ledger/order/position records.
+## Current feature boundaries
 
-Never place a Supabase `service_role` or secret key in browser code.
+- Tutor applications are reviewed by the centre. Approval activates the tutor account and automatically maps the applicant's selected active classes and subjects into tutor classroom assignments; unmatched catalogue selections are flagged for administrator correction.
+- Learning access uses administrator-reviewed programme/payment requests. After approval, an authorised administrator issues a unique 10-character classroom PIN; learners redeem it to unlock published lessons for the approved programme. PINs are stored as hashes and are shown to the administrator only at issuance. This workflow still requires end-to-end role-based QA.
+- Payments currently use a manual submission and administrator review process; no live payment gateway is configured.
+- Lessons, programmes, learning materials, assessments and CBT questions must be configured by the centre before learners can use those areas meaningfully.
+- Notifications are available in the app; native push-notification delivery is not configured.
+
+## Local development
+
+Install Flutter stable, then:
+
+```sh
+cd apps/mobile
+flutter pub get
+flutter run
+flutter test
+flutter build apk --debug
+```
+
+See [docs/FIRST_RELEASE_AUDIT.md](docs/FIRST_RELEASE_AUDIT.md) for the current release-readiness findings and remediation order.

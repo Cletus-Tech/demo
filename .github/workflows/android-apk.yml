@@ -1,0 +1,199 @@
+name: Young Learners Android APK
+# Re-run after adding mocked SharedPreferences to the Supabase widget test.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [young-learners-foundation]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform scaffolding
+        run: flutter create . --platforms=android
+      - name: Generate branded Android launcher icons
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-cairosvg
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import cairosvg
+
+          root = Path("android/app/src/main/res")
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          source = Path("assets/app_icon.svg")
+          if not source.exists():
+              raise SystemExit("Young Learners Tutorial app icon artwork is missing")
+          sizes = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192,
+          }
+          for folder, size in sizes.items():
+              target_dir = root / folder
+              target_dir.mkdir(parents=True, exist_ok=True)
+              cairosvg.svg2png(url=str(source), write_to=str(target_dir / "ic_launcher.png"), output_width=size, output_height=size)
+          drawable = root / "drawable-nodpi"
+          drawable.mkdir(parents=True, exist_ok=True)
+          cairosvg.svg2png(url=str(source), write_to=str(drawable / "launcher_foreground.png"), output_width=432, output_height=432)
+          adaptive = root / "mipmap-anydpi-v26"
+          adaptive.mkdir(parents=True, exist_ok=True)
+          (adaptive / "ic_launcher.xml").write_text(
+              '<?xml version="1.0" encoding="utf-8"?>\n'
+              '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+              '    <background android:drawable="@color/launcher_icon_background"/>\n'
+              '    <foreground android:drawable="@drawable/launcher_foreground"/>\n'
+              '</adaptive-icon>\n'
+          )
+          (adaptive / "ic_launcher_round.xml").write_text(
+              '<?xml version="1.0" encoding="utf-8"?>\n'
+              '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+              '    <background android:drawable="@color/launcher_icon_background"/>\n'
+              '    <foreground android:drawable="@drawable/launcher_foreground"/>\n'
+              '</adaptive-icon>\n'
+          )
+          colors = root / "values"
+          colors.mkdir(parents=True, exist_ok=True)
+          (colors / "launcher_icon.xml").write_text(
+              '<?xml version="1.0" encoding="utf-8"?>\n'
+              '<resources><color name="launcher_icon_background">#4A2412</color></resources>\n'
+          )
+          content = manifest.read_text()
+          content, icon_count = re.subn(r'android:icon="[^"]+"', 'android:icon="@mipmap/ic_launcher"', content, count=1)
+          if icon_count == 0:
+              content = content.replace("<application", '<application android:icon="@mipmap/ic_launcher"', 1)
+          content = re.sub(r'android:roundIcon="[^"]+"', 'android:roundIcon="@mipmap/ic_launcher"', content, count=1)
+          if "android:roundIcon=" not in content:
+              content = content.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher"', 1)
+          content = re.sub(r'android:label="[^"]+"', 'android:label="Young Learners Tutorial"', content, count=1)
+          manifest.write_text(content)
+          if "@mipmap/ic_launcher" not in content:
+              raise SystemExit("Launcher icon was not connected to the Android manifest")
+          print("Installed Young Learners Tutorial launcher icon in all Android densities and adaptive-icon resources")
+          PY
+      - name: Configure Gradle plugin repositories
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          settings = Path("android/settings.gradle.kts")
+          if not settings.exists():
+              raise SystemExit("Generated Android settings.gradle.kts is missing")
+          content = settings.read_text()
+          pattern = r"(pluginManagement\s*\{.*?repositories\s*\{)(.*?)(\})"
+          replacement = r"\1\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    \3"
+          updated, count = re.subn(pattern, replacement, content, count=1, flags=re.S)
+          if count == 0:
+              raise SystemExit("Could not safely locate pluginManagement repositories")
+          settings.write_text(updated)
+          print("Added Google, Maven Central and Gradle Plugin Portal to plugin resolution")
+          PY
+      - name: Set Android compile SDK to API 36
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          gradle = next((p for p in candidates if p.exists()), None)
+          if gradle is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          content = gradle.read_text()
+          import re
+          content, count_kts = re.subn(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
+          content, count_groovy = re.subn(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
+          if count_kts + count_groovy == 0:
+              content, count_kts = re.subn(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
+              content, count_groovy = re.subn(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
+          if count_kts + count_groovy == 0:
+              raise SystemExit("Could not locate compileSdk declaration")
+          gradle.write_text(content)
+          print(f"Configured {gradle} to compile against Android API 36")
+          PY
+      - name: Ensure release app has internet permission
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          content = manifest.read_text()
+          permission = '    <uses-permission android:name="android.permission.INTERNET" />'
+          if permission not in content:
+              content = content.replace('<application', permission + '\n    <application', 1)
+          manifest.write_text(content)
+          assert 'android.permission.INTERNET' in manifest.read_text()
+          print("Verified INTERNET permission in main (release) manifest")
+          PY
+      - name: Resolve packages
+        run: flutter pub get
+      - name: Align Android plugin libraries with API 36
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          cache = Path.home() / ".pub-cache" / "hosted" / "pub.dev"
+          targets = {"file_picker", "flutter_plugin_android_lifecycle"}
+          changed = []
+          found = set()
+          patterns = [
+              (r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36'),
+              (r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36'),
+              (r'compileSdkVersion\s*=\s*flutter\.compileSdkVersion', 'compileSdkVersion = 36'),
+              (r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36'),
+              (r'compileSdk\s*=\s*\d+', 'compileSdk = 36'),
+              (r'compileSdk\s+\d+', 'compileSdk 36'),
+              (r'compileSdkVersion\s*=\s*\d+', 'compileSdkVersion = 36'),
+              (r'compileSdkVersion\s+\d+', 'compileSdkVersion 36'),
+          ]
+          for package in targets:
+              for android_dir in sorted(cache.glob(f"{package}-*/android")):
+                  found.add(package)
+                  for gradle in (android_dir / "build.gradle.kts", android_dir / "build.gradle"):
+                      if not gradle.exists():
+                          continue
+                      content = gradle.read_text()
+                      updated = content
+                      for pattern, replacement in patterns:
+                          updated, count = re.subn(pattern, replacement, updated)
+                          if count:
+                              break
+                      if updated == content:
+                          continue
+                      gradle.write_text(updated)
+                      changed.append(str(gradle))
+          missing = targets - found
+          if missing:
+              raise SystemExit("Missing resolved Android plugin(s): " + ", ".join(sorted(missing)))
+          if not changed:
+              raise SystemExit("No Android plugin compileSdk declarations were updated")
+          print("Configured Android plugin libraries for API 36:", ", ".join(changed))
+          PY
+      - name: Run tests
+        run: flutter test
+      - name: Build optimised release APKs
+        run: flutter build apk --release --split-per-abi --dart-define=SUPABASE_URL=https://lvpetmhhspuagbjojlks.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB
+      - name: Upload architecture-specific APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: young-learners-tutorial-android-release-apks
+          path: |
+            apps/mobile/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            apps/mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            apps/mobile/build/app/outputs/flutter-apk/app-x86_64-release.apk
+          if-no-files-found: error
+          retention-days: 14

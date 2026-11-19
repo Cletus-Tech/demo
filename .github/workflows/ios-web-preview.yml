@@ -1,0 +1,52 @@
+name: Young Learners Web Preview
+# Re-run after adding mocked SharedPreferences to the Supabase widget test.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [young-learners-foundation]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/ios-web-preview.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate web platform files
+        run: flutter create . --platforms=web
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Run widget tests
+        run: flutter test
+      - name: Build responsive web preview
+        run: flutter build web --release --base-href /demo/ --dart-define=SUPABASE_URL=https://lvpetmhhspuagbjojlks.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload web preview
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/mobile/build/web
+      - name: Publish preview
+        id: deployment
+        uses: actions/deploy-pages@v4
