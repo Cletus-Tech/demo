@@ -3207,26 +3207,30 @@ class _AnnouncementMediaState extends State<_AnnouncementMedia> {
   }
   @override void dispose(){_video?.dispose();super.dispose();}
   @override Widget build(BuildContext context){
-    if(_loading)return const AspectRatio(aspectRatio:16/9,child:Center(child:CircularProgressIndicator(color:Color(0xFFFFD98A))));
+    if(_loading)return const SizedBox.expand(child:Center(child:CircularProgressIndicator(color:Color(0xFFFFD98A))));
     if(_error!=null)return _mediaFallback('Media preview unavailable. Tap the attachment below to open it.');
     if(_isVideo){
       final controller=_video;
       if(controller==null)return _mediaFallback('Video preview unavailable. Tap to open.');
-      return ClipRRect(borderRadius:BorderRadius.circular(14),child:ColoredBox(
-        color:Colors.black,child:AspectRatio(aspectRatio:controller.value.aspectRatio>0?controller.value.aspectRatio:16/9,
-          child:Stack(alignment:Alignment.center,children:[
-            VideoPlayer(controller),
-            IconButton.filledTonal(onPressed:(){
-              setState(()=>controller.value.isPlaying?controller.pause():controller.play());
-            },icon:Icon(controller.value.isPlaying?Icons.pause_rounded:Icons.play_arrow_rounded,size:34),
-              style:IconButton.styleFrom(backgroundColor:Colors.white.withValues(alpha:.9),foregroundColor:AppColors.ink)),
-            Positioned(left:10,right:10,bottom:8,child:VideoProgressIndicator(controller,allowScrubbing:true,
-              colors:const VideoProgressColors(playedColor:Color(0xFFFFD98A),backgroundColor:Colors.white54))),
-          ]))));
+      final size=controller.value.size;
+      return ColoredBox(color:Colors.black,child:LayoutBuilder(builder:(context,constraints){
+        final width=size.width>0?size.width:16.0;
+        final height=size.height>0?size.height:9.0;
+        return Stack(fit:StackFit.expand,children:[
+          Center(child:FittedBox(fit:BoxFit.contain,child:SizedBox(
+            width:width,height:height,child:VideoPlayer(controller)))),
+          Center(child:IconButton.filledTonal(onPressed:(){
+            setState(()=>controller.value.isPlaying?controller.pause():controller.play());
+          },icon:Icon(controller.value.isPlaying?Icons.pause_rounded:Icons.play_arrow_rounded,size:36),
+            style:IconButton.styleFrom(backgroundColor:Colors.white.withValues(alpha:.88),foregroundColor:AppColors.ink))),
+          Positioned(left:12,right:12,bottom:9,child:VideoProgressIndicator(controller,allowScrubbing:true,
+            colors:const VideoProgressColors(playedColor:Color(0xFFFFD98A),backgroundColor:Colors.white54)) )
+        ]);
+      }));
     }
     if((widget.item['attachment_mime_type']??'').toString().startsWith('image/')){
-      return ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.network(_url!,width:double.infinity,
-        fit:BoxFit.contain,errorBuilder:(_,__,___)=>_mediaFallback('Image preview unavailable. Tap to open.')));
+      return Image.network(_url!,width:double.infinity,height:double.infinity,fit:BoxFit.cover,
+        errorBuilder:(_,__,___)=>_mediaFallback('Image preview unavailable. Tap to open.'));
     }
     return _mediaFallback('Attachment: ${widget.item['attachment_name']??'Open file'}');
   }
@@ -3333,92 +3337,102 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
   Widget build(BuildContext context){
     final item=_items.isEmpty?null:_items[_index.clamp(0,_items.length-1).toInt()];
     final palette=_toneColors((item?['banner_tone']??'gold').toString());
-    final tone=palette.first;
     final title=(item?['title']??widget.fallbackTitle).toString();
     final body=(item?['body']??widget.fallbackBody).toString();
     final className=(item?['classes'] is Map?item!['classes']['name']:null)?.toString();
+    final attachmentPath=(item?['attachment_path']??'').toString();
+    final mime=(item?['attachment_mime_type']??'').toString();
+    final hasImage=mime.startsWith('image/')&&attachmentPath.isNotEmpty;
+    final hasVideo=mime.startsWith('video/')&&attachmentPath.isNotEmpty;
+    final hasMedia=hasImage||hasVideo;
     return Container(
-      width:double.infinity,constraints:const BoxConstraints(minHeight:205),padding:const EdgeInsets.all(22),
+      width:double.infinity,height:260,
       decoration:BoxDecoration(
-        gradient:LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
-          colors:[palette[0],palette[1],palette[2]]),
-        borderRadius:BorderRadius.circular(20),border:Border.all(color:AppColors.gold.withValues(alpha:.65),width:1.2),
-        boxShadow:[BoxShadow(color:palette[1].withValues(alpha:.34),blurRadius:24,spreadRadius:1,offset:const Offset(0,7))]),
-      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Row(children:[
-          const Icon(Icons.campaign_rounded,color:Color(0xFFFFD98A),size:22),const SizedBox(width:8),
-          Text(item==null?'LEARNING BOARD':'CENTRE UPDATE',
-            style:const TextStyle(color:Color(0xFFFFD98A),fontSize:10,letterSpacing:1.5,fontWeight:FontWeight.w900)),
-          const Spacer(),
-          if(className!=null&&className.isNotEmpty)
-            Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),
-              decoration:BoxDecoration(color:Colors.white.withValues(alpha:.14),borderRadius:BorderRadius.circular(20)),
-              child:Text(className,style:const TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.w700)))
-          else if(item!=null)
-            Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),
-              decoration:BoxDecoration(color:Colors.white.withValues(alpha:.14),borderRadius:BorderRadius.circular(20)),
-              child:const Text('ALL LEARNERS',style:TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.w700))),
-        ]),
-        const SizedBox(height:16),
-        AnimatedSwitcher(duration:const Duration(milliseconds:550),
-          transitionBuilder:(child,animation)=>SlideTransition(
-            position:Tween<Offset>(begin:const Offset(.06,0),end:Offset.zero).animate(animation),
-            child:FadeTransition(opacity:animation,child:child)),
-          child:Column(key:ValueKey('${item?['id']??'welcome-board'}|$title|$body'),crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Expanded(child:Text(title.substring(0,_typedTitle.clamp(0,title.length).toInt()),maxLines:2,overflow:TextOverflow.ellipsis,
-                style:const TextStyle(color:Colors.white,fontSize:22,height:1.16,fontWeight:FontWeight.w800))),
-              if(_typedTitle<title.length)
-                Container(width:2,height:23,margin:const EdgeInsets.only(left:3,top:2),
-                  decoration:BoxDecoration(color:const Color(0xFFFFD98A),borderRadius:BorderRadius.circular(2))),
-            ]),
-            const SizedBox(height:9),
-            Text(body,maxLines:4,overflow:TextOverflow.ellipsis,
-              style:const TextStyle(color:Color(0xFFF0E8DE),fontSize:13,height:1.48)),
-            if(item!=null && (item['attachment_path']??'').toString().isNotEmpty)
-              Padding(padding:const EdgeInsets.only(top:14),
-                child:_AnnouncementMedia(item:item,onOpen:()=>_openAttachment(item))),
-            if(item!=null && (item['attachment_path']??'').toString().isNotEmpty)
-              Align(alignment:Alignment.centerLeft,child:TextButton.icon(
-                onPressed:()=>_openAttachment(item),
-                icon:const Icon(Icons.attach_file,size:15),
-                label:Text((item['attachment_name']??'Open attachment').toString(),maxLines:1,overflow:TextOverflow.ellipsis),
-                style:TextButton.styleFrom(foregroundColor:const Color(0xFFFFD98A)))),
-          ])),
-        const SizedBox(height:14),
-        Row(children:[
-          if(_items.length>1)
+        gradient:LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,colors:palette),
+        borderRadius:BorderRadius.circular(20),
+        border:Border.all(color:AppColors.gold.withValues(alpha:.65),width:1.2),
+        boxShadow:[BoxShadow(color:palette[1].withValues(alpha:.30),blurRadius:22,spreadRadius:1,offset:const Offset(0,7))]),
+      child:ClipRRect(borderRadius:BorderRadius.circular(19),child:Stack(fit:StackFit.expand,children:[
+        if(hasMedia)
+          _AnnouncementMedia(item:item!,onOpen:()=>_openAttachment(item)),
+        if(hasMedia)
+          const DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(
+            begin:Alignment.topCenter,end:Alignment.bottomCenter,
+            colors:[Color(0x33000000),Color(0x12000000),Color(0xD9000000)],
+            stops:[0,.42,1]))),
+        if(!hasMedia)
+          DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(
+            begin:Alignment.topLeft,end:Alignment.bottomRight,colors:palette))),
+        Padding(padding:const EdgeInsets.fromLTRB(18,16,18,14),child:Column(
+          crossAxisAlignment:CrossAxisAlignment.start,children:[
             Row(children:[
-              IconButton(
-                visualDensity:VisualDensity.compact,padding:EdgeInsets.zero,constraints:const BoxConstraints(minWidth:28,minHeight:28),
-                onPressed:(){setState(()=>_index=(_index-1+_items.length)%_items.length);_startTitleTyping();},
-                icon:const Icon(Icons.chevron_left_rounded,color:Colors.white,size:20)),
-              ...List.generate(_items.length,(i)=>AnimatedContainer(
-                duration:const Duration(milliseconds:350),curve:Curves.easeOutCubic,
-                margin:const EdgeInsets.only(right:5),width:i==_index?20:6,height:6,
-                decoration:BoxDecoration(color:i==_index?const Color(0xFFFFD98A):Colors.white.withValues(alpha:.42),
-                  borderRadius:BorderRadius.circular(8)))),
-              IconButton(
-                visualDensity:VisualDensity.compact,padding:EdgeInsets.zero,constraints:const BoxConstraints(minWidth:28,minHeight:28),
-                onPressed:(){setState(()=>_index=(_index+1)%_items.length);_startTitleTyping();},
-                icon:const Icon(Icons.chevron_right_rounded,color:Colors.white,size:20)),
-            ])
-          else
-            Text(item==null?'YOUR LEARNING SPACE':'YOUNG LEARNERS TUTORIAL',
-              style:TextStyle(color:Colors.white.withValues(alpha:.72),fontSize:9,letterSpacing:1.1,fontWeight:FontWeight.w800)),
-          const Spacer(),
-          if(widget.canManage)
-            TextButton.icon(
-              onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
-                builder:(_)=>const AdminCommunicationsPage())).then((_)=>_load()),
-              icon:const Icon(Icons.edit_outlined,size:15),label:const Text('Manage board'),
-              style:TextButton.styleFrom(foregroundColor:const Color(0xFFFFD98A),visualDensity:VisualDensity.compact))
-          else if(_loading)
-            const SizedBox(width:14,height:14,child:CircularProgressIndicator(strokeWidth:1.5,color:Color(0xFFFFD98A))),
-        ]),
-      ]),
+              const Icon(Icons.campaign_rounded,color:Color(0xFFFFD98A),size:21),
+              const SizedBox(width:7),
+              Text(item==null?'LEARNING BOARD':'CENTRE UPDATE',
+                style:const TextStyle(color:Color(0xFFFFD98A),fontSize:10,letterSpacing:1.4,fontWeight:FontWeight.w900)),
+              const Spacer(),
+              if(className!=null&&className.isNotEmpty)
+                _billboardTag(className)
+              else if(item!=null)_billboardTag('ALL LEARNERS'),
+            ]),
+            const Spacer(),
+            AnimatedSwitcher(duration:const Duration(milliseconds:400),
+              transitionBuilder:(child,animation)=>FadeTransition(opacity:animation,child:SlideTransition(
+                position:Tween<Offset>(begin:const Offset(0,.08),end:Offset.zero).animate(animation),child:child)),
+              child:Column(key:ValueKey('${item?['id']??'welcome-board'}|$title|$body'),
+                crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  Text(title.substring(0,_typedTitle.clamp(0,title.length).toInt()),
+                    maxLines:2,overflow:TextOverflow.ellipsis,
+                    style:const TextStyle(color:Colors.white,fontSize:22,height:1.12,fontWeight:FontWeight.w900,
+                      shadows:[Shadow(color:Colors.black54,blurRadius:10,offset:Offset(0,2))])),
+                  const SizedBox(height:7),
+                  Text(body,maxLines:2,overflow:TextOverflow.ellipsis,
+                    style:const TextStyle(color:Colors.white,fontSize:12.5,height:1.35,
+                      shadows:[Shadow(color:Colors.black87,blurRadius:8,offset:Offset(0,1))])),
+                ])),
+            const SizedBox(height:8),
+            Row(children:[
+              if(_items.length>1)...[
+                IconButton(visualDensity:VisualDensity.compact,padding:EdgeInsets.zero,
+                  constraints:const BoxConstraints(minWidth:27,minHeight:27),
+                  onPressed:(){setState(()=>_index=(_index-1+_items.length)%_items.length);_startTitleTyping();},
+                  icon:const Icon(Icons.chevron_left_rounded,color:Colors.white,size:20)),
+                ...List.generate(_items.length,(i)=>AnimatedContainer(duration:const Duration(milliseconds:300),
+                  margin:const EdgeInsets.only(right:5),width:i==_index?18:6,height:6,
+                  decoration:BoxDecoration(color:i==_index?const Color(0xFFFFD98A):Colors.white70,
+                    borderRadius:BorderRadius.circular(8)))),
+                IconButton(visualDensity:VisualDensity.compact,padding:EdgeInsets.zero,
+                  constraints:const BoxConstraints(minWidth:27,minHeight:27),
+                  onPressed:(){setState(()=>_index=(_index+1)%_items.length);_startTitleTyping();},
+                  icon:const Icon(Icons.chevron_right_rounded,color:Colors.white,size:20)),
+              ]else
+                Text(item==null?'YOUR LEARNING SPACE':'YOUNG LEARNERS TUTORIAL',
+                  style:const TextStyle(color:Colors.white70,fontSize:9,letterSpacing:1,fontWeight:FontWeight.w800)),
+              const Spacer(),
+              if(item!=null&&attachmentPath.isNotEmpty&&!hasMedia)
+                TextButton.icon(onPressed:()=>_openAttachment(item),
+                  icon:const Icon(Icons.attach_file,size:14),label:const Text('Open attachment'),
+                  style:TextButton.styleFrom(foregroundColor:const Color(0xFFFFD98A),visualDensity:VisualDensity.compact)),
+              if(widget.canManage)
+                TextButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder:(_)=>const AdminCommunicationsPage())).then((_)=>_load()),
+                  icon:const Icon(Icons.edit_outlined,size:14),label:const Text('Manage'),
+                  style:TextButton.styleFrom(foregroundColor:const Color(0xFFFFD98A),visualDensity:VisualDensity.compact)),
+            ]),
+          ])),
+        if(_loading)
+          const Positioned(right:12,top:12,child:SizedBox(width:14,height:14,
+            child:CircularProgressIndicator(strokeWidth:1.5,color:Color(0xFFFFD98A)))),
+      ])),
     );
   }
+
+  Widget _billboardTag(String label)=>Container(
+    padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),
+    decoration:BoxDecoration(color:Colors.black.withValues(alpha:.35),
+      borderRadius:BorderRadius.circular(20),border:Border.all(color:Colors.white24)),
+    child:Text(label,style:const TextStyle(color:Colors.white,fontSize:9,fontWeight:FontWeight.w800)));
+
 }
 
 class _HomeTab extends StatelessWidget {
