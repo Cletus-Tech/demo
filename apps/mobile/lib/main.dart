@@ -641,6 +641,14 @@ class _AdminPortalPageState extends State<AdminPortalPage> {
                   onTap: () => _open(const AdminStudentsPage()),
                 )),
                 const SizedBox(height: 8),
+                Card(child: ListTile(
+                  leading: const Icon(Icons.assessment_outlined, color: AppColors.brown),
+                  title: const Text('Results & report cards'),
+                  subtitle: const Text('Enter class scores, calculate grades and release student results'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _open(const AdminResultsPage()),
+                )),
+                const SizedBox(height: 8),
               ],
               if (permissions.contains('communications.send') && !permissions.contains('staff.manage')) ...[
                 Card(child: ListTile(
@@ -764,13 +772,44 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
   void dispose() { _searchController.dispose(); super.dispose(); }
   Future<List<Map<String, dynamic>>> _load() async {
     final data = await Supabase.instance.client.from('students')
-      .select('id,level,status,user_id,profiles(full_name,email)')
+      .select('id,level,status,user_id,admission_number,created_at,profiles(full_name,email,phone)')
       .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(data);
   }
+  String _csvCell(dynamic value) {
+    final raw=(value??'').toString().replaceAll('"','""');
+    return '"$raw"';
+  }
+  Future<void> _exportExcelDirectory() async {
+    try {
+      final rows=await _load();
+      final csv=StringBuffer();
+      csv.writeln(['Student name','Email','Phone','Class','Admission number','Account status','Registered on'].map(_csvCell).join(','));
+      for(final row in rows) {
+        final profile=row['profiles'] as Map<String,dynamic>?;
+        csv.writeln([
+          profile?['full_name'],profile?['email'],profile?['phone'],row['level'],
+          row['admission_number'],row['status'],row['created_at'],
+        ].map(_csvCell).join(','));
+      }
+      final saved=await FilePicker.platform.saveFile(
+        dialogTitle:'Export Young Learners student directory',
+        fileName:'young_learners_student_directory.csv',
+        type:FileType.custom,allowedExtensions:['csv'],
+        bytes:Uint8List.fromList(utf8.encode(csv.toString())),
+      );
+      if(saved!=null&&mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Student spreadsheet exported: ${rows.length} records.')));
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not export student directory: $e')));
+    }
+  }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Student records')),
+    appBar: AppBar(title: const Text('Student records'),actions:[
+      IconButton(onPressed:_exportExcelDirectory,tooltip:'Export Excel-compatible spreadsheet',
+        icon:const Icon(Icons.table_view_outlined)),
+    ]),
     body: RefreshIndicator(onRefresh: () async => setState(() => _rows = _load()),
       child: FutureBuilder<List<Map<String, dynamic>>>(future: _rows, builder: (context, s) {
         if (s.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
