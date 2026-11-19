@@ -28,12 +28,11 @@ jobs:
         run: flutter create . --platforms=android
       - name: Generate branded Android launcher icons
         run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
+          python3 -m pip install --user cairosvg
           python3 - <<'PY'
           from pathlib import Path
           import re
-          import subprocess
+          import cairosvg
 
           root = Path("android/app/src/main/res")
           manifest = Path("android/app/src/main/AndroidManifest.xml")
@@ -50,16 +49,10 @@ jobs:
           for folder, size in sizes.items():
               target_dir = root / folder
               target_dir.mkdir(parents=True, exist_ok=True)
-              subprocess.run(
-                  ["convert", "-background", "none", str(source), "-resize", f"{size}x{size}", str(target_dir / "ic_launcher.png")],
-                  check=True,
-              )
+              cairosvg.svg2png(url=str(source), write_to=str(target_dir / "ic_launcher.png"), output_width=size, output_height=size)
           drawable = root / "drawable-nodpi"
           drawable.mkdir(parents=True, exist_ok=True)
-          subprocess.run(
-              ["convert", "-background", "none", str(source), "-resize", "432x432", str(drawable / "launcher_foreground.png")],
-              check=True,
-          )
+          cairosvg.svg2png(url=str(source), write_to=str(drawable / "launcher_foreground.png"), output_width=432, output_height=432)
           adaptive = root / "mipmap-anydpi-v26"
           adaptive.mkdir(parents=True, exist_ok=True)
           (adaptive / "ic_launcher.xml").write_text(
