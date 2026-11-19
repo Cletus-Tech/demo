@@ -26,6 +26,23 @@ jobs:
           cache: true
       - name: Generate Android platform scaffolding
         run: flutter create . --platforms=android
+      - name: Configure Gradle plugin repositories
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          settings = Path("android/settings.gradle.kts")
+          if not settings.exists():
+              raise SystemExit("Generated Android settings.gradle.kts is missing")
+          content = settings.read_text()
+          block = "pluginManagement {\\n    repositories {\\n        google()\\n        mavenCentral()\\n        gradlePluginPortal()\\n    }\\n}"
+          pattern = r"pluginManagement\\s*\\{.*?repositories\\s*\\{.*?\\}\\s*\\}"
+          updated, count = re.subn(pattern, block, content, count=1, flags=re.S)
+          if count == 0:
+              raise SystemExit("Could not safely locate pluginManagement repositories")
+          settings.write_text(updated)
+          print("Configured Google, Maven Central and Gradle Plugin Portal for plugin resolution")
+          PY
       - name: Set Android compile SDK to API 36
         run: |
           python3 - <<'PY'
