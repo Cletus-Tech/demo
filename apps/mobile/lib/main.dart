@@ -2761,7 +2761,7 @@ class _HomeTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(owner ? 'OWNER DASHBOARD' : admin ? 'CENTRE DASHBOARD' : tutor ? 'TUTOR PORTAL' : parent ? 'PARENT PORTAL' : 'LEARNER PORTAL',
+                Text(owner ? 'OWNER DASHBOARD' : admin ? 'CENTRE DASHBOARD' : tutor ? 'TUTOR PORTAL' : staffMember ? 'STAFF PORTAL' : parent ? 'PARENT PORTAL' : 'LEARNER PORTAL',
                   style: TextStyle(fontSize: 10, letterSpacing: 1.4,
                     fontWeight: FontWeight.w800, color: AppColors.muted)),
                 const SizedBox(height: 8),
@@ -2780,12 +2780,13 @@ class _HomeTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(parent ? 'Stay connected to your child’s learning' : 'Your learning journey starts here',
+                      Text(parent ? 'Stay connected to your child’s learning' : staffMember ? 'Welcome to your staff workspace' : 'Your learning journey starts here',
                         style: TextStyle(color: Colors.white, fontSize: 21,
                           fontWeight: FontWeight.w700)),
                       SizedBox(height: 8),
                       Text(parent
                         ? 'Link your child’s learner account to follow assignments, results and attendance from one place.'
+                        : staffMember ? 'Keep up with centre updates, team conversations and your staff responsibilities.'
                         : 'Your classes, subjects, learning materials and progress will appear here as the centre activates them.',
                         style: TextStyle(color: Color(0xFFE7DED6), height: 1.5)),
                     ],
