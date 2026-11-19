@@ -77,19 +77,19 @@ jobs:
                       continue
                   content = gradle.read_text()
                   updated, count = re.subn(
-                      r'compileSdk\\s*=\\s*flutter\\.compileSdkVersion',
+                      r'compileSdk\s*=\s*flutter\.compileSdkVersion',
                       'compileSdk = 36', content)
                   if count == 0:
                       updated, count = re.subn(
-                          r'compileSdkVersion\\s+flutter\\.compileSdkVersion',
+                          r'compileSdkVersion\s+flutter\.compileSdkVersion',
                           'compileSdkVersion 36', content)
                   if count == 0:
                       updated, count = re.subn(
-                          r'compileSdk\\s*=\\s*\\d+',
+                          r'compileSdk\s*=\s*\d+',
                           'compileSdk = 36', content)
                   if count == 0:
                       updated, count = re.subn(
-                          r'compileSdkVersion\\s+\\d+',
+                          r'compileSdkVersion\s+\d+',
                           'compileSdkVersion 36', content)
                   if count == 0:
                       raise SystemExit(f"Could not set API 36 in {gradle}")
