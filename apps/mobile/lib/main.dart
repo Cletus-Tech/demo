@@ -6640,6 +6640,7 @@ class StudentAssessmentResultPage extends StatelessWidget {
   }
 }
 
+// Examination body shortcuts use bundled monograms so logos never depend on remote image hosts.
 class ExamPreparationPage extends StatelessWidget {
   const ExamPreparationPage({super.key});
 
