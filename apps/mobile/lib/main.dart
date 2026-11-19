@@ -3052,11 +3052,15 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
         .or('expires_at.is.null,expires_at.gt.$now')
         .order('display_order',ascending:false).order('published_at',ascending:false).limit(10);
       if(mounted){
-        final previousId=_items.isNotEmpty?_items[_index.clamp(0,_items.length-1).toInt()]['id']:null;
+        final previousItem=_items.isNotEmpty?_items[_index.clamp(0,_items.length-1).toInt()]:null;
+        final previousId=previousItem?['id'];
+        final previousTitle=previousItem?['title'];
+        final previousBody=previousItem?['body'];
         final nextItems=List<Map<String,dynamic>>.from(rows);
         final nextIndex=previousId==null?0:nextItems.indexWhere((row)=>row['id']==previousId);
         final safeIndex=nextIndex<0?0:nextIndex;
-        final activeChanged=previousId!= (nextItems.isEmpty?null:nextItems[safeIndex]['id']);
+        final nextActive=nextItems.isEmpty?null:nextItems[safeIndex];
+        final activeChanged=previousId!=nextActive?['id'] || previousTitle!=nextActive?['title'] || previousBody!=nextActive?['body'];
         setState((){_items=nextItems;_index=safeIndex;_loading=false;});
         if(activeChanged)_startTitleTyping();
       }
@@ -3100,7 +3104,7 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
           transitionBuilder:(child,animation)=>SlideTransition(
             position:Tween<Offset>(begin:const Offset(.06,0),end:Offset.zero).animate(animation),
             child:FadeTransition(opacity:animation,child:child)),
-          child:Column(key:ValueKey(item?['id']??'welcome-board'),crossAxisAlignment:CrossAxisAlignment.start,children:[
+          child:Column(key:ValueKey('${item?['id']??'welcome-board'}|$title|$body'),crossAxisAlignment:CrossAxisAlignment.start,children:[
             Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Expanded(child:Text(title.substring(0,_typedTitle.clamp(0,title.length).toInt()),maxLines:2,overflow:TextOverflow.ellipsis,
                 style:const TextStyle(color:Colors.white,fontSize:22,height:1.16,fontWeight:FontWeight.w800))),
