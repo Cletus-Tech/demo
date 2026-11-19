@@ -2854,7 +2854,7 @@ class _HomeTab extends StatelessWidget {
                       builder: (_) => const GuardianPortalPage())),
                   )),
                 ],
-                if (!parent) ...[
+                if (!parent && !staffMember) ...[
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
