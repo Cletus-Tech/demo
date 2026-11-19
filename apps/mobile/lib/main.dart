@@ -2281,6 +2281,8 @@ class AdminCommunicationsPage extends StatefulWidget {
 class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
   final _title=TextEditingController(), _body=TextEditingController();
   bool _notify=true, _busy=false;
+  PlatformFile? _attachment;
+  static const _fileTypes=['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','csv','rtf','jpg','jpeg','png','webp','gif','mp4','webm','mov'];
   String _targetClassId='', _tone='gold';
   DateTime _expiresAt=DateTime.now().add(const Duration(days:7));
   late Future<List<Map<String,dynamic>>> _classes;
@@ -2288,6 +2290,8 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
   void initState(){super.initState();_classes=_loadClasses();}
   @override
   void dispose(){_title.dispose();_body.dispose();super.dispose();}
+  String _mime(PlatformFile f){final ext=f.extension?.toLowerCase()??'';return const {'pdf':'application/pdf','doc':'application/msword','docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','xls':'application/vnd.ms-excel','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','ppt':'application/vnd.ms-powerpoint','pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation','txt':'text/plain','csv':'text/csv','rtf':'application/rtf','jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp','gif':'image/gif','mp4':'video/mp4','webm':'video/webm','mov':'video/quicktime'}[ext]??'application/octet-stream';}
+  Future<void> _chooseAttachment() async{final r=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:_fileTypes,withData:true);if(r!=null&&r.files.isNotEmpty&&mounted){final file=r.files.first;if(file.size>52428800){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Attachments must be 50 MB or smaller.')));return;}setState(()=>_attachment=file);}}
   Future<List<Map<String,dynamic>>> _loadClasses() async{
     final rows=await Supabase.instance.client.from('classes').select('id,name').eq('status','active').order('name');
     return List<Map<String,dynamic>>.from(rows);
@@ -2306,19 +2310,34 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Choose an expiry date in the future.')));return;
     }
     setState(()=>_busy=true);
+    String? attachmentPath;
     try{
+      String? attachmentName,attachmentMime;int? attachmentSize;
+      if(_attachment!=null){
+        final file=_attachment!,bytes=file.bytes;
+        if(bytes==null)throw Exception('The selected file could not be read.');
+        final uid=Supabase.instance.client.auth.currentUser!.id;
+        attachmentName=file.name;attachmentMime=_mime(file);attachmentSize=file.size;
+        final safe=file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
+        attachmentPath='announcements/$uid/${DateTime.now().microsecondsSinceEpoch}_$safe';
+        await Supabase.instance.client.storage.from('platform-attachments')
+          .uploadBinary(attachmentPath!,bytes,fileOptions:FileOptions(contentType:attachmentMime,upsert:false));
+      }
       final sent=await Supabase.instance.client.rpc('publish_dashboard_announcement',params:{
         '_title':_title.text.trim(),'_body':_body.text.trim(),'_notify_students':_notify,
         '_expires_at':_expiresAt.toUtc().toIso8601String(),
         '_target_class_id':_targetClassId.isEmpty?null:_targetClassId,'_banner_tone':_tone,
+        '_attachment_path':attachmentPath,'_attachment_name':attachmentName,
+        '_attachment_mime_type':attachmentMime,'_attachment_size':attachmentSize,
       });
       _title.clear();_body.clear();
       if(mounted){
-        setState(()=>_expiresAt=DateTime.now().add(const Duration(days:7)));
+        setState(()=>{_expiresAt=DateTime.now().add(const Duration(days:7));_attachment=null;});
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content:Text('Dashboard update published. \${sent.toString()} student notification(s) sent.')));
+          SnackBar(content:Text('Dashboard update published. ${sent.toString()} student notification(s) sent.')));
       }
     }catch(e){
+      if(attachmentPath!=null){try{await Supabase.instance.client.storage.from('platform-attachments').remove([attachmentPath]);}catch(_){}}
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Update could not be published: $e')));
     }finally{if(mounted)setState(()=>_busy=false);}
   }
@@ -2354,11 +2373,20 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
           DropdownMenuItem(value:'rose',child:Text('Rose notice')),
         ],
         onChanged:_busy?null:(v)=>setState(()=>_tone=v??'gold')),
+      const SizedBox(height:10),
+      OutlinedButton.icon(onPressed:_busy?null:_chooseAttachment,
+        icon:const Icon(Icons.attach_file),
+        label:Text(_attachment==null?'Attach a document or media file':_attachment!.name),
+      ),
+      if(_attachment!=null)Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+        onPressed:()=>setState(()=>_attachment=null),icon:const Icon(Icons.close),label:const Text('Remove attachment'))),
+      const Text('Supported: PDF, Word, Excel, PowerPoint, text, images and videos. Maximum 50 MB.',
+        style:TextStyle(fontSize:11,color:AppColors.muted)),
       const SizedBox(height:8),
       Card(child:ListTile(
         leading:const Icon(Icons.event_available_outlined,color:AppColors.brown),
         title:const Text('Automatic expiry'),
-        subtitle:Text('Visible until \${_expiresAt.day}/\${_expiresAt.month}/\${_expiresAt.year}'),
+        subtitle:Text('Visible until ${_expiresAt.day}/${_expiresAt.month}/${_expiresAt.year}'),
         trailing:const Icon(Icons.calendar_month_outlined),onTap:_busy?null:_chooseExpiry)),
       SwitchListTile(contentPadding:EdgeInsets.zero,value:_notify,
         onChanged:_busy?null:(v)=>setState(()=>_notify=v),
