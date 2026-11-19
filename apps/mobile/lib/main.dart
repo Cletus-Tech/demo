@@ -47,51 +47,64 @@ class YoungLearnersLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final brandText = dark ? const Color(0xFFFFE8B2) : AppColors.brown;
+    Widget bookMark(double width, double height) => Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFFFFF7E7) : Colors.white,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.gold, width: dark ? 1.6 : 1),
+        boxShadow: dark ? [
+          BoxShadow(color: AppColors.gold.withValues(alpha: .22), blurRadius: 12, spreadRadius: 1),
+        ] : const [],
+      ),
+      child: SvgPicture.asset('assets/young_learners_logo.svg',
+        width: width, height: height, fit: BoxFit.contain),
+    );
     if (compact) {
       return Row(mainAxisSize: MainAxisSize.min, children: [
         Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('YL', style: TextStyle(
+          Text('YL', style: TextStyle(
             fontFamily: 'Georgia', fontSize: 23, height: .85,
-            fontWeight: FontWeight.w900, letterSpacing: -2, color: AppColors.brown)),
-          SvgPicture.asset('assets/young_learners_logo.svg',
-            width: 38, height: 24, fit: BoxFit.contain),
+            fontWeight: FontWeight.w900, letterSpacing: -2, color: brandText)),
+          bookMark(38, 24),
         ]),
         const SizedBox(width: 6),
         Container(width: 2, height: 43, color: AppColors.gold),
         const SizedBox(width: 7),
-        const Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('YOUNG LEARNERS', style: TextStyle(
             fontSize: 11, height: 1, fontWeight: FontWeight.w900,
-            letterSpacing: .1, color: AppColors.brown)),
-          SizedBox(height: 3),
-          _TutorialWordmark(compact: true),
+            letterSpacing: .1, color: brandText)),
+          const SizedBox(height: 3),
+          const _TutorialWordmark(compact: true),
         ]),
       ]);
     }
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Row(mainAxisSize: MainAxisSize.min, children: [
         Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('YL', style: TextStyle(
+          Text('YL', style: TextStyle(
             fontFamily: 'Georgia', fontSize: 37, height: .85,
-            fontWeight: FontWeight.w900, letterSpacing: -3, color: AppColors.brown)),
-          SvgPicture.asset('assets/young_learners_logo.svg',
-            width: 62, height: 34, fit: BoxFit.contain),
+            fontWeight: FontWeight.w900, letterSpacing: -3, color: brandText)),
+          bookMark(62, 34),
         ]),
         const SizedBox(width: 10),
         Container(width: 2, height: 70, color: AppColors.gold),
         const SizedBox(width: 10),
-        const Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('YOUNG LEARNERS', maxLines: 1, softWrap: false,
             style: TextStyle(fontSize: 17, height: 1, fontWeight: FontWeight.w900,
-              letterSpacing: .1, color: AppColors.brown)),
-          SizedBox(height: 5),
-          _TutorialWordmark(),
+              letterSpacing: .1, color: brandText)),
+          const SizedBox(height: 5),
+          const _TutorialWordmark(),
         ]),
       ]),
       const SizedBox(height: 5),
-      const Text('EVERY CHILD CAN LEARN',
+      Text('EVERY CHILD CAN LEARN',
         style: TextStyle(fontSize: 10, letterSpacing: 1.1,
-          fontWeight: FontWeight.w700, color: AppColors.brown)),
+          fontWeight: FontWeight.w700, color: brandText)),
     ]);
   }
 }
@@ -341,17 +354,31 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     return '₦' + n.toStringAsFixed(2).replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
   }
-  Widget _metric(String label, dynamic value, {String? hint}) => Expanded(child: Card(
-    child: Padding(padding: const EdgeInsets.all(13), child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(value?.toString() ?? '0', style: const TextStyle(
-          fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.brown)),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
-        if (hint != null) Text(hint, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-      ],
-    )),
-  ));
+  String _figure(dynamic value) {
+    final raw = value?.toString() ?? '0';
+    final parsed = num.tryParse(raw.replaceAll(',', ''));
+    if (parsed == null) return raw;
+    final parts = parsed.toString().split('.');
+    final whole = parts.first.replaceAllMapped(
+      RegExp(r'\\B(?=(\\d{3})+(?!\\d))'), (m) => ',');
+    return parts.length > 1 && parts[1] != '0' ? '$whole.${parts[1]}' : whole;
+  }
+  Widget _metric(String label, dynamic value, {String? hint}) => Builder(
+    builder: (context) {
+      final colors = Theme.of(context).colorScheme;
+      return Expanded(child: Card(
+        child: Padding(padding: const EdgeInsets.all(13), child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_figure(value), style: TextStyle(
+              fontSize: 23, fontWeight: FontWeight.w900, color: colors.primary,
+              fontFeatures: const [FontFeature.tabularFigures()])),
+            const SizedBox(height: 4),
+            Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: colors.onSurface)),
+            if (hint != null) Text(hint, style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant)),
+          ],
+        )),
+      ));
+    });
   Widget _section(String title, List<Widget> children) => Padding(
     padding: const EdgeInsets.only(top: 18), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
