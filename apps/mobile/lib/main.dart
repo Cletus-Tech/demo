@@ -5296,6 +5296,13 @@ class _StudentAssessmentsPageState extends State<StudentAssessmentsPage> {
             icon: const Icon(Icons.library_books_outlined), label: const Text('Browse past-question bank')),
           const SizedBox(height: 8),
           OutlinedButton.icon(onPressed: _openHistory, icon: const Icon(Icons.history_rounded), label: const Text('View my previous results')),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+              builder:(_)=>const StudentReleasedResultsPage())),
+            icon:const Icon(Icons.school_outlined),
+            label:const Text('View released school report cards'),
+          ),
           const SizedBox(height: 14),
           if (items.isEmpty) const _InfoNotice(message: 'There are no published practice tests for your current class yet. Your tutor will publish eligible tests here when they are ready.'),
           ...items.map((item) {
