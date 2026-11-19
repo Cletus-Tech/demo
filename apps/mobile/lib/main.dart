@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -16,8 +17,16 @@ const supabasePublishableKey = String.fromEnvironment(
   defaultValue: 'sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB',
 );
 
+class AppThemeController {
+  static final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.light);
+  static const _key = 'young_learners_theme_mode';
+  static Future<void> load() async { final p = await SharedPreferences.getInstance(); mode.value = p.getBool(_key) == true ? ThemeMode.dark : ThemeMode.light; }
+  static Future<void> setDark(bool dark) async { mode.value = dark ? ThemeMode.dark : ThemeMode.light; final p = await SharedPreferences.getInstance(); await p.setBool(_key, dark); }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppThemeController.load();
   await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
   runApp(const YoungLearnersApp());
 }
@@ -102,57 +111,34 @@ class _TutorialWordmark extends StatelessWidget {
 
 class YoungLearnersApp extends StatelessWidget {
   const YoungLearnersApp({super.key});
-
   @override
-  Widget build(BuildContext context) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.brown,
-      primary: AppColors.brown,
-      secondary: AppColors.gold,
-      surface: Colors.white,
-    );
-    return MaterialApp(
-      title: 'Young Learners Tutorial',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: scheme,
-        scaffoldBackgroundColor: AppColors.cream,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.cream,
-          foregroundColor: AppColors.ink,
-          elevation: 0,
+  Widget build(BuildContext context) => ValueListenableBuilder<ThemeMode>(
+    valueListenable: AppThemeController.mode,
+    builder: (context, mode, _) {
+      final lightScheme = ColorScheme.fromSeed(seedColor: AppColors.brown, primary: AppColors.brown, secondary: AppColors.gold, surface: Colors.white);
+      final darkScheme = ColorScheme.fromSeed(seedColor: AppColors.gold, primary: const Color(0xFFE5C27A), secondary: AppColors.gold, surface: const Color(0xFF24211E), brightness: Brightness.dark);
+      return MaterialApp(
+        title: 'Young Learners Tutorial',
+        debugShowCheckedModeBanner: false,
+        themeMode: mode,
+        theme: ThemeData(
+          useMaterial3: true, colorScheme: lightScheme,
+          scaffoldBackgroundColor: AppColors.cream,
+          appBarTheme: const AppBarTheme(backgroundColor: AppColors.cream, foregroundColor: AppColors.ink, elevation: 0),
+          cardTheme: CardThemeData(color: Colors.white, elevation: 0, margin: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: AppColors.line))),
+          inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.line)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.line)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.brown, width: 1.4))),
         ),
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.line),
-          ),
+        darkTheme: ThemeData(
+          useMaterial3: true, brightness: Brightness.dark, colorScheme: darkScheme,
+          scaffoldBackgroundColor: const Color(0xFF171513),
+          appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF171513), foregroundColor: Color(0xFFF4EFE8), elevation: 0),
+          cardTheme: CardThemeData(color: const Color(0xFF24211E), elevation: 0, margin: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFF3B342D)))),
+          inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: const Color(0xFF2B2723), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF494037))), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF494037))), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.gold, width: 1.4))),
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.line),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.line),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.brown, width: 1.4),
-          ),
-        ),
-      ),
-      home: const AuthGate(),
-    );
-  }
+        home: const AuthGate(),
+      );
+    },
+  );
 }
 
 class AuthGate extends StatefulWidget {
@@ -4640,6 +4626,19 @@ class _ProfileTab extends StatelessWidget {
             leading: const Icon(Icons.verified_user_outlined, color: AppColors.brown),
             title: const Text('Account type'),
             subtitle: Text(data['role'] as String),
+          )),
+          const SizedBox(height: 24),
+          const Text('APPEARANCE', style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800, color: AppColors.muted)),
+          const SizedBox(height: 10),
+          Card(child: ValueListenableBuilder<ThemeMode>(
+            valueListenable: AppThemeController.mode,
+            builder: (context, mode, _) => SwitchListTile(
+              secondary: Icon(mode == ThemeMode.dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: Theme.of(context).colorScheme.primary),
+              title: const Text('Dark theme'),
+              subtitle: Text(mode == ThemeMode.dark ? 'Dark appearance is enabled' : 'Use the light appearance'),
+              value: mode == ThemeMode.dark, activeColor: AppColors.gold,
+              onChanged: AppThemeController.setDark,
+            ),
           )),
           const SizedBox(height: 24),
           OutlinedButton.icon(
