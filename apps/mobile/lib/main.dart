@@ -3538,7 +3538,7 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
                 title == 'Assignments'
                   ? '${r['subject'] ?? 'Subject'} • ${r['status'] ?? 'Not submitted'} • ${r['score'] == null ? 'Not marked' : '${r['score']}/${r['max_score'] ?? '?'}'} • Due: ${_date(r['due_at'])}'
                   : title == 'Results'
-                    ? 'Score: ${r['score'] ?? '-'} • Grade: ${r['grade'] ?? 'Not graded'} • ${_date(r['published_at'])}'
+                    ? '${r['period_title'] ?? 'Result'} ${r['academic_year'] ?? ''} • CA: ${r['ca_score'] ?? '—'}/${r['max_ca'] ?? '—'} • Exam: ${r['exam_score'] ?? '—'}/${r['max_exam'] ?? '—'} • Total: ${r['score'] ?? '-'} • Grade: ${r['grade'] ?? 'Not graded'} • ${r['remark'] ?? ''} • ${_date(r['published_at'])}'
                     : title == 'Upcoming live and recorded lessons'
                       ? '${r['subject'] ?? 'Lesson'} • ${r['scheduled_at'] == null ? 'Schedule to be announced' : _date(r['scheduled_at'])} • ${r['duration_minutes'] ?? '—'} minutes'
                       : title == 'Learning materials'
@@ -3553,6 +3553,10 @@ class _GuardianChildDetailsPageState extends State<GuardianChildDetailsPage> {
                 Padding(padding: const EdgeInsets.only(top: 4), child: Text('Tutor feedback: ${r['feedback']}', style: const TextStyle(height: 1.4))),
               if (r['comment'] != null && r['comment'].toString().trim().isNotEmpty)
                 Padding(padding: const EdgeInsets.only(top: 4), child: Text('Tutor comment: ${r['comment']}', style: const TextStyle(height: 1.4))),
+              if (title == 'Results' && (r['class_teacher_comment'] ?? '').toString().trim().isNotEmpty)
+                Padding(padding: const EdgeInsets.only(top: 4), child: Text('Class teacher: ${r['class_teacher_comment']}', style: const TextStyle(height: 1.4))),
+              if (title == 'Results' && (r['head_teacher_comment'] ?? '').toString().trim().isNotEmpty)
+                Padding(padding: const EdgeInsets.only(top: 4), child: Text('Centre coordinator: ${r['head_teacher_comment']}', style: const TextStyle(height: 1.4))),
               if (r['note'] != null && r['note'].toString().trim().isNotEmpty)
                 Padding(padding: const EdgeInsets.only(top: 4), child: Text('Note: ${r['note']}', style: const TextStyle(height: 1.4))),
               if (title == 'Classroom signboard' && ((r['media_path'] ?? '').toString().isNotEmpty || (r['media_url'] ?? '').toString().isNotEmpty))
