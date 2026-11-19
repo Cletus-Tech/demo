@@ -1757,12 +1757,19 @@ class AdminAssignmentsPanel extends StatefulWidget {
 }
 class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
   late Future<List<Map<String,dynamic>>> _items;
+  late Future<List<Map<String,dynamic>>> _classes;
   bool _busy=false;
+  String? _selectedClassId;
+  String _kind='assignment';
   @override
-  void initState(){super.initState();_items=_load();}
+  void initState(){super.initState();_items=_load();_classes=_loadClasses();}
+  Future<List<Map<String,dynamic>>> _loadClasses() async{
+    final rows=await Supabase.instance.client.from('classes').select('id,name,level').eq('status','active').order('name');
+    return List<Map<String,dynamic>>.from(rows);
+  }
   Future<List<Map<String,dynamic>>> _load() async{
     final rows=await Supabase.instance.client.from('assignments')
-      .select('id,title,instructions,due_at,max_score,published_at,tutor_id,classes(name),subjects(name),assignment_submissions(id)')
+      .select('id,class_id,title,instructions,due_at,max_score,published_at,tutor_id,assignment_type,classes(name),subjects(name),assignment_submissions(id)')
       .order('created_at',ascending:false);
     return List<Map<String,dynamic>>.from(rows);
   }
@@ -1783,10 +1790,14 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
       if(classes.isEmpty||subjects.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Create an active class and subject first.')));return;}
       String? classId=classes.first['id'].toString();String? subjectId=subjects.first['id'].toString();
       String tutorId='';
+      String assignmentType=_kind;
       List<Map<String,dynamic>> eligibleTutors(String? c,String? sub)=>tutorOptions.where((t)=>t['class_id']==c&&t['subject_id']==sub).toList();
       final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refreshDialog)=>AlertDialog(
         title:const Text('Create assignment'),
         content:SizedBox(width:460,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          DropdownButtonFormField<String>(value:assignmentType,decoration:const InputDecoration(labelText:'Work category'),
+            items:const [DropdownMenuItem(value:'assignment',child:Text('Assignment / Homework')),DropdownMenuItem(value:'classwork',child:Text('Classwork'))],
+            onChanged:(v)=>refreshDialog(()=>assignmentType=v??'assignment')),
           TextField(controller:title,decoration:const InputDecoration(labelText:'Assignment title')),
           DropdownButtonFormField<String>(value:classId,decoration:const InputDecoration(labelText:'Class'),
             items:classes.map((r)=>DropdownMenuItem<String>(value:r['id'].toString(),child:Text(r['name'].toString()))).toList(),onChanged:(v)=>refreshDialog(() { classId=v; final options=eligibleTutors(classId,subjectId); tutorId=options.isEmpty?'':options.first['tutor_id'].toString(); })),
@@ -1811,7 +1822,7 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
         if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Check the title, due date and maximum marks.')));return;
       }
       await db.from('assignments').insert({
-        'title':title.text.trim(),'class_id':classId,'subject_id':subjectId,
+        'title':title.text.trim(),'class_id':classId,'subject_id':subjectId,'assignment_type':assignmentType,
         'instructions':instructions.text.trim().isEmpty?null:instructions.text.trim(),
         'tutor_id':tutorId.isEmpty?null:tutorId,
         'due_at':dueDate?.toUtc().toIso8601String(),'max_score':maxScore,
@@ -1836,18 +1847,45 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
     child:FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,s){
       if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
       if(s.hasError)return ListView(padding:const EdgeInsets.all(18),children:[_InfoNotice(message:'Assignments could not be loaded: '+s.error.toString())]);
-      final rows=s.data??[];
+      final rows=(s.data??[]).where((r)=>(r['assignment_type']??'assignment')==_kind&&(_selectedClassId==null||r['class_id']==_selectedClassId)).toList();
       return ListView(padding:const EdgeInsets.all(16),children:[
-        Row(children:[const Expanded(child:Text('Homework and marking',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:AppColors.ink))),
+        Row(children:[const Expanded(child:Text('Submission centre',style:TextStyle(fontSize:20,fontWeight:FontWeight.w800,color:AppColors.ink))),
           FilledButton.icon(onPressed:_busy?null:_create,icon:const Icon(Icons.add),label:const Text('Create'))]),
-        const Padding(padding:EdgeInsets.only(top:8,bottom:12),child:Text('Create a class assignment, publish it to enrolled learners, then review and mark their submissions.',style:TextStyle(color:AppColors.muted,height:1.4))),
-        if(rows.isEmpty)const _InfoNotice(message:'No assignments created yet. Create the first homework task for a class.'),
-        ...rows.map((r){
+        const Padding(padding:EdgeInsets.only(top:8,bottom:12),child:Text('Choose a work type, open a class, then review each learner’s submission status and marks.',style:TextStyle(color:AppColors.muted,height:1.4))),
+        Wrap(spacing:8,children:[
+          ChoiceChip(label:const Text('Assignments'),selected:_kind=='assignment',onSelected:(_)=>setState(()=>_kind='assignment')),
+          ChoiceChip(label:const Text('Classwork'),selected:_kind=='classwork',onSelected:(_)=>setState(()=>_kind='classwork')),
+        ]),
+        const SizedBox(height:10),
+        if(_selectedClassId==null)
+          FutureBuilder<List<Map<String,dynamic>>>(future:_classes,builder:(context,cs){
+            if(cs.connectionState!=ConnectionState.done)return const Padding(padding:EdgeInsets.all(16),child:Center(child:CircularProgressIndicator()));
+            if(cs.hasError)return _InfoNotice(message:'Classes could not be loaded: '+cs.error.toString());
+            final classRows=cs.data??[];
+            return Column(children:classRows.map((c){
+              final id=c['id'].toString();
+              final count=(s.data??[]).where((r)=>r['class_id']==id&&(r['assignment_type']??'assignment')==_kind).length;
+              return Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
+                leading:const Icon(Icons.school_outlined,color:AppColors.brown),
+                title:Text(c['name'].toString(),style:const TextStyle(fontWeight:FontWeight.w800)),
+                subtitle:Text((c['level']??'').toString()+' • '+count.toString()+' work item(s)'),
+                trailing:const Icon(Icons.chevron_right_rounded),
+                onTap:()=>setState(()=>_selectedClassId=id),
+              ));
+            }).toList());
+          }),
+        if(_selectedClassId!=null)...[
+          Row(children:[
+            IconButton(onPressed:()=>setState(()=>_selectedClassId=null),icon:const Icon(Icons.arrow_back)),
+            Expanded(child:Text(rows.isEmpty?'Selected class':(rows.first['classes']?['name']??'Selected class').toString(),style:const TextStyle(fontSize:18,fontWeight:FontWeight.w800))),
+          ]),
+          if(rows.isEmpty)const _InfoNotice(message:'No work of this type has been created for this class yet.'),
+          ...rows.map((r){
           final sub=r['assignment_submissions'];final count=sub is List?sub.length:0;
           final published=r['published_at']!=null;
           return Card(margin:const EdgeInsets.only(bottom:10),child:ListTile(
             title:Text(r['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
-            subtitle:Text((r['classes']?['name']??'Class').toString()+' • '+(r['subjects']?['name']??'Subject').toString()+' • '+(r['tutor_id']==null?'No tutor assigned':'Tutor assigned')+' • '+count.toString()+' submissions • '+(published?'Published':'Draft')),
+            subtitle:Text((r['subjects']?['name']??'Subject').toString()+' • '+count.toString()+' submitted • '+(published?'Published':'Draft')),
             trailing:PopupMenuButton<String>(onSelected:(v)async{
               if(v=='submissions')await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>AdminAssignmentSubmissionsPage(assignment:r)));
               if(v=='publish'||v=='draft')await _togglePublish(r);
@@ -1858,6 +1896,7 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
             ]),
           ));
         }),
+        ],
       ]);
     }));
 }
@@ -1874,10 +1913,9 @@ class _AdminAssignmentSubmissionsPageState extends State<AdminAssignmentSubmissi
   @override
   void initState(){super.initState();_items=_load();}
   Future<List<Map<String,dynamic>>> _load()async{
-    final rows=await Supabase.instance.client.from('assignment_submissions')
-      .select('id,status,answer_text,score,tutor_feedback,submitted_at,graded_at,students(profiles(full_name))')
-      .eq('assignment_id',widget.assignment['id']).order('submitted_at',ascending:false);
-    return List<Map<String,dynamic>>.from(rows);
+    final rows=await Supabase.instance.client.rpc('admin_assignment_submissions',params:{'p_assignment_id':widget.assignment['id']});
+    if(rows is! List)return [];
+    return rows.map((e)=>Map<String,dynamic>.from(e as Map)).toList();
   }
   Future<void> _refresh()async{final next=_load();setState(()=>_items=next);await next;}
   Future<void> _mark(Map<String,dynamic> row)async{
