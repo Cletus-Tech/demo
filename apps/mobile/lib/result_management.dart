@@ -304,3 +304,99 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
     }),
   );
 }
+
+class StudentReleasedResultsPage extends StatefulWidget {
+  const StudentReleasedResultsPage({super.key});
+  @override
+  State<StudentReleasedResultsPage> createState()=>_StudentReleasedResultsPageState();
+}
+class _StudentReleasedResultsPageState extends State<StudentReleasedResultsPage>{
+  late Future<Map<String,dynamic>> _data;
+  @override
+  void initState(){super.initState();_data=_load();}
+  Future<Map<String,dynamic>> _load() async{
+    final db=Supabase.instance.client;
+    final uid=db.auth.currentUser?.id;
+    if(uid==null)return {'results':<Map<String,dynamic>>[],'cards':<Map<String,dynamic>>[]};
+    final student=await db.from('students').select('id').eq('user_id',uid).maybeSingle();
+    if(student==null)return {'results':<Map<String,dynamic>>[],'cards':<Map<String,dynamic>>[]};
+    final values=await Future.wait<dynamic>([
+      db.from('results').select('id,period_id,score,grade,remark,ca_score,exam_score,max_ca,max_exam,published_at,subjects(name),result_periods(title,academic_year)')
+        .eq('student_id',student['id']).not('published_at','is',null).order('created_at',ascending:false),
+      db.from('student_report_cards').select('period_id,class_teacher_comment,head_teacher_comment,position_in_class,days_school_open,days_present,next_term_begins')
+        .eq('student_id',student['id']),
+    ]);
+    return {
+      'results':List<Map<String,dynamic>>.from(values[0] as List),
+      'cards':List<Map<String,dynamic>>.from(values[1] as List),
+    };
+  }
+  Future<void> _refresh() async{final next=_load();setState(()=>_data=next);await next;}
+  @override
+  Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('My released results')),
+    body:RefreshIndicator(onRefresh:_refresh,child:FutureBuilder<Map<String,dynamic>>(
+      future:_data,builder:(context,s){
+        if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
+        if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[Text('Results could not be loaded: ${s.error}')]);
+        final results=List<Map<String,dynamic>>.from(s.data?['results']??[]);
+        final cards=List<Map<String,dynamic>>.from(s.data?['cards']??[]);
+        if(results.isEmpty)return ListView(padding:const EdgeInsets.all(22),children:const [
+          Text('Your report cards will appear here when the centre releases them.',style:TextStyle(color:Color(0xFF746D66),height:1.5)),
+        ]);
+        final groups=<String,List<Map<String,dynamic>>>{};
+        for(final row in results){
+          final p=row['result_periods'] as Map<String,dynamic>?;
+          final label='${p?['title']??'Result'} • ${p?['academic_year']??''}';
+          groups.putIfAbsent(label,()=>[]).add(row);
+        }
+        final cardByPeriod=<String,Map<String,dynamic>>{
+          for(final c in cards)c['period_id'].toString():c,
+        };
+        return ListView(padding:const EdgeInsets.all(16),children:[
+          const Text('Released academic report cards',style:TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:Color(0xFF29231F))),
+          const SizedBox(height:5),
+          const Text('These are your officially released class results from Young Learners Tutorial.',style:TextStyle(color:Color(0xFF746D66))),
+          const SizedBox(height:12),
+          ...groups.entries.map((entry){
+            final rows=entry.value;
+            final total=rows.fold<double>(0,(v,r)=>v+(double.tryParse(r['score'].toString())??0));
+            final maximum=rows.fold<double>(0,(v,r)=>v+(double.tryParse(r['max_ca'].toString())??40)+(double.tryParse(r['max_exam'].toString())??60));
+            final average=maximum==0?0:total/maximum*100;
+            final periodId=rows.first['period_id'].toString();
+            final report=cardByPeriod[periodId];
+            return Card(margin:const EdgeInsets.only(bottom:12),child:Padding(
+              padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Text(entry.key,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800,color:Color(0xFF4A3022))),
+                const SizedBox(height:10),
+                SingleChildScrollView(scrollDirection:Axis.horizontal,child:DataTable(
+                  columns:const [
+                    DataColumn(label:Text('Subject')),DataColumn(label:Text('CA')),
+                    DataColumn(label:Text('Exam')),DataColumn(label:Text('Total')),
+                    DataColumn(label:Text('Grade')),
+                  ],
+                  rows:rows.map((r)=>DataRow(cells:[
+                    DataCell(Text((r['subjects']?['name']??'Subject').toString())),
+                    DataCell(Text('${r['ca_score']}/${r['max_ca']}')),
+                    DataCell(Text('${r['exam_score']}/${r['max_exam']}')),
+                    DataCell(Text(r['score'].toString())),
+                    DataCell(Text((r['grade']??'-').toString(),style:const TextStyle(fontWeight:FontWeight.w800))),
+                  ])).toList(),
+                )),
+                const SizedBox(height:8),
+                Text('Aggregate: ${total.toStringAsFixed(1)} / ${maximum.toStringAsFixed(1)}  •  Average: ${average.toStringAsFixed(1)}%',
+                  style:const TextStyle(fontWeight:FontWeight.w800,color:Color(0xFF4A3022))),
+                if((report?['class_teacher_comment']??'').toString().isNotEmpty)
+                  Padding(padding:const EdgeInsets.only(top:10),child:Text('Class teacher: ${report!['class_teacher_comment']}')),
+                if((report?['head_teacher_comment']??'').toString().isNotEmpty)
+                  Padding(padding:const EdgeInsets.only(top:6),child:Text('Centre coordinator: ${report!['head_teacher_comment']}')),
+                if(report?['position_in_class']!=null)
+                  Padding(padding:const EdgeInsets.only(top:6),child:Text('Position in class: ${report!['position_in_class']}')),
+              ]),
+            ));
+          }),
+        ]);
+      },
+    )),
+  );
+}
