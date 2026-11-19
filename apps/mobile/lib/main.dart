@@ -5241,7 +5241,7 @@ class _ProfileEditorPageState extends State<ProfileEditorPage>{
     final file=result.files.first;
     if(file.size>5242880){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Choose an image smaller than 5 MB.')));return;}
     if(!['jpg','jpeg','png','webp'].contains(file.extension?.toLowerCase())){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Use a JPG, PNG or WebP image.')));return;}
-    if(mounted)setState(()=>{_photo=file,_removeAvatar=false});
+    if(mounted)setState((){_photo=file;_removeAvatar=false;});
   }
   Future<void> _save()async{
     setState(()=>_saving=true);
@@ -5281,14 +5281,18 @@ class _ProfileEditorPageState extends State<ProfileEditorPage>{
   @override
   void dispose(){_about.dispose();_occupation.dispose();_class.dispose();_interests.dispose();_skills.dispose();_goals.dispose();_phone.dispose();super.dispose();}
   @override
-  Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Edit my profile')),
+  Widget build(BuildContext context){
+    final ImageProvider? photoProvider=_photo?.bytes!=null
+      ?MemoryImage(_photo!.bytes!)
+      :(_removeAvatar||_avatarUrl==null?null:NetworkImage(_avatarUrl!));
+    return Scaffold(appBar:AppBar(title:const Text('Edit my profile')),
     body:_loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(20),children:[
       const Text('Make your profile your own',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800)),
       const SizedBox(height:6),const Text('Everything here is optional. Add one detail, several details, or leave everything blank. Your account will work normally either way.',style:TextStyle(color:AppColors.muted,height:1.45)),
       const SizedBox(height:18),
       Center(child:Column(children:[
         CircleAvatar(radius:48,backgroundColor:AppColors.paleGold,
-          backgroundImage:_photo?.bytes!=null?MemoryImage(_photo!.bytes!):(_removeAvatar?null:(_avatarUrl==null?null:NetworkImage(_avatarUrl!))) as ImageProvider?,
+          backgroundImage:photoProvider,
           child:_photo==null&&(_avatarUrl==null||_removeAvatar)?const Icon(Icons.person_outline,size:42,color:AppColors.brown):null),
         const SizedBox(height:8),Wrap(spacing:8,children:[
           OutlinedButton.icon(onPressed:_saving?null:_choosePhoto,icon:const Icon(Icons.photo_camera_outlined),label:const Text('Choose photo')),
@@ -5308,6 +5312,7 @@ class _ProfileEditorPageState extends State<ProfileEditorPage>{
       FilledButton.icon(onPressed:_saving?null:_save,icon:const Icon(Icons.save_outlined),label:Text(_saving?'Saving...':'Save profile')),
       const SizedBox(height:12),const Text('Your name and sign-in email are managed by your account and are not changed here.',style:TextStyle(fontSize:12,color:AppColors.muted)),
     ]));
+  }
 }
 
 class _InfoNotice extends StatelessWidget {
