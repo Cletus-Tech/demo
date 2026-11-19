@@ -783,20 +783,20 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
       workbook.rename('Sheet1','Student Directory');
       final sheet=workbook['Student Directory'];
       sheet.appendRow([
-        xls.TextCellValue('Student name'),TextCellValue('Email'),TextCellValue('Phone'),
-        TextCellValue('Class'),TextCellValue('Admission number'),
-        TextCellValue('Account status'),TextCellValue('Registered on'),
+        xls.TextCellValue('Student name'),xls.TextCellValue('Email'),xls.TextCellValue('Phone'),
+        xls.TextCellValue('Class'),xls.TextCellValue('Admission number'),
+        xls.TextCellValue('Account status'),xls.TextCellValue('Registered on'),
       ]);
       for(final row in rows) {
         final profile=row['profiles'] as Map<String,dynamic>?;
         sheet.appendRow([
-          TextCellValue((profile?['full_name']??'').toString()),
-          TextCellValue((profile?['email']??'').toString()),
-          TextCellValue((profile?['phone']??'').toString()),
-          TextCellValue((row['level']??'').toString()),
-          TextCellValue((row['admission_number']??'').toString()),
-          TextCellValue((row['status']??'').toString()),
-          TextCellValue((row['created_at']??'').toString()),
+          xls.TextCellValue((profile?['full_name']??'').toString()),
+          xls.TextCellValue((profile?['email']??'').toString()),
+          xls.TextCellValue((profile?['phone']??'').toString()),
+          xls.TextCellValue((row['level']??'').toString()),
+          xls.TextCellValue((row['admission_number']??'').toString()),
+          xls.TextCellValue((row['status']??'').toString()),
+          xls.TextCellValue((row['created_at']??'').toString()),
         ]);
       }
       final bytes=workbook.save();
