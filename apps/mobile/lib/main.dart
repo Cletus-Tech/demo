@@ -2483,7 +2483,7 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
   Future<List<Map<String,dynamic>>> _loadAnnouncements() async{
     final rows=await Supabase.instance.client.from('announcements')
       .select('id,title,body,published_at,expires_at,banner_tone,target_class_id,attachment_path,attachment_name,attachment_mime_type,attachment_size,classes(name)')
-      .order('created_at',ascending:false).limit(200);
+      .order('created_at',ascending:false);
     return List<Map<String,dynamic>>.from(rows);
   }
   Future<void> _refreshAnnouncements() async{
@@ -2540,10 +2540,10 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
               final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:_fileTypes,withData:true);
               if(picked!=null&&picked.files.isNotEmpty){
                 if(picked.files.first.size>52428800){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Attachments must be 50 MB or smaller.')));return;}
-                dialogSetState(()=>{replacement=picked.files.first,removeAttachment=false});
+                dialogSetState((){replacement=picked.files.first;removeAttachment=false;});
               }
             },icon:const Icon(Icons.swap_horiz),label:const Text('Replace media')),
-            TextButton.icon(onPressed:()=>dialogSetState(()=>{replacement=null,removeAttachment=true}),
+            TextButton.icon(onPressed:()=>dialogSetState((){replacement=null;removeAttachment=true;}),
               icon:const Icon(Icons.delete_outline),label:const Text('Remove media')),
           ]),
           const Text('Changes apply to the existing dashboard post. Maximum media size: 50 MB.',
