@@ -2316,7 +2316,7 @@ class _AdminBillboardAppearancePageState extends State<AdminBillboardAppearanceP
       .not('published_at','is',null).lte('published_at',now)
       .or('expires_at.is.null,expires_at.gt.$now').order('published_at',ascending:false);
     final list=List<Map<String,dynamic>>.from(rows);
-    if(list.isNotEmpty){_selected??=list.first['id'].toString();final active=list.where((x)=>x['id'].toString()==_selected).firstOrNull??list.first;_style??=active['banner_tone'].toString();}
+    if(list.isNotEmpty){_selected??=list.first['id'].toString();final active=list.firstWhere((x)=>x['id'].toString()==_selected,orElse:()=>list.first);_style??=active['banner_tone'].toString();}
     return list;
   }
   Future<void> _save()async{
@@ -2334,13 +2334,13 @@ class _AdminBillboardAppearancePageState extends State<AdminBillboardAppearanceP
       if(s.hasError)return Center(child:Text('Could not load notices: ${s.error}'));
       final rows=s.data??[];
       if(rows.isEmpty)return const Padding(padding:EdgeInsets.all(24),child:Text('There are no active billboard notices to style yet.'));
-      final selected=rows.where((x)=>x['id'].toString()==_selected).firstOrNull??rows.first;
+      final selected=rows.firstWhere((x)=>x['id'].toString()==_selected,orElse:()=>rows.first);
       return ListView(padding:const EdgeInsets.all(20),children:[
         const Text('Choose a notice',style:TextStyle(fontWeight:FontWeight.w800)),
         const SizedBox(height:8),
         DropdownButtonFormField<String>(value:_selected,isExpanded:true,decoration:const InputDecoration(labelText:'Existing billboard message'),
           items:rows.map((x)=>DropdownMenuItem(value:x['id'].toString(),child:Text(x['title'].toString(),overflow:TextOverflow.ellipsis))).toList(),
-          onChanged:_saving?null:(v){setState((){_selected=v;final found=rows.where((x)=>x['id'].toString()==v).firstOrNull;_style=found?['banner_tone']?.toString()??'gold';});}),
+          onChanged:_saving?null:(v){setState((){_selected=v;final found=rows.firstWhere((x)=>x['id'].toString()==v,orElse:()=>rows.first);_style=found['banner_tone']?.toString()??'gold';});}),
         const SizedBox(height:18),
         const Text('Select a visual design',style:TextStyle(fontWeight:FontWeight.w800)),
         const SizedBox(height:10),
