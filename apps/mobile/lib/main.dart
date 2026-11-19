@@ -360,7 +360,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     if (parsed == null) return raw;
     final parts = parsed.toString().split('.');
     final whole = parts.first.replaceAllMapped(
-      RegExp(r'\\B(?=(\\d{3})+(?!\\d))'), (m) => ',');
+      RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
     return parts.length > 1 && parts[1] != '0' ? '$whole.${parts[1]}' : whole;
   }
   Widget _metric(String label, dynamic value, {String? hint}) => Builder(
