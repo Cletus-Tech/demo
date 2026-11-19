@@ -1788,7 +1788,7 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
       final subjects=List<Map<String,dynamic>>.from(setup[1] as List);
       final tutorOptions=List<Map<String,dynamic>>.from((setup[2] as List).map((e)=>Map<String,dynamic>.from(e as Map)));
       if(classes.isEmpty||subjects.isEmpty){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Create an active class and subject first.')));return;}
-      String? classId=classes.first['id'].toString();String? subjectId=subjects.first['id'].toString();
+      String? classId=_selectedClassId??classes.first['id'].toString();String? subjectId=subjects.first['id'].toString();
       String tutorId='';
       String assignmentType=_kind;
       List<Map<String,dynamic>> eligibleTutors(String? c,String? sub)=>tutorOptions.where((t)=>t['class_id']==c&&t['subject_id']==sub).toList();
