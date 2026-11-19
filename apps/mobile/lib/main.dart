@@ -4712,7 +4712,7 @@ class _TutorAssignmentSubmissionsPageState extends State<TutorAssignmentSubmissi
         ]);
         final rows=s.data??[];
         if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(20),children:[
-          const _InfoNotice(message:'No learner has submitted this assignment yet.')
+          const _InfoNotice(message:'No active learners are enrolled in this class yet.')
         ]);
         return ListView(padding:const EdgeInsets.all(16),children:[
           Text((widget.assignment['title']??'Assignment').toString(),
@@ -4728,29 +4728,36 @@ class _TutorAssignmentSubmissionsPageState extends State<TutorAssignmentSubmissi
                 Row(children:[
                   Expanded(child:Text((r['student_name']??'Learner').toString(),
                     style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink))),
-                  Text(status=='graded'?'Marked':'Awaiting marking',
+                  Text(status=='graded'?'Marked':status=='not_submitted'?'Not submitted':'Awaiting marking',
                     style:TextStyle(fontWeight:FontWeight.w700,color:status=='graded'?Colors.green.shade700:AppColors.brown)),
                 ]),
                 if(r['student_level']!=null)Text(r['student_level'].toString(),style:const TextStyle(fontSize:12,color:AppColors.muted)),
                 const SizedBox(height:10),
-                const Text('STUDENT ANSWER',style:TextStyle(fontSize:10,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.muted)),
-                const SizedBox(height:5),
-                SelectableText((r['answer_text']??'No text answer').toString(),
-                  style:const TextStyle(height:1.5,color:AppColors.ink)),
-                if(r['score']!=null)...[
+                if(status=='not_submitted')...[
+                  const Text('This learner is enrolled in your class but has not submitted this work yet.',style:TextStyle(color:AppColors.muted)),
                   const SizedBox(height:8),
-                  Text('Score: ${r['score']} / ${widget.assignment['max_score']??0}',
-                    style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.brown)),
+                  OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentDirectChatPage(studentId:r['student_id'].toString(),studentName:(r['student_name']??'Learner').toString()))),
+                    icon:const Icon(Icons.chat_outlined),label:const Text('Message learner')),
+                ]else...[
+                  const Text('STUDENT ANSWER',style:TextStyle(fontSize:10,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+                  const SizedBox(height:5),
+                  SelectableText((r['answer_text']??'No text answer').toString(),
+                    style:const TextStyle(height:1.5,color:AppColors.ink)),
+                  if(r['score']!=null)...[
+                    const SizedBox(height:8),
+                    Text('Score: '+r['score'].toString()+' / '+(widget.assignment['max_score']??0).toString(),
+                      style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.brown)),
+                  ],
+                  if((r['tutor_feedback']??'').toString().isNotEmpty)...[
+                    const SizedBox(height:6),Text('Feedback: '+r['tutor_feedback'].toString(),
+                      style:const TextStyle(color:AppColors.muted)),
+                  ],
+                  const SizedBox(height:10),
+                  Align(alignment:Alignment.centerRight,child:OutlinedButton.icon(
+                    onPressed:_busy?null:()=>_grade(r),
+                    icon:const Icon(Icons.edit_note),label:Text(status=='graded'?'Update mark':'Mark work'),
+                  )),
                 ],
-                if((r['tutor_feedback']??'').toString().isNotEmpty)...[
-                  const SizedBox(height:6),Text('Feedback: ${r['tutor_feedback']}',
-                    style:const TextStyle(color:AppColors.muted)),
-                ],
-                const SizedBox(height:10),
-                Align(alignment:Alignment.centerRight,child:OutlinedButton.icon(
-                  onPressed:_busy?null:()=>_grade(r),
-                  icon:const Icon(Icons.edit_note),label:Text(status=='graded'?'Update mark':'Mark work'),
-                )),
               ]),
             ));
           }),
