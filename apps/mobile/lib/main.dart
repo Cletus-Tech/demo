@@ -2789,11 +2789,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
         .from('notifications')
         .select('id,title,body,read_at,created_at')
         .order('created_at', ascending: false);
+    final now = DateTime.now().toUtc().toIso8601String();
     final announcements = await client
         .from('announcements')
-        .select('id,title,body,published_at,created_at')
+        .select('id,title,body,published_at,expires_at,created_at')
         .not('published_at', 'is', null)
-        .lte('published_at', DateTime.now().toUtc().toIso8601String())
+        .lte('published_at', now)
+        .or('expires_at.is.null,expires_at.gt.$now')
         .order('published_at', ascending: false);
     final items = <Map<String, dynamic>>[
       ...List<Map<String, dynamic>>.from(notifications).map((item) => {
