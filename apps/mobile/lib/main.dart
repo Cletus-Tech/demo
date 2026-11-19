@@ -5589,26 +5589,49 @@ class _ClassroomPageState extends State<ClassroomPage> {
   String get _classId=>widget.classroom['id'].toString();
   @override
   void initState(){super.initState();_data=_load();}
+  Future<Map<String,dynamic>> _loadSection(Future<dynamic> Function() query) async {
+    try {
+      return {'data': await query(), 'error': null};
+    } catch (e) {
+      return {'data': <dynamic>[], 'error': e.toString()};
+    }
+  }
   Future<Map<String,dynamic>> _load() async {
     final db=Supabase.instance.client;
-    final results=await Future.wait<dynamic>([
-      db.from('lessons').select('id,title,description,content,live_class_url,scheduled_at,duration_minutes,subjects(name)')
-        .eq('class_id',_classId).eq('is_published',true).order('scheduled_at'),
-      db.from('classroom_posts').select('id,post_type,title,body,media_path,media_url,created_at')
-        .eq('class_id',_classId).eq('is_published',true).order('created_at',ascending:false),
-      widget.canManage
+    // Each classroom area loads independently. A permissions or network error
+    // in one query must not hide the other sections or close the classroom.
+    final sections=await Future.wait<Map<String,dynamic>>([
+      _loadSection(() => db.from('lessons')
+        .select('id,title,description,content,live_class_url,scheduled_at,duration_minutes,subjects(name)')
+        .eq('class_id',_classId).eq('is_published',true).order('scheduled_at')),
+      _loadSection(() => db.from('classroom_posts')
+        .select('id,post_type,title,body,media_path,media_url,created_at')
+        .eq('class_id',_classId).eq('is_published',true).order('created_at',ascending:false)),
+      _loadSection(() => widget.canManage
         ? db.from('assignments').select('id,title,due_at,max_score,subjects(name)')
             .eq('class_id',_classId).not('published_at','is',null).order('due_at')
-        : db.rpc('student_assignments'),
+        : db.rpc('student_assignments')),
     ]);
-    final lessons=List<Map<String,dynamic>>.from(results[0] as List);
-    final posts=List<Map<String,dynamic>>.from(results[1] as List);
-    final rawAssignments=(results[2] as List).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+    List<Map<String,dynamic>> rows(int index) {
+      final raw=sections[index]['data'];
+      if(raw is! List) return <Map<String,dynamic>>[];
+      return raw.whereType<Map>().map((e)=>Map<String,dynamic>.from(e)).toList();
+    }
+    final lessons=rows(0);
+    final posts=rows(1);
+    final rawAssignments=rows(2);
     final assignments=widget.canManage
       ? rawAssignments.map((a)=>{'id':a['id'],'title':a['title'],'due_at':a['due_at'],'max_score':a['max_score'],
           'subject_name':a['subjects'] is Map ? a['subjects']['name'] : 'Subject','submission_status':'Published'}).toList()
       : rawAssignments.where((a)=>(a['class_name']??'').toString()==(widget.classroom['name']??'').toString()).toList();
-    return {'lessons':lessons,'posts':posts,'assignments':assignments};
+    return {
+      'lessons':lessons,'posts':posts,'assignments':assignments,
+      'errors': {
+        'lessons':sections[0]['error'],
+        'posts':sections[1]['error'],
+        'assignments':sections[2]['error'],
+      },
+    };
   }
   Future<void> _refresh() async {final f=_load();setState(()=>_data=f);await f;}
   Future<void> _createAssignment() async {
@@ -5761,7 +5784,24 @@ class _ClassroomPageState extends State<ClassroomPage> {
     body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,child:FutureBuilder<Map<String,dynamic>>(future:_data,builder:(context,s){
       if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
       if(s.hasError)return ListView(children:[_InfoNotice(message:'This classroom could not be loaded. '+s.error.toString())]);
-      final d=s.data??{};final lessons=List<Map<String,dynamic>>.from(d['lessons']??[]);final posts=List<Map<String,dynamic>>.from(d['posts']??[]);final assignments=List<Map<String,dynamic>>.from(d['assignments']??[]);
+      final d=s.data??{};
+      final lessons=List<Map<String,dynamic>>.from(d['lessons']??[]);
+      final posts=List<Map<String,dynamic>>.from(d['posts']??[]);
+      final assignments=List<Map<String,dynamic>>.from(d['assignments']??[]);
+      final errors=Map<String,dynamic>.from(d['errors']??{});
+      Widget sectionError(String title,String key) {
+        final error=errors[key];
+        if(error==null)return const SizedBox.shrink();
+        return Card(color:Theme.of(context).colorScheme.errorContainer,child:Padding(
+          padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text('$title could not be loaded',style:TextStyle(fontWeight:FontWeight.w800,color:Theme.of(context).colorScheme.onErrorContainer)),
+            const SizedBox(height:4),
+            Text(error.toString(),style:TextStyle(fontSize:11,color:Theme.of(context).colorScheme.onErrorContainer),maxLines:3,overflow:TextOverflow.ellipsis),
+            Align(alignment:Alignment.centerRight,child:TextButton.icon(
+              onPressed:_refresh,icon:const Icon(Icons.refresh_rounded),label:const Text('Retry classroom data'))),
+          ]),
+        ));
+      }
       return ListView(padding:const EdgeInsets.fromLTRB(16,14,16,90),children:[
         ClipRRect(borderRadius:BorderRadius.circular(18),child:SvgPicture.asset('assets/classroom_hero.svg',height:145,width:double.infinity,fit:BoxFit.cover)),
         const SizedBox(height:14),
@@ -5775,10 +5815,12 @@ class _ClassroomPageState extends State<ClassroomPage> {
         ]),
         const SizedBox(height:19),
         _classroomHeading('Class signboard','Notices, explanations and shared resources'),
-        if(posts.isEmpty)const _InfoNotice(message:'The classroom board is empty. Your tutor will post explanations, learning resources and notices here.'),
+        sectionError('Classroom board','posts'),
+        if(errors['posts']==null&&posts.isEmpty)const _InfoNotice(message:'The classroom board is empty. Your tutor will post explanations, learning resources and notices here.'),
         ...posts.map(_postCard),
         const SizedBox(height:8),_classroomHeading('Lessons and teaching','Published lessons for this class'),
-        if(lessons.isEmpty)const _InfoNotice(message:'No lessons have been published for this classroom yet.'),
+        sectionError('Lessons','lessons'),
+        if(errors['lessons']==null&&lessons.isEmpty)const _InfoNotice(message:'No lessons have been published for this classroom yet.'),
         ...lessons.map((lesson)=>Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
           leading:const CircleAvatar(backgroundColor:AppColors.paleGold,child:Icon(Icons.play_lesson_outlined,color:AppColors.brown)),
           title:Text(lesson['title']?.toString()??'Lesson',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
@@ -5787,7 +5829,8 @@ class _ClassroomPageState extends State<ClassroomPage> {
           onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>LessonDetailPage(lesson:lesson))),
         ))),
         const SizedBox(height:8),_classroomHeading('Assignments','Homework published for this class'),
-        if(assignments.isEmpty)const _InfoNotice(message:'No assignments have been published for this classroom yet.'),
+        sectionError('Assignments','assignments'),
+        if(errors['assignments']==null&&assignments.isEmpty)const _InfoNotice(message:'No assignments have been published for this classroom yet.'),
         ...assignments.map((a)=>Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
           leading:const CircleAvatar(backgroundColor:AppColors.paleGold,child:Icon(Icons.assignment_outlined,color:AppColors.brown)),
           title:Text(a['title']?.toString()??'Assignment',style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
