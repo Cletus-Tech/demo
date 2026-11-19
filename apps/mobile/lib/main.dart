@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'learning_access.dart';
+import 'result_management.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Keep release and web clients aligned with the active Supabase project.
@@ -5800,34 +5803,81 @@ class _StaffRoomPageState extends State<StaffRoomPage>{
   final _composer=TextEditingController();
   late Future<List<Map<String,dynamic>>> _messages;
   dynamic _channel;
-  bool _sending=false;
-  bool _announcement=false;
+  bool _sending=false,_announcement=false;
+  PlatformFile? _attachment;
+  static const _extensions=['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','csv','rtf','jpg','jpeg','png','webp','gif','mp4','webm','mov'];
   @override
   void initState(){super.initState();_messages=_load();_subscribe();}
   Future<List<Map<String,dynamic>>> _load() async{
     final rows=await Supabase.instance.client.from('staff_room_messages')
-      .select('id,sender_id,sender_name,body,message_type,pinned,created_at')
+      .select('id,sender_id,sender_name,body,message_type,pinned,created_at,attachment_path,attachment_name,attachment_mime_type,attachment_size')
       .order('created_at',ascending:false).limit(150);
     return List<Map<String,dynamic>>.from(rows);
   }
   void _subscribe(){
     _channel=Supabase.instance.client.channel('staff-room-live')
-      .onPostgresChanges(event:PostgresChangeEvent.all,schema:'public',table:'staff_room_messages',
-        callback:(_)=>_refresh())
-      .subscribe();
+      .onPostgresChanges(event:PostgresChangeEvent.all,schema:'public',table:'staff_room_messages',callback:(_)=>_refresh()).subscribe();
   }
   Future<void> _refresh() async{final next=_load();if(mounted)setState(()=>_messages=next);await next;}
-  Future<void> _send() async{
-    final body=_composer.text.trim();if(body.isEmpty||_sending)return;
-    setState(()=>_sending=true);
+  String _mime(PlatformFile file){
+    final ext=file.extension?.toLowerCase()??'';
+    return const {
+      'pdf':'application/pdf','doc':'application/msword',
+      'docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls':'application/vnd.ms-excel','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt':'application/vnd.ms-powerpoint','pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'txt':'text/plain','csv':'text/csv','rtf':'application/rtf',
+      'jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp','gif':'image/gif',
+      'mp4':'video/mp4','webm':'video/webm','mov':'video/quicktime',
+    }[ext]??'application/octet-stream';
+  }
+  Future<void> _chooseFile() async{
+    final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:_extensions,withData:true);
+    if(result!=null&&result.files.isNotEmpty&&mounted){
+      final file=result.files.first;
+      if(file.size>52428800){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Attachments must be 50 MB or smaller.')));return;}
+      setState(()=>_attachment=file);
+    }
+  }
+  Future<void> _openAttachment(Map<String,dynamic> row) async{
     try{
+      final path=row['attachment_path']?.toString();
+      if(path==null||path.isEmpty)throw Exception('Attachment not found.');
+      final url=await Supabase.instance.client.storage.from('platform-attachments').createSignedUrl(path,3600);
+      await launchUrl(Uri.parse(url),mode:LaunchMode.externalApplication);
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not open attachment: $e')));}
+  }
+  Future<void> _send() async{
+    final body=_composer.text.trim();
+    if((body.isEmpty&&_attachment==null)||_sending)return;
+    setState(()=>_sending=true);
+    String? path;
+    try{
+      String? fileName,mime;int? size;
+      if(_attachment!=null){
+        final file=_attachment!,bytes=file.bytes;
+        if(bytes==null)throw Exception('The selected file could not be read. Please choose it again.');
+        final uid=Supabase.instance.client.auth.currentUser!.id;
+        fileName=file.name;mime=_mime(file);size=file.size;
+        final safe=file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
+        path='staff-room/$uid/${DateTime.now().microsecondsSinceEpoch}_$safe';
+        await Supabase.instance.client.storage.from('platform-attachments')
+          .uploadBinary(path!,bytes,fileOptions:FileOptions(contentType:mime,upsert:false));
+      }
       await Supabase.instance.client.from('staff_room_messages').insert({
         'sender_id':Supabase.instance.client.auth.currentUser!.id,
-        'body':body,'message_type':_announcement?'announcement':'message',
+        'body':body.isEmpty?'Shared a file':body,
+        'message_type':_announcement?'announcement':'message',
+        'attachment_path':path,'attachment_name':fileName,
+        'attachment_mime_type':mime,'attachment_size':size,
       });
-      _composer.clear();if(mounted)setState(()=>_announcement=false);await _refresh();
-    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Message could not be sent: $e')));}
-    finally{if(mounted)setState(()=>_sending=false);}
+      _composer.clear();
+      if(mounted)setState((){_announcement=false;_attachment=null;});
+      await _refresh();
+    }catch(e){
+      if(path!=null){try{await Supabase.instance.client.storage.from('platform-attachments').remove([path]);}catch(_){}}
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Message could not be sent: $e')));
+    }finally{if(mounted)setState(()=>_sending=false);}
   }
   @override
   void dispose(){_composer.dispose();if(_channel!=null)Supabase.instance.client.removeChannel(_channel);super.dispose();}
@@ -5837,8 +5887,7 @@ class _StaffRoomPageState extends State<StaffRoomPage>{
     body:Column(children:[
       Container(width:double.infinity,padding:const EdgeInsets.all(16),color:AppColors.cream,
         child:const Row(children:[Icon(Icons.lock_outline,color:AppColors.brown),SizedBox(width:10),
-          Expanded(child:Text('A private space for tutors, employees and centre coordinators.',
-            style:TextStyle(color:AppColors.ink,fontWeight:FontWeight.w600)))])),
+          Expanded(child:Text('A private space for tutors, employees and centre coordinators.',style:TextStyle(color:AppColors.ink,fontWeight:FontWeight.w600)))])),
       Expanded(child:RefreshIndicator(onRefresh:_refresh,child:FutureBuilder<List<Map<String,dynamic>>>(
         future:_messages,builder:(context,s){
           if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator());
@@ -5848,23 +5897,29 @@ class _StaffRoomPageState extends State<StaffRoomPage>{
             Icon(Icons.forum_outlined,size:48,color:AppColors.gold),const SizedBox(height:12),
             const _InfoNotice(message:'The staff room is ready. The first coordinator message or staff conversation will appear here.')]);
           return ListView.builder(reverse:true,padding:const EdgeInsets.all(14),itemCount:rows.length,itemBuilder:(context,index){
-            final r=rows[index];
-            final announcement=r['message_type']=='announcement';
+            final r=rows[index];final announcement=r['message_type']=='announcement';
             return Card(color:announcement?AppColors.cream:null,margin:const EdgeInsets.only(bottom:9),
               child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                Row(children:[Expanded(child:Text(r['sender_name']?.toString()??'Staff member',
-                  style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink))),
-                  if(announcement)const Chip(label:Text('CENTRE NOTICE'),visualDensity:VisualDensity.compact),
-                ]),
+                Row(children:[Expanded(child:Text(r['sender_name']?.toString()??'Staff member',style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink))),
+                  if(announcement)const Chip(label:Text('CENTRE NOTICE'),visualDensity:VisualDensity.compact)]),
                 const SizedBox(height:5),Text(r['body'].toString(),style:const TextStyle(height:1.45,color:AppColors.ink)),
-                const SizedBox(height:7),Text(_staffDate(r['created_at']),style:const TextStyle(fontSize:11,color:AppColors.muted)),
+                if((r['attachment_path']??'').toString().isNotEmpty)
+                  Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+                    onPressed:()=>_openAttachment(r),icon:const Icon(Icons.attach_file),
+                    label:Text((r['attachment_name']??'Open attachment').toString(),maxLines:1,overflow:TextOverflow.ellipsis))),
+                const SizedBox(height:5),Text(_staffDate(r['created_at']),style:const TextStyle(fontSize:11,color:AppColors.muted)),
               ])));
           });
         }))),
       SafeArea(top:false,child:Padding(padding:const EdgeInsets.fromLTRB(12,8,12,12),child:Column(children:[
         if(widget.canAnnounce)CheckboxListTile(value:_announcement,onChanged:(v)=>setState(()=>_announcement=v??false),
           dense:true,contentPadding:EdgeInsets.zero,title:const Text('Post as a centre announcement')),
+        if(_attachment!=null)Container(width:double.infinity,padding:const EdgeInsets.symmetric(horizontal:10,vertical:7),
+          decoration:BoxDecoration(color:AppColors.cream,borderRadius:BorderRadius.circular(9)),
+          child:Row(children:[const Icon(Icons.attach_file,size:17),Expanded(child:Text(_attachment!.name,maxLines:1,overflow:TextOverflow.ellipsis)),
+            IconButton(onPressed:()=>setState(()=>_attachment=null),icon:const Icon(Icons.close,size:18))])),
         Row(crossAxisAlignment:CrossAxisAlignment.end,children:[
+          IconButton(onPressed:_sending?null:_chooseFile,tooltip:'Attach a document or file',icon:const Icon(Icons.attach_file)),
           Expanded(child:TextField(controller:_composer,minLines:1,maxLines:4,
             decoration:const InputDecoration(hintText:'Write a staff message...',border:OutlineInputBorder()))),
           const SizedBox(width:8),IconButton.filled(onPressed:_sending?null:_send,
