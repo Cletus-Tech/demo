@@ -5270,14 +5270,15 @@ class _ProfileEditorPageState extends State<ProfileEditorPage>{
         }catch(_){}
       }
       if(!mounted)return;
+      final messenger=ScaffoldMessenger.of(context);
       widget.onSaved();Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your profile has been updated.')));
+      messenger.showSnackBar(const SnackBar(content:Text('Your profile has been updated.')));
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Profile could not be saved: $e')));}
     finally{if(mounted)setState(()=>_saving=false);}
   }
-  Widget _field(TextEditingController c,String label,{int lines=1,String? hint})=>Padding(
+  Widget _field(TextEditingController c,String label,{int lines=1,int maxLength=300,String? hint})=>Padding(
     padding:const EdgeInsets.only(bottom:12),child:TextField(controller:c,minLines:lines,maxLines:lines==1?1:4,
-      maxLength:label=='About me'?600:300,decoration:InputDecoration(labelText:label,hintText:hint,alignLabelWithHint:lines>1)));
+      maxLength:maxLength,decoration:InputDecoration(labelText:label,hintText:hint,alignLabelWithHint:lines>1)));
   @override
   void dispose(){_about.dispose();_occupation.dispose();_class.dispose();_interests.dispose();_skills.dispose();_goals.dispose();_phone.dispose();super.dispose();}
   @override
@@ -5301,9 +5302,9 @@ class _ProfileEditorPageState extends State<ProfileEditorPage>{
         ]),
       ])),
       const SizedBox(height:20),
-      _field(_about,'About me',lines:3,hint:'A little about yourself...'),
-      _field(_occupation,'What I do',hint:'Student, teacher, designer, business owner...'),
-      _field(_class,'Class / level',hint:'Optional profile description of your class or level'),
+      _field(_about,'About me',lines:3,maxLength:600,hint:'A little about yourself...'),
+      _field(_occupation,'What I do',maxLength:100,hint:'Student, teacher, designer, business owner...'),
+      _field(_class,'Class / level',maxLength:80,hint:'Optional profile description of your class or level'),
       _field(_interests,'Interests',lines:2,hint:'Things you enjoy learning or doing...'),
       _field(_skills,'Skills',lines:2,hint:'Skills you have or are developing...'),
       _field(_goals,'What I hope to become',lines:2,hint:'Your dreams, career goals or ambitions...'),
