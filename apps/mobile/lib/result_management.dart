@@ -103,7 +103,7 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
       final ca=_value(_ca[id]!);
       final exam=_value(_exam[id]!);
       if(ca==null||exam==null||ca<0||exam<0||ca>caMax||exam>examMax){
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Check scores for ${'(student['profiles']?['full_name']??'this learner').toString()}')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Check scores for ${(student['profiles']?['full_name']??'this learner').toString()}')));
         return;
       }
       payload.add({'student_id':id,'subject_id':_subjectId,'ca_score':ca,'exam_score':exam,
@@ -115,7 +115,6 @@ class _AdminResultsPageState extends State<AdminResultsPage> {
       for(final row in payload){row['period_id']=periodId;}
       await _db.from('results').upsert(payload,onConflict:'period_id,student_id,subject_id');
       if(release){
-        final now=DateTime.now().toUtc().toIso8601String();
         await _db.rpc('release_result_period',params:{'_period_id':periodId});
         _periodStatus='published';
       }
