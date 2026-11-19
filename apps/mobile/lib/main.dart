@@ -3102,7 +3102,7 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
             child:FadeTransition(opacity:animation,child:child)),
           child:Column(key:ValueKey(item?['id']??'welcome-board'),crossAxisAlignment:CrossAxisAlignment.start,children:[
             Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Expanded(child:Text(title.substring(0,_typedTitle.clamp(0,title.length)),maxLines:2,overflow:TextOverflow.ellipsis,
+              Expanded(child:Text(title.substring(0,_typedTitle.clamp(0,title.length).toInt()),maxLines:2,overflow:TextOverflow.ellipsis,
                 style:const TextStyle(color:Colors.white,fontSize:22,height:1.16,fontWeight:FontWeight.w800))),
               if(_typedTitle<title.length)
                 Container(width:2,height:23,margin:const EdgeInsets.only(left:3,top:2),
