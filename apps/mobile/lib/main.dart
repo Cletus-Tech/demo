@@ -2920,15 +2920,17 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
   int _index=0;
   bool _loading=true;
   Timer? _rotation;
+  Timer? _expiryRefresh;
   @override
   void initState(){
     super.initState();_load();
     _rotation=Timer.periodic(const Duration(seconds:7),(_){
       if(mounted&&_items.length>1)setState(()=>_index=(_index+1)%_items.length);
     });
+    _expiryRefresh=Timer.periodic(const Duration(minutes:1),(_)=>_load());
   }
   @override
-  void dispose(){_rotation?.cancel();super.dispose();}
+  void dispose(){_rotation?.cancel();_expiryRefresh?.cancel();super.dispose();}
   Future<void> _load() async{
     try{
       final now=DateTime.now().toUtc().toIso8601String();
@@ -2937,7 +2939,7 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
         .not('published_at','is',null).lte('published_at',now)
         .or('expires_at.is.null,expires_at.gt.$now')
         .order('display_order',ascending:false).order('published_at',ascending:false).limit(10);
-      if(mounted)setState(()=>{_items=List<Map<String,dynamic>>.from(rows),_index=0,_loading=false});
+      if(mounted)setState((){_items=List<Map<String,dynamic>>.from(rows);_index=0;_loading=false;});
     }catch(_){if(mounted)setState(()=>_loading=false);}
   }
   Color _tone(String value){
@@ -2946,7 +2948,7 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
   }
   @override
   Widget build(BuildContext context){
-    final item=_items.isEmpty?null:_items[_index.clamp(0,_items.length-1)];
+    final item=_items.isEmpty?null:_items[_index.clamp(0,_items.length-1).toInt()];
     final tone=_tone((item?['banner_tone']??'gold').toString());
     final title=(item?['title']??widget.fallbackTitle).toString();
     final body=(item?['body']??widget.fallbackBody).toString();
