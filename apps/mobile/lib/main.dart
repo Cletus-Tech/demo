@@ -1959,39 +1959,68 @@ class _AdminAssignmentSubmissionsPageState extends State<AdminAssignmentSubmissi
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not return submission: '+e.toString())));}
   }
   @override
-  Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Assignment submissions')),
+  Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(widget.assignment['assignment_type']=='classwork'?'Classwork register':'Assignment register')),
     body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,child:FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,s){
       if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
-      if(s.hasError)return ListView(padding:const EdgeInsets.all(18),children:[_InfoNotice(message:'Submissions could not be loaded: '+s.error.toString())]);
+      if(s.hasError)return ListView(padding:const EdgeInsets.all(18),children:[_InfoNotice(message:'Class register could not be loaded: '+s.error.toString())]);
       final rows=s.data??[];
-      if(rows.isEmpty)return ListView(padding:const EdgeInsets.all(18),children:const [_InfoNotice(message:'No learners have submitted this assignment yet.')]);
+      final submitted=rows.where((r)=>r['status']!='not_submitted').length;
+      final missing=rows.length-submitted;
+      final graded=rows.where((r)=>r['status']=='graded').length;
       return ListView(padding:const EdgeInsets.all(16),children:[
-        Text(widget.assignment['title']?.toString()??'Assignment',style:const TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink)),
+        Text(widget.assignment['title']?.toString()??'Work item',style:const TextStyle(fontSize:21,fontWeight:FontWeight.w800,color:AppColors.ink)),
+        Text((widget.assignment['classes']?['name']??'').toString()+' • '+(widget.assignment['subjects']?['name']??'').toString(),style:const TextStyle(color:AppColors.muted)),
         const SizedBox(height:12),
+        Row(children:[
+          Expanded(child:_SubmissionCountCard(label:'Enrolled',value:rows.length)),
+          const SizedBox(width:6),Expanded(child:_SubmissionCountCard(label:'Submitted',value:submitted)),
+          const SizedBox(width:6),Expanded(child:_SubmissionCountCard(label:'Not submitted',value:missing)),
+          const SizedBox(width:6),Expanded(child:_SubmissionCountCard(label:'Marked',value:graded)),
+        ]),
+        const SizedBox(height:12),
+        if(rows.isEmpty)const _InfoNotice(message:'There are no active student enrolments in this class yet.'),
         ...rows.map((r){
-          final student=r['students'] is Map?Map<String,dynamic>.from(r['students'] as Map):<String,dynamic>{};
-          final profile=student['profiles'] is Map?Map<String,dynamic>.from(student['profiles'] as Map):<String,dynamic>{};
-          return Card(margin:const EdgeInsets.only(bottom:10),child:ExpansionTile(
-            title:Text(profile['full_name']?.toString()??'Learner submission',style:const TextStyle(fontWeight:FontWeight.w700)),
-            subtitle:Text((r['status']??'submitted').toString()+' • '+(r['submitted_at']?.toString()??'Date unavailable')),
-            children:[
-              Padding(padding:const EdgeInsets.fromLTRB(16,0,16,16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                const Align(alignment:Alignment.centerLeft,child:Text('LEARNER ANSWER',style:TextStyle(fontSize:11,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.muted))),
-                const SizedBox(height:7),
-                SelectableText(r['answer_text']?.toString()??'No answer text supplied.',style:const TextStyle(height:1.5,color:AppColors.ink)),
-                if(r['score']!=null)Padding(padding:const EdgeInsets.only(top:9),child:Text('Current score: '+r['score'].toString(),style:const TextStyle(fontWeight:FontWeight.w700))),
-                if(r['tutor_feedback']!=null)Padding(padding:const EdgeInsets.only(top:6),child:Text('Feedback: '+r['tutor_feedback'].toString())),
-                const SizedBox(height:12),
+          final status=(r['status']??'not_submitted').toString();
+          final isMissing=status=='not_submitted';
+          final name=(r['student_name']??'Learner').toString();
+          return Card(margin:const EdgeInsets.only(bottom:9),child:ExpansionTile(
+            leading:Icon(isMissing?Icons.pending_actions_outlined:status=='graded'?Icons.check_circle_outline:Icons.assignment_turned_in_outlined,color:isMissing?AppColors.muted:AppColors.brown),
+            title:Text(name,style:const TextStyle(fontWeight:FontWeight.w800)),
+            subtitle:Text((r['student_level']??'').toString()+' • '+(isMissing?'Not submitted':status)+' • '+(r['submitted_at']?.toString()??'No submission date')),
+            children:[Padding(padding:const EdgeInsets.fromLTRB(16,0,16,14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              if(isMissing)...[
+                const Text('This learner is enrolled but has not submitted this work.',style:TextStyle(color:AppColors.muted)),
+                const SizedBox(height:8),
+                OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudentDirectChatPage(studentId:r['student_id'].toString(),studentName:name,admin:true))),
+                  icon:const Icon(Icons.chat_outlined),label:const Text('Query / message student')),
+              ]else...[
+                const Text('STUDENT WORK',style:TextStyle(fontSize:10,letterSpacing:1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+                const SizedBox(height:6),
+                SelectableText((r['answer_text']??'No answer text supplied.').toString(),style:const TextStyle(height:1.5)),
+                if(r['score']!=null)Padding(padding:const EdgeInsets.only(top:8),child:Text('Score: '+r['score'].toString()+' / '+(widget.assignment['max_score']?.toString()??'—'),style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.brown))),
+                if((r['tutor_feedback']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:6),child:Text('Feedback: '+r['tutor_feedback'].toString())),
+                const SizedBox(height:10),
                 Wrap(spacing:8,children:[
-                  FilledButton.icon(onPressed:_busy?null:()=>_mark(r),icon:const Icon(Icons.grading_outlined),label:const Text('Mark')),
-                  OutlinedButton.icon(onPressed:_busy?null:()=>_return(r),icon:const Icon(Icons.assignment_return_outlined),label:const Text('Return for correction')),
+                  FilledButton.icon(onPressed:_busy?null:()=>_mark(r),icon:const Icon(Icons.grading_outlined),label:const Text('Mark / update score')),
+                  if(status!='graded')OutlinedButton.icon(onPressed:_busy?null:()=>_return(r),icon:const Icon(Icons.assignment_return_outlined),label:const Text('Return for correction')),
                 ]),
-              ])),
-            ],
+              ],
+            ]))],
           ));
         }),
       ]);
     })));
+}
+
+class _SubmissionCountCard extends StatelessWidget{
+  final String label;final int value;
+  const _SubmissionCountCard({required this.label,required this.value});
+  @override
+  Widget build(BuildContext context)=>Card(child:Padding(padding:const EdgeInsets.symmetric(vertical:10,horizontal:5),child:Column(children:[
+    Text(value.toString(),style:const TextStyle(fontSize:19,fontWeight:FontWeight.w900,color:AppColors.brown)),
+    const SizedBox(height:3),Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:10,color:AppColors.muted,fontWeight:FontWeight.w700)),
+  ])));
+}
 }
 
 class AdminAssessmentQuestionsPage extends StatefulWidget {
