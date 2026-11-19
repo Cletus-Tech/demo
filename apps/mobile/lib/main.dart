@@ -2314,7 +2314,8 @@ class _AdminCommunicationsPageState extends State<AdminCommunicationsPage> {
     try{
       String? attachmentName,attachmentMime;int? attachmentSize;
       if(_attachment!=null){
-        final file=_attachment!,bytes=file.bytes;
+        final file=_attachment!;
+        final bytes=file.bytes;
         if(bytes==null)throw Exception('The selected file could not be read.');
         final uid=Supabase.instance.client.auth.currentUser!.id;
         attachmentName=file.name;attachmentMime=_mime(file);attachmentSize=file.size;
