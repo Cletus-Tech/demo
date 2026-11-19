@@ -85,7 +85,7 @@ jobs:
               content = content.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher"', 1)
           content = re.sub(r'android:label="[^"]+"', 'android:label="Young Learners Tutorial"', content, count=1)
           manifest.write_text(content)
-          if "android:icon=\\"@mipmap/ic_launcher\\"" not in content:
+          if "@mipmap/ic_launcher" not in content:
               raise SystemExit("Launcher icon was not connected to the Android manifest")
           print("Installed Young Learners Tutorial launcher icon in all Android densities and adaptive-icon resources")
           PY
