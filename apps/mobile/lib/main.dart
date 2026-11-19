@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'learning_access.dart';
@@ -776,30 +776,39 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
       .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(data);
   }
-  String _csvCell(dynamic value) {
-    final raw=(value??'').toString().replaceAll('"','""');
-    return '"$raw"';
-  }
   Future<void> _exportExcelDirectory() async {
     try {
       final rows=await _load();
-      final csv=StringBuffer();
-      csv.writeln(['Student name','Email','Phone','Class','Admission number','Account status','Registered on'].map(_csvCell).join(','));
+      final workbook=Excel.createExcel();
+      workbook.rename('Sheet1','Student Directory');
+      final sheet=workbook['Student Directory'];
+      sheet.appendRow([
+        TextCellValue('Student name'),TextCellValue('Email'),TextCellValue('Phone'),
+        TextCellValue('Class'),TextCellValue('Admission number'),
+        TextCellValue('Account status'),TextCellValue('Registered on'),
+      ]);
       for(final row in rows) {
         final profile=row['profiles'] as Map<String,dynamic>?;
-        csv.writeln([
-          profile?['full_name'],profile?['email'],profile?['phone'],row['level'],
-          row['admission_number'],row['status'],row['created_at'],
-        ].map(_csvCell).join(','));
+        sheet.appendRow([
+          TextCellValue((profile?['full_name']??'').toString()),
+          TextCellValue((profile?['email']??'').toString()),
+          TextCellValue((profile?['phone']??'').toString()),
+          TextCellValue((row['level']??'').toString()),
+          TextCellValue((row['admission_number']??'').toString()),
+          TextCellValue((row['status']??'').toString()),
+          TextCellValue((row['created_at']??'').toString()),
+        ]);
       }
+      final bytes=workbook.save();
+      if(bytes==null)throw Exception('The Excel workbook could not be generated.');
       final saved=await FilePicker.platform.saveFile(
         dialogTitle:'Export Young Learners student directory',
-        fileName:'young_learners_student_directory.csv',
-        type:FileType.custom,allowedExtensions:['csv'],
-        bytes:Uint8List.fromList(utf8.encode(csv.toString())),
+        fileName:'young_learners_student_directory.xlsx',
+        type:FileType.custom,allowedExtensions:['xlsx'],
+        bytes:Uint8List.fromList(bytes),
       );
       if(saved!=null&&mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('Student spreadsheet exported: ${rows.length} records.')));
+        SnackBar(content:Text('Excel student directory exported: ${rows.length} records.')));
     }catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not export student directory: $e')));
     }
