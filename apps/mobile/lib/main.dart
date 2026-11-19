@@ -3576,7 +3576,11 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
         boxShadow:[BoxShadow(color:palette[1].withValues(alpha:.30),blurRadius:22,spreadRadius:1,offset:const Offset(0,7))]),
       child:ClipRRect(borderRadius:BorderRadius.circular(19),child:Stack(fit:StackFit.expand,children:[
         if(hasMedia)
-          _AnnouncementMedia(item:item!,onOpen:()=>_openAttachment(item)),
+          AnimatedSwitcher(duration:const Duration(milliseconds:650),
+            switchInCurve:Curves.easeOutCubic,switchOutCurve:Curves.easeInCubic,
+            child:_AnnouncementMedia(
+              key:ValueKey('${item?['id']}|$attachmentPath|$mime'),
+              item:item!,onOpen:()=>_openAttachment(item))),
         if(hasMedia)
           const DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(
             begin:Alignment.topCenter,end:Alignment.bottomCenter,
