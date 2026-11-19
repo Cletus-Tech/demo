@@ -1793,7 +1793,7 @@ class _AdminAssignmentsPanelState extends State<AdminAssignmentsPanel>{
       String assignmentType=_kind;
       List<Map<String,dynamic>> eligibleTutors(String? c,String? sub)=>tutorOptions.where((t)=>t['class_id']==c&&t['subject_id']==sub).toList();
       final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refreshDialog)=>AlertDialog(
-        title:const Text('Create assignment'),
+        title:Text(assignmentType=='classwork'?'Create classwork':'Create assignment'),
         content:SizedBox(width:460,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
           DropdownButtonFormField<String>(value:assignmentType,decoration:const InputDecoration(labelText:'Work category'),
             items:const [DropdownMenuItem(value:'assignment',child:Text('Assignment / Homework')),DropdownMenuItem(value:'classwork',child:Text('Classwork'))],
@@ -4628,12 +4628,12 @@ class _TutorWorkspacePageState extends State<TutorWorkspacePage> {
           onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>LessonDetailPage(lesson:l,allowCompletion:false))),
         ))),
         const SizedBox(height:16),
-        const Text('ASSIGNMENTS & STUDENT WORK',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
+        const Text('ASSIGNMENTS & CLASSWORK',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
         const SizedBox(height:8),
         if(assignments.isEmpty)const _InfoNotice(message:'Assignments specifically assigned to you will appear here. The centre administrator can assign a tutor when creating or managing class homework.'),
         ...assignments.map((a)=>Card(child:ListTile(
           leading:const Icon(Icons.assignment_outlined,color:AppColors.brown),
-          title:Text((a['title']??'Assignment').toString(),style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+          title:Text(((a['assignment_type']??'assignment')=='classwork'?'Classwork: ':'Assignment: ')+(a['title']??'Work item').toString(),style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
           subtitle:Text('${a['class_name']??''} • ${a['subject_name']??''}\n${a['submission_count']??0} submissions • ${a['graded_count']??0} marked'),
           isThreeLine:true,
           trailing:const Icon(Icons.chevron_right_rounded),
