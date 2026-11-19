@@ -71,14 +71,14 @@ jobs:
           changed = []
           found = set()
           patterns = [
-              (r'compileSdk\\s*=\\s*flutter\\.compileSdkVersion', 'compileSdk = 36'),
-              (r'compileSdk\\s+flutter\\.compileSdkVersion', 'compileSdk 36'),
-              (r'compileSdkVersion\\s*=\\s*flutter\\.compileSdkVersion', 'compileSdkVersion = 36'),
-              (r'compileSdkVersion\\s+flutter\\.compileSdkVersion', 'compileSdkVersion 36'),
-              (r'compileSdk\\s*=\\s*\\d+', 'compileSdk = 36'),
-              (r'compileSdk\\s+\\d+', 'compileSdk 36'),
-              (r'compileSdkVersion\\s*=\\s*\\d+', 'compileSdkVersion = 36'),
-              (r'compileSdkVersion\\s+\\d+', 'compileSdkVersion 36'),
+              (r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36'),
+              (r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36'),
+              (r'compileSdkVersion\s*=\s*flutter\.compileSdkVersion', 'compileSdkVersion = 36'),
+              (r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36'),
+              (r'compileSdk\s*=\s*\d+', 'compileSdk = 36'),
+              (r'compileSdk\s+\d+', 'compileSdk 36'),
+              (r'compileSdkVersion\s*=\s*\d+', 'compileSdkVersion = 36'),
+              (r'compileSdkVersion\s+\d+', 'compileSdkVersion 36'),
           ]
           for package in targets:
               for android_dir in sorted(cache.glob(f"{package}-*/android")):
