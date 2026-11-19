@@ -3392,6 +3392,22 @@ class _AnnouncementMediaState extends State<_AnnouncementMedia> {
   bool _loading=true;
   bool get _isVideo => (widget.item['attachment_mime_type']??'').toString().startsWith('video/');
   @override void initState(){super.initState();_prepare();}
+  @override void didUpdateWidget(covariant _AnnouncementMedia oldWidget){
+    super.didUpdateWidget(oldWidget);
+    final oldPath=(oldWidget.item['attachment_path']??'').toString();
+    final newPath=(widget.item['attachment_path']??'').toString();
+    final oldMime=(oldWidget.item['attachment_mime_type']??'').toString();
+    final newMime=(widget.item['attachment_mime_type']??'').toString();
+    if(oldPath!=newPath||oldMime!=newMime){
+      final previous=_video;
+      _video=null;
+      previous?.dispose();
+      _url=null;
+      _error=null;
+      _loading=true;
+      _prepare();
+    }
+  }
   Future<void> _prepare() async {
     try {
       final path=(widget.item['attachment_path']??'').toString();
@@ -3400,8 +3416,10 @@ class _AnnouncementMediaState extends State<_AnnouncementMedia> {
       if(_isVideo){
         final controller=VideoPlayerController.networkUrl(Uri.parse(url));
         await controller.initialize();
+        await controller.setLooping(true);
         if(!mounted){await controller.dispose();return;}
         setState(()=>_video=controller);
+        await controller.play();
       }
       if(mounted)setState(()=>_url=url);
     } catch(e){if(mounted)setState(()=>_error=e);}
@@ -3419,7 +3437,7 @@ class _AnnouncementMediaState extends State<_AnnouncementMedia> {
         final width=size.width>0?size.width:16.0;
         final height=size.height>0?size.height:9.0;
         return Stack(fit:StackFit.expand,children:[
-          Center(child:FittedBox(fit:BoxFit.contain,child:SizedBox(
+          ClipRect(child:FittedBox(fit:BoxFit.cover,child:SizedBox(
             width:width,height:height,child:VideoPlayer(controller)))),
           Center(child:IconButton.filledTonal(onPressed:(){
             setState(()=>controller.value.isPlaying?controller.pause():controller.play());
@@ -3547,8 +3565,10 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
     final hasImage=mime.startsWith('image/')&&attachmentPath.isNotEmpty;
     final hasVideo=mime.startsWith('video/')&&attachmentPath.isNotEmpty;
     final hasMedia=hasImage||hasVideo;
-    return Container(
-      width:double.infinity,height:260,
+    // The billboard itself is a true 16:9 frame. Uploaded portrait,
+    // square and landscape media are cropped to this frame without stretching.
+    return AspectRatio(aspectRatio:16/9,child:Container(
+      width:double.infinity,
       decoration:BoxDecoration(
         gradient:LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,colors:palette),
         borderRadius:BorderRadius.circular(20),
@@ -3626,7 +3646,7 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
           const Positioned(right:12,top:12,child:SizedBox(width:14,height:14,
             child:CircularProgressIndicator(strokeWidth:1.5,color:Color(0xFFFFD98A)))),
       ])),
-    );
+    ));
   }
 
   Widget _billboardTag(String label)=>Container(
