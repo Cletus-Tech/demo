@@ -3057,7 +3057,7 @@ class _DashboardAnnouncementBoardState extends State<_DashboardAnnouncementBoard
         final nextIndex=previousId==null?0:nextItems.indexWhere((row)=>row['id']==previousId);
         final safeIndex=nextIndex<0?0:nextIndex;
         final activeChanged=previousId!= (nextItems.isEmpty?null:nextItems[safeIndex]['id']);
-        setState(()=>{_items=nextItems,_index=safeIndex,_loading=false});
+        setState((){_items=nextItems;_index=safeIndex;_loading=false;});
         if(activeChanged)_startTitleTyping();
       }
     }catch(_){if(mounted)setState(()=>_loading=false);}
