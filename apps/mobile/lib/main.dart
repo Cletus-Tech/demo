@@ -4564,9 +4564,14 @@ class _ClassroomDirectoryPageState extends State<ClassroomDirectoryPage> {
       }
       return _sortSchoolClasses(unique.values.toList());
     }
-    final requests=await db.from('learning_access_requests').select('learning_programmes(class_id)')
+    final requests=await db.from('learning_access_requests')
+      .select('learning_programmes(class_id),classroom_access_passes(redeemed_at,revoked_at)')
       .eq('user_id',userId).eq('status','approved');
-    final ids=requests.map((r){
+    final ids=requests.where((r){
+      final passes=r['classroom_access_passes'];
+      if(passes is! List) return false;
+      return passes.any((pass)=>pass is Map && pass['redeemed_at']!=null && pass['revoked_at']==null);
+    }).map((r){
       final p=r['learning_programmes'];
       return p is Map ? p['class_id']?.toString() : null;
     }).whereType<String>().toSet().toList();
@@ -6611,7 +6616,7 @@ class _TutorInterviewCentrePageState extends State<TutorInterviewCentrePage>{
       title:const Text('Review tutor application'),
       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
         DropdownButtonFormField<String>(value:status,decoration:const InputDecoration(labelText:'Application stage'),
-          items:['reviewing','shortlisted','interview_scheduled','approved','rejected'].map((v)=>DropdownMenuItem(value:v,child:Text(v.replaceAll('_',' ').toUpperCase()))).toList(),
+          items:['submitted','reviewing','shortlisted','interview_scheduled','approved','rejected'].map((v)=>DropdownMenuItem(value:v,child:Text(v.replaceAll('_',' ').toUpperCase()))).toList(),
           onChanged:(v)=>setDialog(()=>status=v??status)),
         if(status=='interview_scheduled')...[
           const SizedBox(height:10),
