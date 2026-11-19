@@ -5466,6 +5466,17 @@ class _LearningTabState extends State<_LearningTab> {
   }
 }
 
+bool _hasRedeemedClassroomPass(dynamic relation) {
+  bool isRedeemed(dynamic pass) =>
+      pass is Map && pass['redeemed_at'] != null && pass['revoked_at'] == null;
+  // PostgREST returns a single object for a one-to-one relation (request_id
+  // is UNIQUE), not a list. Accept both shapes to remain robust if the
+  // relationship cardinality changes in a future schema revision.
+  if (relation is Map) return isRedeemed(relation);
+  if (relation is List) return relation.any(isRedeemed);
+  return false;
+}
+
 class ClassroomDirectoryPage extends StatefulWidget {
   final bool owner, admin, tutor;
   const ClassroomDirectoryPage({super.key, this.owner=false, this.admin=false, this.tutor=false});
@@ -5500,9 +5511,7 @@ class _ClassroomDirectoryPageState extends State<ClassroomDirectoryPage> {
       .select('learning_programmes(class_id),classroom_access_passes(redeemed_at,revoked_at)')
       .eq('user_id',userId).eq('status','approved');
     final ids=requests.where((r){
-      final passes=r['classroom_access_passes'];
-      if(passes is! List) return false;
-      return passes.any((pass)=>pass is Map && pass['redeemed_at']!=null && pass['revoked_at']==null);
+      return _hasRedeemedClassroomPass(r['classroom_access_passes']);
     }).map((r){
       final p=r['learning_programmes'];
       return p is Map ? p['class_id']?.toString() : null;
