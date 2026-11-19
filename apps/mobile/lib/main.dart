@@ -4567,6 +4567,7 @@ class TutorWorkspacePage extends StatefulWidget {
 }
 class _TutorWorkspacePageState extends State<TutorWorkspacePage> {
   late Future<Map<String,dynamic>> _workspace;
+  String? _selectedWorkClass;
   @override
   void initState() { super.initState(); _workspace = _load(); }
   Future<Map<String,dynamic>> _load() async {
@@ -4629,16 +4630,31 @@ class _TutorWorkspacePageState extends State<TutorWorkspacePage> {
         const SizedBox(height:16),
         const Text('ASSIGNMENTS & CLASSWORK',style:TextStyle(fontSize:11,letterSpacing:1.1,fontWeight:FontWeight.w800,color:AppColors.muted)),
         const SizedBox(height:8),
-        if(assignments.isEmpty)const _InfoNotice(message:'Assignments specifically assigned to you will appear here. The centre administrator can assign a tutor when creating or managing class homework.'),
-        ...assignments.map((a)=>Card(child:ListTile(
-          leading:const Icon(Icons.assignment_outlined,color:AppColors.brown),
-          title:Text(((a['assignment_type']??'assignment')=='classwork'?'Classwork: ':'Assignment: ')+(a['title']??'Work item').toString(),style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
-          subtitle:Text('${a['class_name']??''} • ${a['subject_name']??''}\n${a['submission_count']??0} submissions • ${a['graded_count']??0} marked'),
-          isThreeLine:true,
-          trailing:const Icon(Icons.chevron_right_rounded),
-          onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(
-            builder:(_)=>TutorAssignmentSubmissionsPage(assignment:a))).then((_)=>_refresh()),
-        ))),
+        if(assignments.isEmpty)const _InfoNotice(message:'Assignments and classwork assigned to you will appear here.'),
+        if(_selectedWorkClass==null)...[
+          ...((classes.map((c)=>(c['class_name']??'Class').toString()).toSet().toList()..sort()).map((className){
+            final total=assignments.where((a)=>(a['class_name']??'').toString()==className).length;
+            return Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
+              leading:const Icon(Icons.school_outlined,color:AppColors.brown),
+              title:Text(className,style:const TextStyle(fontWeight:FontWeight.w800,color:AppColors.ink)),
+              subtitle:Text(total.toString()+' assignments / classwork items'),
+              trailing:const Icon(Icons.chevron_right_rounded),
+              onTap:()=>setState(()=>_selectedWorkClass=className),
+            ));
+          })),
+        ]else...[
+          Row(children:[
+            IconButton(onPressed:()=>setState(()=>_selectedWorkClass=null),icon:const Icon(Icons.arrow_back)),
+            Expanded(child:Text(_selectedWorkClass!,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800,color:AppColors.ink))),
+          ]),
+          ...assignments.where((a)=>(a['class_name']??'').toString()==_selectedWorkClass).map((a)=>Card(margin:const EdgeInsets.only(bottom:8),child:ListTile(
+            leading:const Icon(Icons.assignment_outlined,color:AppColors.brown),
+            title:Text(((a['assignment_type']??'assignment')=='classwork'?'Classwork: ':'Assignment: ')+(a['title']??'Work item').toString(),style:const TextStyle(fontWeight:FontWeight.w700,color:AppColors.ink)),
+            subtitle:Text((a['subject_name']??'').toString()+' • '+(a['submission_count']??0).toString()+' submissions • '+(a['graded_count']??0).toString()+' marked'),
+            trailing:const Icon(Icons.chevron_right_rounded),
+            onTap:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>TutorAssignmentSubmissionsPage(assignment:a))).then((_)=>_refresh()),
+          ))),
+        ],
       ]);
     }),
   );
