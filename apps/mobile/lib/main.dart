@@ -5921,7 +5921,7 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
   }
   @override
   Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('My assignments')),
+    appBar:AppBar(title:const Text('Assignments & classwork')),
     body:RefreshIndicator(color:AppColors.brown,onRefresh:_refresh,
       child:FutureBuilder<List<Map<String,dynamic>>>(future:_items,builder:(context,s){
         if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
