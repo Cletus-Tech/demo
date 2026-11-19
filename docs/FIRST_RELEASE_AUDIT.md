@@ -89,7 +89,7 @@ The two recent hardening changes are now recorded as migrations:
 
 Supabase Performance Advisor currently reports:
 - 27 foreign keys without covering indexes;
-- 8 RLS policies with avoidable auth-function re-evaluation;
+- the own-row RLS auth-function re-evaluation warnings were corrected in migration `20261119014912_optimise_own_row_rls_auth_checks.sql`; the latest advisor run no longer reports that warning;
 - 27 multiple-permissive-policy warnings;
 - 20 unused indexes (these may simply be unused because the project has little real traffic; do not remove them without workload evidence).
 
