@@ -21,18 +21,12 @@ const supabasePublishableKey = String.fromEnvironment(
   defaultValue: 'sb_publishable_M3WhhESOhd7QrrHQA9gsig_yAp607GB',
 );
 
-/// Opens private Supabase resources without handing their URL to arbitrary
-/// third-party apps registered for ACTION_VIEW (some devices route these URLs
-/// to non-exported payment-app activities). Prefer a browser Custom Tab, then
-/// the app's own WebView. Never fall back to an external ACTION_VIEW intent.
+/// Opens signed classroom files inside Flutter's own WebView activity.
+/// Avoid Custom Tabs / ACTION_VIEW: some Android devices incorrectly resolve
+/// private Supabase URLs to payment apps with non-exported activities.
 Future<bool> _openResourceUrl(String rawUrl) async {
   final uri = Uri.tryParse(rawUrl);
   if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return false;
-  try {
-    if (await launchUrl(uri, mode: LaunchMode.inAppBrowserView)) return true;
-  } catch (_) {
-    // Continue to the app-contained WebView fallback.
-  }
   try {
     return await launchUrl(
       uri,
@@ -43,6 +37,7 @@ Future<bool> _openResourceUrl(String rawUrl) async {
       ),
     );
   } catch (_) {
+    // Deliberately do not fall back to external ACTION_VIEW on Android.
     return false;
   }
 }
