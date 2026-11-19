@@ -5290,7 +5290,7 @@ class _ProfileEditorPageState extends State<ProfileEditorPage>{
       if(_photo!=null){
         final bytes=_photo!.bytes;if(bytes==null)throw Exception('The selected image could not be read.');
         final ext=_photo!.extension!.toLowerCase();
-        uploadedPath='$uid/avatar.$ext';
+        uploadedPath='$uid/${DateTime.now().microsecondsSinceEpoch}_avatar.$ext';
         await db.storage.from('profile-avatars').uploadBinary(uploadedPath!,bytes,
           fileOptions:FileOptions(contentType:ext=='jpg'||ext=='jpeg'?'image/jpeg':'image/$ext',upsert:true));
         nextAvatarPath=uploadedPath;
