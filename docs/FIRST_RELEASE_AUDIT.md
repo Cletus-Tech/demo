@@ -87,11 +87,11 @@ The two recent hardening changes are now recorded as migrations:
 
 ### 8. Performance and architecture
 
-Supabase Performance Advisor currently reports:
-- 27 foreign keys without covering indexes;
-- the own-row RLS auth-function re-evaluation warnings were corrected in migration `20261119014912_optimise_own_row_rls_auth_checks.sql`; the latest advisor run no longer reports that warning;
-- 27 multiple-permissive-policy warnings;
-- 20 unused indexes (these may simply be unused because the project has little real traffic; do not remove them without workload evidence).
+Supabase Performance Advisor now reports:
+- Foreign-key index warnings have been cleared by migration `20261119014944_index_uncovered_foreign_keys.sql`.
+- Own-row RLS auth-function re-evaluation warnings have been cleared by migration `20261119014912_optimise_own_row_rls_auth_checks.sql`.
+- 27 multiple-permissive-policy warnings remain; most represent separate admin and own-row access paths and need careful policy review before consolidation.
+- 47 unused-index notices remain. Several are newly created FK indexes and may be unused because the app has little real traffic; do not remove them without workload evidence.
 
 The primary app implementation is concentrated in a very large `main.dart` file. This is maintainability debt and increases regression risk. Refactor by feature after the workflows are covered by tests, not as a blind rewrite.
 
