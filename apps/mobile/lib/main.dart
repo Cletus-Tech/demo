@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' as xls;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'learning_access.dart';
@@ -779,11 +779,11 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
   Future<void> _exportExcelDirectory() async {
     try {
       final rows=await _load();
-      final workbook=Excel.createExcel();
+      final workbook=xls.Excel.createExcel();
       workbook.rename('Sheet1','Student Directory');
       final sheet=workbook['Student Directory'];
       sheet.appendRow([
-        TextCellValue('Student name'),TextCellValue('Email'),TextCellValue('Phone'),
+        xls.TextCellValue('Student name'),TextCellValue('Email'),TextCellValue('Phone'),
         TextCellValue('Class'),TextCellValue('Admission number'),
         TextCellValue('Account status'),TextCellValue('Registered on'),
       ]);
