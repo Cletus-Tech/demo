@@ -17,7 +17,7 @@ A visible screen is not counted as a working feature until its complete workflow
 - Parent/guardian linking, student records, tutor workspaces, classroom posts, assignments, CBT, attendance, results, staff room, communications, notifications and reporting have implementation and database infrastructure.
 - The dashboard announcement publishing function accepts all 14 configured billboard themes.
 - The latest web preview workflow completed successfully for commit `933dc4d8cef327b3a2643412fefb9344b2cb63a2`.
-- The previous Android release workflow completed successfully for commit `8941438d3f87fed5cf40d375dd01e0cb91877814`; the newer Android build for the profile privacy changes is still being checked.
+- The Android release workflow completed successfully for commit `933dc4d8cef327b3a2643412fefb9344b2cb63a2`, and its architecture-specific APK artifact was uploaded. The artifact is a QA/sideload build, not a production-signed Play Store release.
 - Profile editing now uses column-level update grants; users can update their own optional profile fields but cannot change protected account type/status fields.
 - Direct-message rows are now immutable after insertion; authenticated clients have no UPDATE privilege.
 - Profile photos are now stored in a private bucket and loaded through signed URLs. Storage policies restrict read/write/delete to the owner's folder.
@@ -51,9 +51,11 @@ Current live database counts:
 
 The learning catalogue and assessment features therefore have infrastructure but no content to serve. A learner launch requires configured programmes, lessons/materials, assessment questions, and at least one assigned tutor/class workflow.
 
-### 3. Classroom PIN requirement — Not implemented
+### 3. Classroom PIN workflow — Implemented, awaiting end-to-end verification
 
-The planned unique classroom access PIN issued by an administrator after payment approval is not present. The current system uses programme access requests and manual payment review/approval. Do not advertise PIN-based classroom entry until it is built and tested.
+A first implementation is now connected to the approved payment workflow. An authorised finance/student administrator can issue or reset a unique 10-character classroom PIN for an approved programme request. Only a SHA-256 hash is stored; the plaintext is returned once to the administrator. The learner enters the PIN in the Learning Programmes screen; successful redemption unlocks published lessons for that learner/programme. Failed attempts are capped at five per issued pass, and each programme can have its own pass.
+
+The database migration and learner/admin UI are committed. This workflow still needs authenticated role-based testing (issue, redeem, wrong PIN, reuse, multiple programmes, and cross-account denial) before public release.
 
 ### 4. Payments — Limited scope
 
@@ -77,7 +79,7 @@ The recent hardening changes are now recorded as migrations:
 - `20261119014912_optimise_own_row_rls_auth_checks.sql`
 - `20261119014944_index_uncovered_foreign_keys.sql`
 
-**Required:** reconcile every applied migration against its source, restore missing migration files, correct version/name mismatches safely, and verify a clean rebuild on a separate development database before production deployment.
+**Required:** reconcile every applied migration against its source, restore missing migration files, correct version/name mismatches safely, and verify a clean rebuild on a separate development database before production deployment. The three new classroom PIN migrations are now present in this branch.
 
 ### 7. Child-data privacy and security
 
