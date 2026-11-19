@@ -5888,6 +5888,7 @@ class StudentAssignmentsPage extends StatefulWidget {
 class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
   late Future<List<Map<String,dynamic>>> _items;
   String _filter = 'All';
+  String _kind='all';
   @override
   void initState(){super.initState();_items=_load();}
   Future<List<Map<String,dynamic>>> _load() async {
@@ -5919,7 +5920,8 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
         if(s.connectionState!=ConnectionState.done)return const Center(child:CircularProgressIndicator(color:AppColors.brown));
         if(s.hasError)return ListView(padding:const EdgeInsets.all(20),children:[_InfoNotice(message:'Assignments could not be loaded. '+s.error.toString())]);
         final all=s.data??[];
-        final rows=all.where((r)=>_filter=='All'||_status(r)==_filter).toList();
+        final typed=all.where((r)=>_kind=='all'||(r['assignment_type']??'assignment')==_kind).toList();
+        final rows=typed.where((r)=>_filter=='All'||_status(r)==_filter).toList();
         final pending=all.where((r)=>_status(r)=='To do'||_status(r)=='Overdue'||_status(r)=='Returned').length;
         final grouped=<String,Map<String,List<Map<String,dynamic>>>>{};
         for(final row in rows){
@@ -5933,17 +5935,23 @@ class _StudentAssignmentsPageState extends State<StudentAssignmentsPage> {
           return rank!=0?rank:a.compareTo(b);
         });
         return ListView(padding:const EdgeInsets.all(18),children:[
-          const Text('Class assignments',style:TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
+          Text(_kind=='classwork'?'My classwork':_kind=='assignment'?'My assignments':'My learning work',style:const TextStyle(fontSize:22,fontWeight:FontWeight.w800,color:AppColors.ink)),
           const SizedBox(height:5),
-          const Text('Your published homework is arranged by subject. Check the due date and submission status before opening each task.',style:TextStyle(color:AppColors.muted,height:1.4)),
+          const Text('Your work is arranged by class and subject. Check due dates, submit your work and follow your marks.',style:TextStyle(color:AppColors.muted,height:1.4)),
           const SizedBox(height:13),
+          Wrap(spacing:7,children:[
+            ChoiceChip(label:const Text('All work'),selected:_kind=='all',onSelected:(_)=>setState(()=>_kind='all')),
+            ChoiceChip(label:const Text('Assignments'),selected:_kind=='assignment',onSelected:(_)=>setState(()=>_kind='assignment')),
+            ChoiceChip(label:const Text('Classwork'),selected:_kind=='classwork',onSelected:(_)=>setState(()=>_kind='classwork')),
+          ]),
+          const SizedBox(height:8),
           Wrap(spacing:7,runSpacing:7,children:[
             for(final filter in ['All','To do','Overdue','Submitted','Returned','Graded'])
               ChoiceChip(label:Text(filter=='To do'?'To do ($pending)':filter),selected:_filter==filter,
                 onSelected:(_)=>setState(()=>_filter=filter),selectedColor:AppColors.paleGold),
           ]),
           const SizedBox(height:13),
-          if(all.isEmpty) const _InfoNotice(message:'No assignments have been published for your approved class yet. When your tutor publishes homework, it will appear here under its subject.'),
+          if(all.isEmpty) const _InfoNotice(message:'No assignments or classwork have been published for your approved class yet. When your tutor publishes work, it will appear here under its subject.'),
           if(all.isNotEmpty&&rows.isEmpty) _InfoNotice(message:'There are no assignments in the '+_filter.toLowerCase()+' category.'),
           for(final className in classNames)...[
             Padding(padding:const EdgeInsets.only(top:12,bottom:5),child:Text(className.toUpperCase(),
