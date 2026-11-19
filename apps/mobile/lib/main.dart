@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as xls;
@@ -3524,6 +3525,77 @@ class _AnnouncementMediaState extends State<_AnnouncementMedia> {
       ]))));
 }
 
+class _DashboardCountdown extends StatefulWidget {
+  final bool canManage;
+  const _DashboardCountdown({required this.canManage});
+  @override State<_DashboardCountdown> createState()=>_DashboardCountdownState();
+}
+class _DashboardCountdownState extends State<_DashboardCountdown> with SingleTickerProviderStateMixin {
+  Map<String,dynamic>? _event;
+  Timer? _timer;
+  late final AnimationController _pulse;
+  Duration _left=Duration.zero;
+  bool _loading=true,_sound=false;
+  int _lastBeep=-1;
+  @override void initState(){super.initState();_pulse=AnimationController(vsync:this,duration:const Duration(milliseconds:900))..repeat(reverse:true);_load();_timer=Timer.periodic(const Duration(milliseconds:50),(_)=>_tick());}
+  Future<void> _load() async {
+    try { final row=await Supabase.instance.client.from('dashboard_countdowns').select('id,title,target_at,tone').eq('is_active',true).order('created_at',ascending:false).limit(1).maybeSingle(); if(mounted)setState(()=>_event=row); _tick(); }
+    catch(_){if(mounted)setState(()=>_event=null);} finally{if(mounted)setState(()=>_loading=false);}
+  }
+  void _tick(){
+    final target=DateTime.tryParse((_event?['target_at']??'').toString());if(target==null||!mounted)return;
+    final d=target.difference(DateTime.now());final next=d.isNegative?Duration.zero:d;
+    if(next.inMilliseconds!=_left.inMilliseconds){
+      setState(()=>_left=next);
+      final sec=next.inSeconds;
+      if(_sound&&sec<=10&&sec>0&&sec!=_lastBeep){_lastBeep=sec;SystemSound.play(SystemSoundType.alert);}
+    }
+  }
+  List<Color> _palette(String t)=>switch(t){'blue'=>[const Color(0xFF123B62),const Color(0xFF168AAD)],'green'=>[const Color(0xFF14532D),const Color(0xFF16A34A)],'rose'=>[const Color(0xFF881337),const Color(0xFFE11D48)],'violet'=>[const Color(0xFF3B0764),const Color(0xFF9333EA)],'teal'=>[const Color(0xFF134E4A),const Color(0xFF0D9488)],'neon'=>[const Color(0xFF181044),const Color(0xFFBE185D)],'sunset'=>[const Color(0xFF7C2D12),const Color(0xFFEA580C)],_=>[const Color(0xFF68451D),const Color(0xFFC08A2C)]};
+  String _pad(int n)=>n.toString().padLeft(2,'0');
+  Future<void> _configure() async {
+    final title=TextEditingController(text:(_event?['title']??'').toString());
+    var target=DateTime.tryParse((_event?['target_at']??'').toString())??DateTime.now().add(const Duration(days:5));
+    var tone=(_event?['tone']??'gold').toString();
+    final ok=await showDialog<bool>(context:context,builder:(dc)=>StatefulBuilder(builder:(ctx,ss)=>AlertDialog(
+      title:Text(_event==null?'Create countdown':'Edit countdown'),
+      content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        TextField(controller:title,maxLength:100,decoration:const InputDecoration(labelText:'Event name',hintText:'JAMB examination')),
+        ListTile(contentPadding:EdgeInsets.zero,title:const Text('Date'),subtitle:Text('${target.day}/${target.month}/${target.year}'),onTap:()async{final d=await showDatePicker(context:ctx,initialDate:target.isBefore(DateTime.now())?DateTime.now():target,firstDate:DateTime.now(),lastDate:DateTime.now().add(const Duration(days:3650)));if(d!=null)ss(()=>target=DateTime(d.year,d.month,d.day,target.hour,target.minute));}),
+        ListTile(contentPadding:EdgeInsets.zero,title:const Text('Time'),subtitle:Text('${_pad(target.hour)}:${_pad(target.minute)}'),onTap:()async{final t=await showTimePicker(context:ctx,initialTime:TimeOfDay.fromDateTime(target));if(t!=null)ss(()=>target=DateTime(target.year,target.month,target.day,t.hour,t.minute));}),
+        DropdownButtonFormField<String>(value:tone,decoration:const InputDecoration(labelText:'Colour'),items:const [DropdownMenuItem(value:'gold',child:Text('Gold')),DropdownMenuItem(value:'blue',child:Text('Blue')),DropdownMenuItem(value:'green',child:Text('Green')),DropdownMenuItem(value:'rose',child:Text('Rose')),DropdownMenuItem(value:'violet',child:Text('Violet')),DropdownMenuItem(value:'teal',child:Text('Teal')),DropdownMenuItem(value:'neon',child:Text('Neon')),DropdownMenuItem(value:'sunset',child:Text('Sunset'))],onChanged:(v)=>ss(()=>tone=v??'gold')),
+        const SizedBox(height:8),const Text('Starting this countdown replaces the currently active one.',style:TextStyle(fontSize:12,color:AppColors.muted))
+      ])),
+      actions:[TextButton(onPressed:()=>Navigator.pop(dc,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(dc,true),child:const Text('Start'))],
+    )));
+    if(ok==true&&title.text.trim().isNotEmpty){
+      try{final db=Supabase.instance.client;await db.from('dashboard_countdowns').update({'is_active':false}).eq('is_active',true);await db.from('dashboard_countdowns').insert({'title':title.text.trim(),'target_at':target.toUtc().toIso8601String(),'tone':tone,'is_active':true,'created_by':db.auth.currentUser?.id});await _load();}
+      catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not start countdown: $e')));}
+    }
+    title.dispose();
+  }
+  Future<void> _stop() async{if(_event==null)return;try{await Supabase.instance.client.from('dashboard_countdowns').update({'is_active':false}).eq('id',_event!['id']);await _load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not stop countdown: $e')));}}
+  @override void dispose(){_timer?.cancel();_pulse.dispose();super.dispose();}
+  @override Widget build(BuildContext context){
+    if(_loading||(_event==null&&!widget.canManage))return const SizedBox.shrink();
+    final total=_left.inMilliseconds,days=total~/86400000,hours=(total~/3600000)%24,mins=(total~/60000)%60,secs=(total~/1000)%60,ms=total%1000;
+    final colors=_palette((_event?['tone']??'gold').toString());
+    return AnimatedBuilder(animation:_pulse,builder:(context,child)=>Container(margin:const EdgeInsets.only(top:12),padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),
+      decoration:BoxDecoration(gradient:LinearGradient(colors:colors),borderRadius:BorderRadius.circular(14),boxShadow:[BoxShadow(color:colors.last.withValues(alpha:.12+.13*_pulse.value),blurRadius:12)]),
+      child:Column(children:[
+        Row(children:[const Icon(Icons.hourglass_bottom_rounded,color:Colors.white,size:17),const SizedBox(width:6),Expanded(child:Text((_event?['title']??'Event countdown').toString(),maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w800,fontSize:12))),
+          if(widget.canManage&&_event!=null)PopupMenuButton<String>(padding:EdgeInsets.zero,icon:const Icon(Icons.more_vert,color:Colors.white,size:18),onSelected:(v){if(v=='edit')_configure();if(v=='stop')_stop();},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Edit countdown')),PopupMenuItem(value:'stop',child:Text('Stop countdown'))]),
+          if(widget.canManage&&_event==null)IconButton(visualDensity:VisualDensity.compact,onPressed:_configure,icon:const Icon(Icons.add_circle_outline,color:Colors.white,size:19)),
+          if(_event!=null)IconButton(visualDensity:VisualDensity.compact,tooltip:_sound?'Mute sound':'Enable sound',onPressed:()=>setState(()=>_sound=!_sound),icon:Icon(_sound?Icons.volume_up:Icons.volume_off,color:Colors.white,size:18))
+        ]),
+        if(_event==null)TextButton.icon(onPressed:_configure,icon:const Icon(Icons.add_alarm,color:Colors.white),label:const Text('Set event countdown',style:TextStyle(color:Colors.white)))
+        else Row(children:[_unit(_pad(days),'DAYS'),_unit(_pad(hours),'HRS'),_unit(_pad(mins),'MIN'),_unit(_pad(secs),'SEC'),_unit(ms.toString().padLeft(3,'0'),'MS')]),
+      ]),
+    ));
+  }
+  Widget _unit(String value,String label)=>Expanded(child:Column(children:[Text(value,style:const TextStyle(color:Colors.white,fontSize:18,fontWeight:FontWeight.w900)),Text(label,style:TextStyle(color:Colors.white.withValues(alpha:.72),fontSize:8,fontWeight:FontWeight.w800,letterSpacing:.6))]));
+}
+
 class _DashboardAnnouncementBoard extends StatefulWidget {
   final String fallbackTitle, fallbackBody;
   final bool canManage;
@@ -3774,6 +3846,7 @@ class _HomeTab extends StatelessWidget {
                     : 'Your classes, subjects, learning materials and progress will appear here as the centre activates them.',
                   canManage: owner || admin,
                 ),
+                _DashboardCountdown(canManage:owner||admin),
                 if (owner) ...[
                   const SizedBox(height: 20),
                   const _CentreOverview(),
